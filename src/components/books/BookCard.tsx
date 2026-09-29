@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { FaStar } from "react-icons/fa6";
 
 import type { Book } from "@/data/books";

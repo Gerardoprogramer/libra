@@ -1,0 +1,37 @@
+{
+  "nav": {
+    "discover": "Discover",
+    "categories": "Categories",
+    "library": "Library",
+    "search": "Search",
+    "account": "Account"
+  },
+  "home": {
+    "eyebrow": "A library without walls",
+    "titleFirst": "Great stories",
+    "titleSecond": "never get old.",
+    "description": "Discover timeless books, beautifully presented and free to read.",
+    "discover": "Discover",
+    "trending": "Trending this week",
+    "viewAll": "View all"
+  },
+  "book": {
+    "by": "by",
+    "chapters": "{count} chapters",
+    "startReading": "Start reading",
+    "addToLibrary": "Add to library",
+    "share": "Share book",
+    "contents": "Contents",
+    "chapterList": "Chapters"
+  },
+  "reader": {
+    "previous": "Previous",
+    "next": "Next",
+    "finish": "Finish",
+    "chapterOf": "Chapter {current} of {total}",
+    "progress": "{progress}% read",
+    "narrow": "Narrow",
+    "medium": "Medium",
+    "wide": "Wide"
+  }
+}

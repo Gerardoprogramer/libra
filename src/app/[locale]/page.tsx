@@ -1,27 +1,26 @@
+import { getTranslations } from "next-intl/server";
+
 import { BookCard } from "@/components/books/BookCard";
-
 import { trendingBooks } from "@/data/books";
-import Link from "next/dist/client/link";
+import { Link } from "@/i18n/navigation";
 
-export default function Home() {
+export default async function Home() {
+  const t = await getTranslations("home");
+
   return (
     <main>
       <section className="border-b">
         <div className="mx-auto max-w-7xl px-6 py-20 md:py-28">
           <div className="max-w-3xl">
-            <p className="text-muted-foreground mb-5 text-xs font-medium tracking-[0.25em] uppercase">
-              A library without walls
-            </p>
+            <p className="text-muted-foreground mb-5 text-xs font-medium tracking-[0.25em] uppercase">{t("eyebrow")}</p>
 
             <h1 className="font-serif text-5xl leading-[1.05] tracking-tight md:text-7xl">
-              Great stories
+              {t("titleFirst")}
               <br />
-              never get old.
+              {t("titleSecond")}
             </h1>
 
-            <p className="text-muted-foreground mt-7 max-w-xl text-lg leading-8">
-              Discover timeless books, beautifully presented and free to read.
-            </p>
+            <p className="text-muted-foreground mt-7 max-w-xl text-lg leading-8">{t("description")}</p>
           </div>
         </div>
       </section>
@@ -29,13 +28,13 @@ export default function Home() {
       <section className="mx-auto max-w-7xl px-6 py-14">
         <div className="mb-8 flex items-end justify-between">
           <div>
-            <p className="text-muted-foreground mb-2 text-xs tracking-[0.2em] uppercase">Discover</p>
+            <p className="text-muted-foreground mb-2 text-xs tracking-[0.2em] uppercase">{t("discover")}</p>
 
-            <h2 className="font-serif text-3xl tracking-tight">Trending this week</h2>
+            <h2 className="font-serif text-3xl tracking-tight">{t("trending")}</h2>
           </div>
 
           <Link href="/books" className="text-muted-foreground hover:text-foreground text-sm transition">
-            View all →
+            {t("viewAll")} →
           </Link>
         </div>
 

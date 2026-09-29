@@ -1,0 +1,37 @@
+{
+  "nav": {
+    "discover": "Descubrir",
+    "categories": "Categorías",
+    "library": "Biblioteca",
+    "search": "Buscar",
+    "account": "Cuenta"
+  },
+  "home": {
+    "eyebrow": "Una biblioteca sin fronteras",
+    "titleFirst": "Grandes historias",
+    "titleSecond": "nunca envejecen.",
+    "description": "Descubre libros atemporales, presentados con elegancia y completamente gratis.",
+    "discover": "Descubrir",
+    "trending": "Tendencias de la semana",
+    "viewAll": "Ver todos"
+  },
+  "book": {
+    "by": "por",
+    "chapters": "{count} capítulos",
+    "startReading": "Empezar a leer",
+    "addToLibrary": "Añadir a mi biblioteca",
+    "share": "Compartir libro",
+    "contents": "Contenido",
+    "chapterList": "Capítulos"
+  },
+  "reader": {
+    "previous": "Anterior",
+    "next": "Siguiente",
+    "finish": "Finalizar",
+    "chapterOf": "Capítulo {current} de {total}",
+    "progress": "{progress}% leído",
+    "narrow": "Estrecho",
+    "medium": "Medio",
+    "wide": "Amplio"
+  }
+}
