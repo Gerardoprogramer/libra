@@ -1,82 +1,72 @@
 import type { Metadata } from "next";
+
 import { notFound } from "next/navigation";
-import { books, getBookBySlug, getChapterBySlug } from "@/data/books";
+
 import { ReaderView } from "@/components/reader/ReaderView";
+
+import { getChapterBySlug, type ContentLocale } from "@/db/queries/books";
 
 interface ReaderPageProps {
   params: Promise<{
+    locale: string;
     slug: string;
     chapter: string;
   }>;
 }
 
-export function generateStaticParams() {
-  return books.flatMap((book) =>
-    book.chapters.map((chapter) => ({
-      slug: book.slug,
-      chapter: chapter.slug,
-    })),
-  );
+function getContentLocale(locale: string): ContentLocale {
+  return locale === "en" ? "en" : "es";
 }
 
 export async function generateMetadata({ params }: ReaderPageProps): Promise<Metadata> {
-  const { slug, chapter: chapterSlug } = await params;
+  const { locale, slug, chapter } = await params;
 
-  const book = getBookBySlug(slug);
+  const result = await getChapterBySlug(slug, chapter, getContentLocale(locale));
 
-  if (!book) {
+  if (!result) {
     return {
       title: "Chapter not found",
     };
   }
 
-  const chapter = getChapterBySlug(book, chapterSlug);
-
-  if (!chapter) {
-    return {
-      title: "Chapter not found",
-    };
-  }
+  const authors = result.book.authors.map((author) => author.name).join(", ");
 
   return {
-    title: `${chapter.title} — ${book.title}`,
-    description: `Read ${chapter.title} of ${book.title} by ${book.author}.`,
+    title: `${result.chapter.title} — ${result.book.edition.title}`,
+    description: `Read ${result.chapter.title} from ${result.book.edition.title} by ${authors} on Libra.`,
   };
 }
 
 export default async function ReaderPage({ params }: ReaderPageProps) {
-  const { slug, chapter: chapterSlug } = await params;
+  const { locale, slug, chapter } = await params;
 
-  const book = getBookBySlug(slug);
+  const result = await getChapterBySlug(slug, chapter, getContentLocale(locale));
 
-  if (!book) {
+  if (!result) {
     notFound();
   }
 
-  const chapter = getChapterBySlug(book, chapterSlug);
+  const { book, chapter: currentChapter, previous, next } = result;
 
-  if (!chapter) {
-    notFound();
-  }
+  const authors = book.authors.map((author) => author.name).join(", ");
 
-  const chapterIndex = book.chapters.findIndex((item) => item.slug === chapter.slug);
-
-  const previousChapter = chapterIndex > 0 ? book.chapters[chapterIndex - 1] : undefined;
-
-  const nextChapter = chapterIndex < book.chapters.length - 1 ? book.chapters[chapterIndex + 1] : undefined;
+  const paragraphs = currentChapter.content
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 
   return (
     <ReaderView
       bookSlug={book.slug}
-      bookTitle={book.title}
-      author={book.author}
-      chapterSlug={chapter.slug}
-      chapterTitle={chapter.title}
-      chapterNumber={chapter.number}
+      bookTitle={book.edition.title}
+      author={authors}
+      chapterSlug={currentChapter.slug}
+      chapterTitle={currentChapter.title}
+      chapterNumber={currentChapter.number}
       totalChapters={book.chapters.length}
-      paragraphs={chapter.content}
-      previousHref={previousChapter ? `/books/${book.slug}/${previousChapter.slug}` : undefined}
-      nextHref={nextChapter ? `/books/${book.slug}/${nextChapter.slug}` : undefined}
+      paragraphs={paragraphs}
+      previousHref={previous ? `/books/${book.slug}/${previous.slug}` : undefined}
+      nextHref={next ? `/books/${book.slug}/${next.slug}` : undefined}
     />
   );
 }

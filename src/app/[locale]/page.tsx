@@ -1,11 +1,15 @@
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 
 import { BookCard } from "@/components/books/BookCard";
-import { trendingBooks } from "@/data/books";
+import { getBooks, type ContentLocale } from "@/db/queries/books";
 import { Link } from "@/i18n/navigation";
 
 export default async function Home() {
   const t = await getTranslations("home");
+
+  const locale = (await getLocale()) as ContentLocale;
+
+  const books = await getBooks(locale);
 
   return (
     <main>
@@ -39,7 +43,7 @@ export default async function Home() {
         </div>
 
         <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:grid-cols-3 lg:grid-cols-5">
-          {trendingBooks.map((book) => (
+          {books.slice(0, 5).map((book) => (
             <BookCard key={book.id} book={book} />
           ))}
         </div>

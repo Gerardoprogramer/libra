@@ -17,7 +17,7 @@
   },
   "book": {
     "by": "por",
-    "chapters": "{count} capítulos",
+    "chapters": "{count, plural, =0 {Sin capítulos} =1 {# capítulo} other {# capítulos}}",
     "startReading": "Empezar a leer",
     "addToLibrary": "Añadir a mi biblioteca",
     "share": "Compartir libro",

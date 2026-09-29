@@ -61,9 +61,7 @@
         "authors_slug_unique": {
           "name": "authors_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -100,12 +98,8 @@
           "name": "book_authors_book_id_books_id_fk",
           "tableFrom": "book_authors",
           "tableTo": "books",
-          "columnsFrom": [
-            "book_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["book_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -113,12 +107,8 @@
           "name": "book_authors_author_id_authors_id_fk",
           "tableFrom": "book_authors",
           "tableTo": "authors",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -126,10 +116,7 @@
       "compositePrimaryKeys": {
         "book_authors_book_id_author_id_pk": {
           "name": "book_authors_book_id_author_id_pk",
-          "columns": [
-            "book_id",
-            "author_id"
-          ]
+          "columns": ["book_id", "author_id"]
         }
       },
       "uniqueConstraints": {},
@@ -194,9 +181,7 @@
         "books_slug_unique": {
           "name": "books_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -329,12 +314,8 @@
           "name": "chapters_edition_id_editions_id_fk",
           "tableFrom": "chapters",
           "tableTo": "editions",
-          "columnsFrom": [
-            "edition_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["edition_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -565,12 +546,8 @@
           "name": "editions_book_id_books_id_fk",
           "tableFrom": "editions",
           "tableTo": "books",
-          "columnsFrom": [
-            "book_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["book_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -586,22 +563,12 @@
     "public.copyright_status": {
       "name": "copyright_status",
       "schema": "public",
-      "values": [
-        "PUBLIC_DOMAIN_VERIFIED",
-        "LICENSED",
-        "ORIGINAL",
-        "PENDING_REVIEW",
-        "REJECTED"
-      ]
+      "values": ["PUBLIC_DOMAIN_VERIFIED", "LICENSED", "ORIGINAL", "PENDING_REVIEW", "REJECTED"]
     },
     "public.publication_status": {
       "name": "publication_status",
       "schema": "public",
-      "values": [
-        "DRAFT",
-        "PUBLISHED",
-        "ARCHIVED"
-      ]
+      "values": ["DRAFT", "PUBLISHED", "ARCHIVED"]
     }
   },
   "schemas": {},
