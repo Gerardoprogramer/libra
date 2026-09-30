@@ -19,8 +19,9 @@
     "by": "by",
     "chapters": "{count, plural, =0 {No chapters} =1 {# chapter} other {# chapters}}",
     "startReading": "Start reading",
-    "addToLibrary": "Add to library",
+    "addToLibrary": "Add to my library",
     "removeFromLibrary": "Remove from my library",
+    "libraryError": "Your library could not be accessed. Check that your browser allows saving data and try again.",
     "share": "Share book",
     "contents": "Contents",
     "chapterList": "Chapters"
@@ -72,6 +73,7 @@
     "description": "Save the stories you want to read, revisit or keep close at hand.",
     "emptyTitle": "Your library is empty",
     "emptyDescription": "Explore the catalog and save the books you want to keep close at hand.",
-    "browseBooks": "Browse books"
+    "browseBooks": "Browse books",
+    "unavailableTitle": "Your library is unavailable"
   }
 }

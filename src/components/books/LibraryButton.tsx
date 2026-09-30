@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { FiHeart } from "react-icons/fi";
 
 import { Button } from "@/components/ui/button";
@@ -11,24 +12,46 @@ interface LibraryButtonProps {
   bookSlug: string;
   addLabel: string;
   removeLabel: string;
+  errorLabel: string;
+  bookTitle?: string;
+  size?: "sm" | "lg";
 }
 
-export function LibraryButton({ bookSlug, addLabel, removeLabel }: LibraryButtonProps) {
-  const { entries, isReady } = useLibrary();
+export function LibraryButton({
+  bookSlug,
+  addLabel,
+  removeLabel,
+  errorLabel,
+  bookTitle,
+  size = "lg",
+}: LibraryButtonProps) {
+  const { entries, isReady, isAvailable } = useLibrary();
+  const [hasError, setHasError] = useState(false);
 
   const isSaved = entries.some((entry) => entry.bookSlug === bookSlug);
+  const label = isSaved ? removeLabel : addLabel;
 
   return (
-    <Button
-      type="button"
-      size="lg"
-      variant={isSaved ? "secondary" : "outline"}
-      disabled={!isReady}
-      onClick={() => toggleBookInLibrary(bookSlug)}
-    >
-      <FiHeart className={cn(isSaved && "fill-current")} />
+    <div>
+      <Button
+        type="button"
+        size={size}
+        variant={isSaved ? "secondary" : "outline"}
+        className="h-auto min-h-10 max-w-full py-2 text-left whitespace-normal"
+        disabled={!isAvailable}
+        aria-label={bookTitle ? `${label}: ${bookTitle}` : label}
+        onClick={() => setHasError(toggleBookInLibrary(bookSlug) === null)}
+      >
+        <FiHeart aria-hidden="true" className={cn(isSaved && "fill-current")} />
 
-      {isSaved ? removeLabel : addLabel}
-    </Button>
+        {label}
+      </Button>
+
+      {(hasError || (isReady && !isAvailable)) && (
+        <p role="alert" className="text-destructive mt-2 max-w-xs text-sm">
+          {errorLabel}
+        </p>
+      )}
+    </div>
   );
 }

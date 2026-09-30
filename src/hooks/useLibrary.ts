@@ -2,13 +2,11 @@
 
 import { useMemo, useSyncExternalStore } from "react";
 
-import { LIBRARY_CHANGE_EVENT, LIBRARY_STORAGE_KEY, parseLibrary, readLibrary } from "@/lib/library";
-
-const SERVER_SNAPSHOT = "__server__";
+import { LIBRARY_CHANGE_EVENT, LIBRARY_STORAGE_KEY, parseLibrary, readLibrarySnapshot } from "@/lib/library";
 
 function subscribe(callback: () => void) {
   const handleStorage = (event: StorageEvent) => {
-    if (event.key === LIBRARY_STORAGE_KEY) {
+    if (event.key === LIBRARY_STORAGE_KEY || event.key === null) {
       callback();
     }
   };
@@ -24,23 +22,20 @@ function subscribe(callback: () => void) {
   };
 }
 
-function getSnapshot() {
-  return JSON.stringify(readLibrary());
-}
-
 function getServerSnapshot() {
-  return SERVER_SNAPSHOT;
+  return undefined;
 }
 
 export function useLibrary() {
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const snapshot = useSyncExternalStore<string | null | undefined>(subscribe, readLibrarySnapshot, getServerSnapshot);
 
-  const isReady = snapshot !== SERVER_SNAPSHOT;
+  const isReady = snapshot !== undefined;
 
-  const entries = useMemo(() => (isReady ? parseLibrary(snapshot) : []), [snapshot, isReady]);
+  const entries = useMemo(() => (snapshot === undefined ? [] : parseLibrary(snapshot)), [snapshot]);
 
   return {
     entries,
     isReady,
+    isAvailable: isReady && snapshot !== null,
   };
 }

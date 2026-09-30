@@ -19,8 +19,9 @@
     "by": "por",
     "chapters": "{count, plural, =0 {Sin capítulos} =1 {# capítulo} other {# capítulos}}",
     "startReading": "Empezar a leer",
-    "addToLibrary": "Añadir a mi biblioteca",
+    "addToLibrary": "Agregar a mi biblioteca",
     "removeFromLibrary": "Quitar de mi biblioteca",
+    "libraryError": "No se pudo acceder a tu biblioteca. Comprueba que el navegador permita guardar datos y vuelve a intentarlo.",
     "share": "Compartir libro",
     "contents": "Contenido",
     "chapterList": "Capítulos"
@@ -72,6 +73,7 @@
     "description": "Guarda las historias que quieres leer, releer o tener siempre a mano.",
     "emptyTitle": "Tu biblioteca está vacía",
     "emptyDescription": "Explora el catálogo y guarda los libros que quieras tener a mano.",
-    "browseBooks": "Explorar libros"
+    "browseBooks": "Explorar libros",
+    "unavailableTitle": "Tu biblioteca no está disponible"
   }
 }

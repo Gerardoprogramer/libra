@@ -175,7 +175,12 @@ export default async function BookPage({ params }: BookPageProps) {
                 </Button>
               )}
 
-              <LibraryButton bookSlug={book.slug} addLabel={t("addToLibrary")} removeLabel={t("removeFromLibrary")} />
+              <LibraryButton
+                bookSlug={book.slug}
+                addLabel={t("addToLibrary")}
+                removeLabel={t("removeFromLibrary")}
+                errorLabel={t("libraryError")}
+              />
 
               <Button size="icon" variant="ghost" disabled>
                 <FiShare2 />

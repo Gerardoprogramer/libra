@@ -1,15 +1,36 @@
 import { getLocale, getTranslations } from "next-intl/server";
+import { Suspense } from "react";
 
 import { LibraryGrid } from "@/components/library/LibraryGrid";
+import { LibraryGridSkeleton } from "@/components/library/LibraryGridSkeleton";
 
 import { getBooks, type ContentLocale } from "@/db/queries/books";
+
+async function LibraryBooks({ locale }: { locale: ContentLocale }) {
+  const [books, t, bookTranslations] = await Promise.all([
+    getBooks(locale),
+    getTranslations("library"),
+    getTranslations("book"),
+  ]);
+
+  return (
+    <LibraryGrid
+      books={books}
+      emptyTitle={t("emptyTitle")}
+      emptyDescription={t("emptyDescription")}
+      browseLabel={t("browseBooks")}
+      unavailableTitle={t("unavailableTitle")}
+      addLabel={bookTranslations("addToLibrary")}
+      removeLabel={bookTranslations("removeFromLibrary")}
+      errorLabel={bookTranslations("libraryError")}
+    />
+  );
+}
 
 export default async function LibraryPage() {
   const locale = (await getLocale()) as ContentLocale;
 
   const t = await getTranslations("library");
-
-  const books = await getBooks(locale);
 
   return (
     <main className="min-h-screen">
@@ -24,12 +45,9 @@ export default async function LibraryPage() {
       </section>
 
       <section className="mx-auto max-w-7xl px-6 py-14">
-        <LibraryGrid
-          books={books}
-          emptyTitle={t("emptyTitle")}
-          emptyDescription={t("emptyDescription")}
-          browseLabel={t("browseBooks")}
-        />
+        <Suspense fallback={<LibraryGridSkeleton />}>
+          <LibraryBooks locale={locale} />
+        </Suspense>
       </section>
     </main>
   );
