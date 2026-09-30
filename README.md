@@ -1,5 +1,11 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Editorial catalog
+
+Use `pnpm import:collection` to check the local EPUB collection without writes, or
+`pnpm import:collection -- --apply` to import it. See the [editorial workflow](scripts/catalog/README.md)
+for the manifest, error handling, configuration and separate review/category steps.
+
 ## Getting Started
 
 First, run the development server:
