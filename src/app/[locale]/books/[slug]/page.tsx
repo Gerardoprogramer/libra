@@ -3,13 +3,14 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
-import { FiBookOpen, FiHeart, FiShare2 } from "react-icons/fi";
+import { FiBookOpen, FiShare2 } from "react-icons/fi";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 import { getBookBySlug, type ContentLocale } from "@/db/queries/books";
+import { LibraryButton } from "@/components/books/LibraryButton";
 
 import { Link } from "@/i18n/navigation";
 
@@ -174,10 +175,7 @@ export default async function BookPage({ params }: BookPageProps) {
                 </Button>
               )}
 
-              <Button size="lg" variant="outline" disabled>
-                <FiHeart />
-                {t("addToLibrary")}
-              </Button>
+              <LibraryButton bookSlug={book.slug} addLabel={t("addToLibrary")} removeLabel={t("removeFromLibrary")} />
 
               <Button size="icon" variant="ghost" disabled>
                 <FiShare2 />

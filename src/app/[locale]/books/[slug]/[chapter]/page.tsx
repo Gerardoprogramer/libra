@@ -46,9 +46,7 @@ export default async function ReaderPage({ params }: ReaderPageProps) {
     notFound();
   }
 
-  const { book, chapter: currentChapter, previous, next } = result;
-
-  const authors = book.authors.map((author) => author.name).join(", ");
+  const { book, chapter: currentChapter, previous, next, chapterIndex } = result;
 
   const paragraphs = currentChapter.content
     .split(/\n\s*\n/)
@@ -59,10 +57,11 @@ export default async function ReaderPage({ params }: ReaderPageProps) {
     <ReaderView
       bookSlug={book.slug}
       bookTitle={book.edition.title}
-      author={authors}
+      author={book.authors.map((author) => author.name).join(", ")}
       chapterSlug={currentChapter.slug}
       chapterTitle={currentChapter.title}
       chapterNumber={currentChapter.number}
+      chapterIndex={chapterIndex}
       totalChapters={book.chapters.length}
       paragraphs={paragraphs}
       previousHref={previous ? `/books/${book.slug}/${previous.slug}` : undefined}

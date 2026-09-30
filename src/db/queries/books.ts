@@ -603,8 +603,8 @@ export async function getChapterBySlug(bookSlug: string, chapterSlug: string, lo
 
   return {
     book,
-
     chapter,
+    chapterIndex,
 
     previous: chapterIndex > 0 ? book.chapters[chapterIndex - 1] : null,
 

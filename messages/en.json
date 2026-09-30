@@ -20,6 +20,7 @@
     "chapters": "{count, plural, =0 {No chapters} =1 {# chapter} other {# chapters}}",
     "startReading": "Start reading",
     "addToLibrary": "Add to library",
+    "removeFromLibrary": "Remove from my library",
     "share": "Share book",
     "contents": "Contents",
     "chapterList": "Chapters"
@@ -55,5 +56,22 @@
     "books": "Books",
     "bookCount": "{count, plural, =0 {No books} =1 {# book} other {# books}}",
     "noBooks": "No books are available from this author yet."
+  },
+  "continueReading": {
+    "title": "Continue reading",
+    "chapter": "Chapter",
+    "continue": "Continue reading"
+  },
+  "recentlyRead": {
+    "title": "Recently read",
+    "continue": "Continue"
+  },
+  "library": {
+    "eyebrow": "Your collection",
+    "title": "My library",
+    "description": "Save the stories you want to read, revisit or keep close at hand.",
+    "emptyTitle": "Your library is empty",
+    "emptyDescription": "Explore the catalog and save the books you want to keep close at hand.",
+    "browseBooks": "Browse books"
   }
 }

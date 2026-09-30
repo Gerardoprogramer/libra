@@ -1,0 +1,148 @@
+"use client";
+
+import Image from "next/image";
+
+import { useMemo, useSyncExternalStore } from "react";
+
+import { FiArrowRight, FiBookOpen } from "react-icons/fi";
+
+import { Link } from "@/i18n/navigation";
+
+import {
+  calculateBookProgress,
+  parseReadingProgress,
+  READING_PROGRESS_PREFIX,
+  type ReadingProgress,
+} from "@/lib/reading-progress";
+
+interface BookSummary {
+  slug: string;
+  title: string;
+  author: string;
+  coverUrl: string | null;
+}
+
+interface ContinueReadingProps {
+  books: BookSummary[];
+  title: string;
+  chapterLabel: string;
+  continueLabel: string;
+}
+
+function subscribe(callback: () => void) {
+  window.addEventListener("storage", callback);
+
+  return () => {
+    window.removeEventListener("storage", callback);
+  };
+}
+
+function getProgressSnapshot() {
+  let latestValue = "";
+  let latestUpdatedAt = -1;
+
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index);
+
+    if (!key?.startsWith(READING_PROGRESS_PREFIX)) {
+      continue;
+    }
+
+    const value = localStorage.getItem(key);
+
+    const progress = parseReadingProgress(value);
+
+    if (!progress || !value) {
+      continue;
+    }
+
+    const updatedAt = Date.parse(progress.updatedAt);
+
+    if (updatedAt > latestUpdatedAt) {
+      latestUpdatedAt = updatedAt;
+      latestValue = value;
+    }
+  }
+
+  return latestValue;
+}
+
+function getServerSnapshot() {
+  return "";
+}
+
+export function ContinueReading({ books, title, chapterLabel, continueLabel }: ContinueReadingProps) {
+  const snapshot = useSyncExternalStore(subscribe, getProgressSnapshot, getServerSnapshot);
+
+  const progress = useMemo<ReadingProgress | null>(() => parseReadingProgress(snapshot), [snapshot]);
+
+  if (!progress) {
+    return null;
+  }
+
+  const book = books.find((item) => item.slug === progress.bookSlug);
+
+  if (!book) {
+    return null;
+  }
+
+  const percentage = calculateBookProgress(progress);
+
+  return (
+    <section className="border-b">
+      <div className="mx-auto max-w-7xl px-6 py-12 md:py-16">
+        <div className="mb-6 flex items-center gap-2">
+          <FiBookOpen className="text-muted-foreground" />
+
+          <h2 className="font-serif text-2xl">{title}</h2>
+        </div>
+
+        <Link
+          href={`/books/${book.slug}/${progress.chapterSlug}`}
+          className="group bg-card hover:border-foreground/20 grid overflow-hidden rounded-xl border transition hover:shadow-sm sm:grid-cols-[120px_1fr]"
+        >
+          <div className="bg-muted relative hidden aspect-2/3 overflow-hidden sm:block">
+            {book.coverUrl ? (
+              <Image src={book.coverUrl} alt="" fill sizes="120px" className="object-cover" />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <FiBookOpen className="text-muted-foreground size-7" />
+              </div>
+            )}
+          </div>
+
+          <div className="flex min-w-0 flex-col justify-center p-6 md:p-8">
+            <p className="text-muted-foreground mb-2 text-sm">{book.author}</p>
+
+            <h3 className="font-serif text-2xl tracking-tight">{book.title}</h3>
+
+            <p className="text-muted-foreground mt-3 text-sm">
+              {chapterLabel} {progress.chapterNumber}: {progress.chapterTitle}
+            </p>
+
+            <div className="mt-6">
+              <div className="bg-muted h-1.5 overflow-hidden rounded-full">
+                <div
+                  className="bg-foreground h-full rounded-full transition-all"
+                  style={{
+                    width: `${percentage}%`,
+                  }}
+                />
+              </div>
+
+              <div className="text-muted-foreground mt-2 flex items-center justify-between text-xs">
+                <span>{percentage}%</span>
+
+                <span className="text-foreground flex items-center gap-2 font-medium">
+                  {continueLabel}
+
+                  <FiArrowRight className="transition-transform group-hover:translate-x-1" />
+                </span>
+              </div>
+            </div>
+          </div>
+        </Link>
+      </div>
+    </section>
+  );
+}

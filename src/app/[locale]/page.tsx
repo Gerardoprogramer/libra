@@ -3,13 +3,17 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { BookCard } from "@/components/books/BookCard";
 import { getBooks, type ContentLocale } from "@/db/queries/books";
 import { Link } from "@/i18n/navigation";
+import { ContinueReading } from "@/components/home/ContinueReading";
+import { RecentlyRead } from "@/components/home/RecentlyRead";
 
 export default async function Home() {
   const t = await getTranslations("home");
+  const recentlyRead = await getTranslations("recentlyRead");
 
   const locale = (await getLocale()) as ContentLocale;
 
   const books = await getBooks(locale);
+  const continueReading = await getTranslations("continueReading");
 
   return (
     <main>
@@ -28,7 +32,27 @@ export default async function Home() {
           </div>
         </div>
       </section>
-
+      <ContinueReading
+        books={books.map((book) => ({
+          slug: book.slug,
+          title: book.title,
+          author: book.author,
+          coverUrl: book.coverUrl,
+        }))}
+        title={continueReading("title")}
+        chapterLabel={continueReading("chapter")}
+        continueLabel={continueReading("continue")}
+      />
+      <RecentlyRead
+        books={books.map((book) => ({
+          slug: book.slug,
+          title: book.title,
+          author: book.author,
+          coverUrl: book.coverUrl,
+        }))}
+        title={recentlyRead("title")}
+        continueLabel={recentlyRead("continue")}
+      />
       <section className="mx-auto max-w-7xl px-6 py-14">
         <div className="mb-8 flex items-end justify-between">
           <div>

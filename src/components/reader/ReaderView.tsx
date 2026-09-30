@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useReaderPreferences } from "@/hooks/useReaderPreferences";
+import { getReadingProgressKey, parseReadingProgress, type ReadingProgress } from "@/lib/reading-progress";
 
 type ReaderTheme = "light" | "sepia" | "dark";
 type ReaderWidth = "narrow" | "medium" | "wide";
@@ -21,6 +22,7 @@ interface ReaderViewProps {
   chapterSlug: string;
   chapterTitle: string;
   chapterNumber: number;
+  chapterIndex: number;
 
   totalChapters: number;
   paragraphs: string[];
@@ -48,53 +50,121 @@ export function ReaderView({
   chapterSlug,
   chapterTitle,
   chapterNumber,
+  chapterIndex,
   totalChapters,
   paragraphs,
   previousHref,
   nextHref,
 }: ReaderViewProps) {
   const articleRef = useRef<HTMLElement>(null);
+  const hasRestoredProgress = useRef(false);
   const { theme, width, fontSize, setTheme, setWidth, setFontSize } = useReaderPreferences();
 
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    const updateProgress = () => {
-      const article = articleRef.current;
+    const article = articleRef.current;
 
-      if (!article) return;
+    if (!article) {
+      return;
+    }
 
-      const articleTop = article.getBoundingClientRect().top + window.scrollY;
-      const readableHeight = Math.max(article.offsetHeight - window.innerHeight, 1);
+    hasRestoredProgress.current = false;
+
+    const progressKey = getReadingProgressKey(bookSlug);
+
+    const savedProgress = parseReadingProgress(localStorage.getItem(progressKey));
+
+    const savedPercentage = savedProgress?.chapterSlug === chapterSlug ? savedProgress.percentage : 0;
+
+    setProgress(savedPercentage);
+
+    const saveProgress = (percentage: number) => {
+      const readingProgress: ReadingProgress = {
+        bookSlug,
+        chapterSlug,
+        chapterTitle,
+        chapterNumber,
+        chapterIndex,
+        totalChapters,
+        percentage,
+        updatedAt: new Date().toISOString(),
+      };
+
+      localStorage.setItem(progressKey, JSON.stringify(readingProgress));
+    };
+
+    const calculateProgress = () => {
+      const currentArticle = articleRef.current;
+
+      if (!currentArticle) {
+        return 0;
+      }
+
+      const articleTop = currentArticle.getBoundingClientRect().top + window.scrollY;
+
+      const readableHeight = Math.max(currentArticle.offsetHeight - window.innerHeight, 1);
 
       const current = window.scrollY - articleTop;
+
       const percentage = Math.min(Math.max((current / readableHeight) * 100, 0), 100);
 
-      const roundedProgress = Math.round(percentage);
-
-      setProgress(roundedProgress);
-
-      localStorage.setItem(
-        `libra:progress:${bookSlug}`,
-        JSON.stringify({
-          bookSlug,
-          chapterSlug,
-          chapterTitle,
-          chapterNumber,
-          percentage: roundedProgress,
-          updatedAt: new Date().toISOString(),
-        }),
-      );
+      return Math.round(percentage);
     };
 
-    updateProgress();
+    const updateProgress = () => {
+      if (!hasRestoredProgress.current) {
+        return;
+      }
 
-    window.addEventListener("scroll", updateProgress, { passive: true });
+      const percentage = calculateProgress();
+
+      setProgress(percentage);
+
+      saveProgress(percentage);
+    };
+
+    const restoreFrame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const currentArticle = articleRef.current;
+
+        if (!currentArticle) {
+          hasRestoredProgress.current = true;
+
+          return;
+        }
+
+        if (savedPercentage > 0) {
+          const articleTop = currentArticle.getBoundingClientRect().top + window.scrollY;
+
+          const readableHeight = Math.max(currentArticle.offsetHeight - window.innerHeight, 1);
+
+          const targetScroll = articleTop + readableHeight * (savedPercentage / 100);
+
+          hasRestoredProgress.current = true;
+
+          window.scrollTo({
+            top: targetScroll,
+            behavior: "auto",
+          });
+        } else {
+          hasRestoredProgress.current = true;
+
+          saveProgress(0);
+        }
+      });
+    });
+
+    window.addEventListener("scroll", updateProgress, {
+      passive: true,
+    });
 
     return () => {
+      cancelAnimationFrame(restoreFrame);
+
       window.removeEventListener("scroll", updateProgress);
     };
-  }, [bookSlug, chapterSlug, chapterTitle, chapterNumber]);
+  }, [bookSlug, chapterSlug, chapterTitle, chapterNumber, chapterIndex, totalChapters]);
 
   function decreaseFontSize() {
     setFontSize(fontSize - 2);
