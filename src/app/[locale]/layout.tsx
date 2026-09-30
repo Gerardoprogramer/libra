@@ -7,6 +7,9 @@ import { routing } from "@/i18n/routing";
 
 import "../globals.css";
 
+// Keep existing blocking routes while adopting data caching incrementally.
+export const instant = false;
+
 interface LocaleLayoutProps {
   children: React.ReactNode;
   params: Promise<{

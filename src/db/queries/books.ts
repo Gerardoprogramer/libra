@@ -1,6 +1,8 @@
 import "server-only";
 
 import { and, asc, eq, ilike, or } from "drizzle-orm";
+import { cacheLife, cacheTag } from "next/cache";
+import { cache } from "react";
 
 import { db } from "@/db";
 
@@ -354,7 +356,12 @@ export async function getCategories(locale: ContentLocale): Promise<CategoryList
     .sort((first, second) => first.name.localeCompare(second.name));
 }
 
-export async function getBookBySlug(slug: string, locale: ContentLocale): Promise<BookDetails | null> {
+export const getBookBySlug = cache(async (slug: string, locale: ContentLocale): Promise<BookDetails | null> => {
+  "use cache";
+
+  cacheLife("editorial");
+  cacheTag("library:editorial", `book:${slug}`);
+
   const [book] = await db
     .select({
       id: books.id,
@@ -533,9 +540,14 @@ export async function getBookBySlug(slug: string, locale: ContentLocale): Promis
 
     chapters: chapterRows,
   };
-}
+});
 
-export async function getChapterBySlug(bookSlug: string, chapterSlug: string, locale: ContentLocale) {
+export const getChapterBySlug = cache(async (bookSlug: string, chapterSlug: string, locale: ContentLocale) => {
+  "use cache";
+
+  cacheLife("editorial");
+  cacheTag("library:editorial", `book:${bookSlug}`, `chapter:${bookSlug}:${chapterSlug}`);
+
   const book = await getBookBySlug(bookSlug, locale);
 
   if (!book) {
@@ -582,4 +594,4 @@ export async function getChapterBySlug(bookSlug: string, chapterSlug: string, lo
 
     next: chapterIndex < book.chapters.length - 1 ? book.chapters[chapterIndex + 1] : null,
   };
-}
+});
