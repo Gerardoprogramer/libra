@@ -134,9 +134,19 @@ export default async function BookPage({ params }: BookPageProps) {
 
             <h1 className="max-w-3xl font-serif text-5xl tracking-tight md:text-6xl">{book.edition.title}</h1>
 
-            <p className="text-muted-foreground mt-3 text-lg">
-              {t("by")} <span className="text-foreground">{authors}</span>
-            </p>
+            <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-x-1 text-lg">
+              <span>{t("by")}</span>
+
+              {book.authors.map((author, index) => (
+                <span key={author.id}>
+                  <Link href={`/authors/${author.slug}`} className="text-foreground transition hover:underline">
+                    {author.name}
+                  </Link>
+
+                  {index < book.authors.length - 1 && ","}
+                </span>
+              ))}
+            </div>
 
             <div className="text-muted-foreground mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
               <span>

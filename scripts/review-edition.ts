@@ -170,7 +170,7 @@ async function main() {
 
     console.log(`Publication: ${updated.publicationStatus}`);
 
-    await revalidateEditorialCache([`book:${edition.bookSlug}`]);
+    await revalidateEditorialCache([`book:${edition.bookSlug}`, "library"]);
 
     return;
   }
@@ -194,7 +194,7 @@ async function main() {
 
     console.log(`Copyright: ${updated.copyrightStatus}`);
 
-    await revalidateEditorialCache([`book:${edition.bookSlug}`]);
+    await revalidateEditorialCache([`book:${edition.bookSlug}`, "library"]);
 
     return;
   }
@@ -212,7 +212,7 @@ async function main() {
 
   console.log(`Publication: ${updated.publicationStatus}`);
 
-  await revalidateEditorialCache([`book:${edition.bookSlug}`]);
+  await revalidateEditorialCache([`book:${edition.bookSlug}`, "library"]);
 }
 
 main()

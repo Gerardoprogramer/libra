@@ -2,7 +2,6 @@ import "server-only";
 
 import { and, asc, eq, ilike, or } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
-import { cache } from "react";
 
 import { db } from "@/db";
 
@@ -93,6 +92,15 @@ export interface BookDetails {
   }[];
 }
 
+export interface AuthorDetails {
+  id: string;
+  slug: string;
+  name: string;
+  birthYear: number | null;
+  deathYear: number | null;
+  books: BookListItem[];
+}
+
 function getEditionVisibilityCondition() {
   if (process.env.NODE_ENV === "development") {
     return undefined;
@@ -124,8 +132,12 @@ function chooseEdition<
 }
 
 export async function getBooks(locale: ContentLocale, filters: BookFilters = {}): Promise<BookListItem[]> {
-  const query = filters.query?.trim();
+  "use cache";
 
+  cacheLife("editorial");
+  cacheTag("library:editorial");
+
+  const query = filters.query?.trim();
   const category = filters.category?.trim();
 
   const rows = await db
@@ -277,8 +289,11 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
     ];
   });
 }
-
 export async function getCategories(locale: ContentLocale): Promise<CategoryListItem[]> {
+  "use cache";
+
+  cacheLife("editorial");
+  cacheTag("library:editorial");
   const rows = await db
     .select({
       categoryId: categories.id,
@@ -356,7 +371,7 @@ export async function getCategories(locale: ContentLocale): Promise<CategoryList
     .sort((first, second) => first.name.localeCompare(second.name));
 }
 
-export const getBookBySlug = cache(async (slug: string, locale: ContentLocale): Promise<BookDetails | null> => {
+export async function getBookBySlug(slug: string, locale: ContentLocale): Promise<BookDetails | null> {
   "use cache";
 
   cacheLife("editorial");
@@ -540,13 +555,14 @@ export const getBookBySlug = cache(async (slug: string, locale: ContentLocale): 
 
     chapters: chapterRows,
   };
-});
+}
 
-export const getChapterBySlug = cache(async (bookSlug: string, chapterSlug: string, locale: ContentLocale) => {
+export async function getChapterBySlug(bookSlug: string, chapterSlug: string, locale: ContentLocale) {
   "use cache";
 
   cacheLife("editorial");
-  cacheTag("library:editorial", `book:${bookSlug}`, `chapter:${bookSlug}:${chapterSlug}`);
+
+  cacheTag(`book:${bookSlug}`, `chapter:${bookSlug}:${chapterSlug}`, "library:editorial");
 
   const book = await getBookBySlug(bookSlug, locale);
 
@@ -594,4 +610,108 @@ export const getChapterBySlug = cache(async (bookSlug: string, chapterSlug: stri
 
     next: chapterIndex < book.chapters.length - 1 ? book.chapters[chapterIndex + 1] : null,
   };
-});
+}
+
+export async function getAuthorBySlug(slug: string, locale: ContentLocale): Promise<AuthorDetails | null> {
+  "use cache";
+
+  cacheLife("editorial");
+
+  cacheTag(`author:${slug}`, "library:editorial");
+
+  const [author] = await db
+    .select({
+      id: authors.id,
+      slug: authors.slug,
+      name: authors.name,
+      birthYear: authors.birthYear,
+      deathYear: authors.deathYear,
+    })
+    .from(authors)
+    .where(eq(authors.slug, slug))
+    .limit(1);
+
+  if (!author) {
+    return null;
+  }
+
+  const rows = await db
+    .select({
+      bookId: books.id,
+      bookSlug: books.slug,
+      publicationYear: books.originalPublicationYear,
+
+      editionId: editions.id,
+      editionTitle: editions.title,
+      editionLanguage: editions.language,
+      editionCoverUrl: editions.coverUrl,
+    })
+    .from(bookAuthors)
+    .innerJoin(books, eq(books.id, bookAuthors.bookId))
+    .innerJoin(editions, eq(editions.bookId, books.id))
+    .where(and(eq(bookAuthors.authorId, author.id), getEditionVisibilityCondition()))
+    .orderBy(asc(books.originalPublicationYear));
+
+  const grouped = new Map<
+    string,
+    {
+      id: string;
+      slug: string;
+      year: number | null;
+      editions: Map<
+        string,
+        {
+          language: string;
+          title: string;
+          coverUrl: string | null;
+        }
+      >;
+    }
+  >();
+
+  for (const row of rows) {
+    let currentBook = grouped.get(row.bookId);
+
+    if (!currentBook) {
+      currentBook = {
+        id: row.bookId,
+        slug: row.bookSlug,
+        year: row.publicationYear,
+        editions: new Map(),
+      };
+
+      grouped.set(row.bookId, currentBook);
+    }
+
+    currentBook.editions.set(row.editionId, {
+      language: row.editionLanguage,
+      title: row.editionTitle,
+      coverUrl: row.editionCoverUrl,
+    });
+  }
+
+  const authorBooks = Array.from(grouped.values()).flatMap((book) => {
+    const selectedEdition = chooseEdition(Array.from(book.editions.values()), locale);
+
+    if (!selectedEdition) {
+      return [];
+    }
+
+    return [
+      {
+        id: book.id,
+        slug: book.slug,
+        title: selectedEdition.title,
+        author: author.name,
+        year: book.year,
+        language: selectedEdition.language,
+        coverUrl: selectedEdition.coverUrl,
+      },
+    ];
+  });
+
+  return {
+    ...author,
+    books: authorBooks,
+  };
+}

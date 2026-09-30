@@ -48,5 +48,12 @@
     "categoriesTitle": "Categories",
     "categoriesDescription": "Browse the library by genre and literary category.",
     "booksInCategory": "{count, plural, =1 {# book} other {# books}}"
+  },
+  "author": {
+    "eyebrow": "Author",
+    "booksEyebrow": "Bibliography",
+    "books": "Books",
+    "bookCount": "{count, plural, =0 {No books} =1 {# book} other {# books}}",
+    "noBooks": "No books are available from this author yet."
   }
 }
