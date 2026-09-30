@@ -121,13 +121,15 @@ export default async function BookPage({ params }: BookPageProps) {
 
           <div className="flex flex-col justify-center">
             <div className="mb-5 flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">{book.edition.language.toUpperCase()}</Badge>
+              {book.categories.map((category) => (
+                <Badge key={category.id} variant="secondary" asChild>
+                  <Link href={`/books?category=${category.slug}`}>{category.name}</Link>
+                </Badge>
+              ))}
+
+              <Badge variant="outline">{book.edition.language.toUpperCase()}</Badge>
 
               {year && <span className="text-muted-foreground text-sm">{year}</span>}
-
-              {book.edition.translator && (
-                <span className="text-muted-foreground text-sm">· {book.edition.translator}</span>
-              )}
             </div>
 
             <h1 className="max-w-3xl font-serif text-5xl tracking-tight md:text-6xl">{book.edition.title}</h1>

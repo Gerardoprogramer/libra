@@ -1,6 +1,7 @@
-import { Link } from "@/i18n/navigation";
+import Image from "next/image";
 
 import type { BookListItem } from "@/db/queries/books";
+import { Link } from "@/i18n/navigation";
 
 interface BookCardProps {
   book: BookListItem;
@@ -29,15 +30,25 @@ export function BookCard({ book }: BookCardProps) {
         <div
           className={`relative aspect-2/3 overflow-hidden rounded-lg bg-linear-to-br ${coverStyle} shadow-lg transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl`}
         >
-          <div className="absolute inset-0 flex flex-col justify-between p-5 text-white">
-            <span className="text-xs font-medium tracking-[0.2em] text-white/60 uppercase">{book.language}</span>
+          {book.coverUrl ? (
+            <Image
+              src={book.coverUrl}
+              alt={`Cover of ${book.title}`}
+              fill
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+              className="object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 flex flex-col justify-between p-5 text-white">
+              <span className="text-xs font-medium tracking-[0.2em] text-white/60 uppercase">{book.language}</span>
 
-            <div>
-              <h3 className="font-serif text-xl leading-tight">{book.title}</h3>
+              <div>
+                <h3 className="font-serif text-xl leading-tight">{book.title}</h3>
 
-              <p className="mt-2 text-sm text-white/65">{book.author}</p>
+                <p className="mt-2 text-sm text-white/65">{book.author}</p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="mt-4">
@@ -46,9 +57,12 @@ export function BookCard({ book }: BookCardProps) {
           <p className="text-muted-foreground mt-1 text-sm">{book.author}</p>
 
           <div className="text-muted-foreground mt-2 flex items-center gap-2 text-xs tracking-wide uppercase">
-            {book.year && <span>{book.year}</span>}
-
-            {book.year && <span>·</span>}
+            {book.year && (
+              <>
+                <span>{book.year}</span>
+                <span>·</span>
+              </>
+            )}
 
             <span>{book.language}</span>
           </div>

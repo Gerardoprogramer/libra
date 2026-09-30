@@ -1,25 +1,31 @@
 import "server-only";
 
-import { and, asc, eq, or } from "drizzle-orm";
+import { and, asc, eq, ilike, or } from "drizzle-orm";
 
 import { db } from "@/db";
-import { authors, bookAuthors, books, chapters, editions } from "@/db/schema";
+
+import {
+  authors,
+  bookAuthors,
+  bookCategories,
+  books,
+  categories,
+  categoryTranslations,
+  chapters,
+  editions,
+} from "@/db/schema";
 
 export type ContentLocale = "es" | "en";
 
-function getEditionVisibilityCondition() {
-  if (process.env.NODE_ENV === "development") {
-    return undefined;
-  }
+export interface BookFilters {
+  query?: string;
+  category?: string;
+}
 
-  return and(
-    eq(editions.publicationStatus, "PUBLISHED"),
-    or(
-      eq(editions.copyrightStatus, "PUBLIC_DOMAIN_VERIFIED"),
-      eq(editions.copyrightStatus, "LICENSED"),
-      eq(editions.copyrightStatus, "ORIGINAL"),
-    ),
-  );
+export interface BookCategory {
+  id: string;
+  slug: string;
+  name: string;
 }
 
 export interface BookListItem {
@@ -32,11 +38,19 @@ export interface BookListItem {
   coverUrl: string | null;
 }
 
+export interface CategoryListItem extends BookCategory {
+  bookCount: number;
+}
+
 export interface BookDetails {
   id: string;
+
   slug: string;
+
   originalTitle: string;
+
   originalLanguage: string;
+
   originalPublicationYear: number | null;
 
   authors: {
@@ -45,16 +59,27 @@ export interface BookDetails {
     name: string;
   }[];
 
+  categories: BookCategory[];
+
   edition: {
     id: string;
+
     slug: string;
+
     language: string;
+
     title: string;
+
     description: string | null;
+
     translator: string | null;
+
     publicationYear: number | null;
+
     coverUrl: string | null;
+
     sourceName: string | null;
+
     copyrightStatus: "PUBLIC_DOMAIN_VERIFIED" | "LICENSED" | "ORIGINAL" | "PENDING_REVIEW" | "REJECTED";
   };
 
@@ -64,6 +89,24 @@ export interface BookDetails {
     number: number;
     title: string;
   }[];
+}
+
+function getEditionVisibilityCondition() {
+  if (process.env.NODE_ENV === "development") {
+    return undefined;
+  }
+
+  return and(
+    eq(editions.publicationStatus, "PUBLISHED"),
+
+    or(
+      eq(editions.copyrightStatus, "PUBLIC_DOMAIN_VERIFIED"),
+
+      eq(editions.copyrightStatus, "LICENSED"),
+
+      eq(editions.copyrightStatus, "ORIGINAL"),
+    ),
+  );
 }
 
 function chooseEdition<
@@ -78,34 +121,74 @@ function chooseEdition<
   );
 }
 
-export async function getBooks(locale: ContentLocale): Promise<BookListItem[]> {
+export async function getBooks(locale: ContentLocale, filters: BookFilters = {}): Promise<BookListItem[]> {
+  const query = filters.query?.trim();
+
+  const category = filters.category?.trim();
+
   const rows = await db
     .select({
       bookId: books.id,
+
       bookSlug: books.slug,
+
+      originalTitle: books.originalTitle,
+
       publicationYear: books.originalPublicationYear,
 
       authorId: authors.id,
+
       authorName: authors.name,
+
       authorPosition: bookAuthors.position,
 
       editionId: editions.id,
+
       editionTitle: editions.title,
+
       editionLanguage: editions.language,
+
       editionCoverUrl: editions.coverUrl,
     })
     .from(books)
+
     .innerJoin(bookAuthors, eq(bookAuthors.bookId, books.id))
+
     .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
+
     .innerJoin(editions, eq(editions.bookId, books.id))
-    .where(getEditionVisibilityCondition())
+
+    .leftJoin(bookCategories, eq(bookCategories.bookId, books.id))
+
+    .leftJoin(categories, eq(categories.id, bookCategories.categoryId))
+
+    .where(
+      and(
+        getEditionVisibilityCondition(),
+
+        query
+          ? or(
+              ilike(editions.title, `%${query}%`),
+
+              ilike(books.originalTitle, `%${query}%`),
+
+              ilike(authors.name, `%${query}%`),
+            )
+          : undefined,
+
+        category ? eq(categories.slug, category) : undefined,
+      ),
+    )
+
     .orderBy(asc(books.originalTitle), asc(bookAuthors.position));
 
   const grouped = new Map<
     string,
     {
       id: string;
+
       slug: string;
+
       year: number | null;
 
       authors: Map<
@@ -133,9 +216,13 @@ export async function getBooks(locale: ContentLocale): Promise<BookListItem[]> {
     if (!currentBook) {
       currentBook = {
         id: row.bookId,
+
         slug: row.bookSlug,
+
         year: row.publicationYear,
+
         authors: new Map(),
+
         editions: new Map(),
       };
 
@@ -144,20 +231,21 @@ export async function getBooks(locale: ContentLocale): Promise<BookListItem[]> {
 
     currentBook.authors.set(row.authorId, {
       name: row.authorName,
+
       position: row.authorPosition,
     });
 
     currentBook.editions.set(row.editionId, {
-      title: row.editionTitle,
       language: row.editionLanguage,
+
+      title: row.editionTitle,
+
       coverUrl: row.editionCoverUrl,
     });
   }
 
   return Array.from(grouped.values()).flatMap((book) => {
-    const availableEditions = Array.from(book.editions.values());
-
-    const selectedEdition = chooseEdition(availableEditions, locale);
+    const selectedEdition = chooseEdition(Array.from(book.editions.values()), locale);
 
     if (!selectedEdition) {
       return [];
@@ -171,28 +259,119 @@ export async function getBooks(locale: ContentLocale): Promise<BookListItem[]> {
     return [
       {
         id: book.id,
+
         slug: book.slug,
+
         title: selectedEdition.title,
+
         author,
+
         year: book.year,
+
         language: selectedEdition.language,
+
         coverUrl: selectedEdition.coverUrl,
       },
     ];
   });
 }
 
+export async function getCategories(locale: ContentLocale): Promise<CategoryListItem[]> {
+  const rows = await db
+    .select({
+      categoryId: categories.id,
+
+      categorySlug: categories.slug,
+
+      translationLocale: categoryTranslations.locale,
+
+      translationName: categoryTranslations.name,
+
+      bookId: bookCategories.bookId,
+    })
+    .from(categories)
+
+    .leftJoin(categoryTranslations, eq(categoryTranslations.categoryId, categories.id))
+
+    .innerJoin(bookCategories, eq(bookCategories.categoryId, categories.id))
+
+    .innerJoin(books, eq(books.id, bookCategories.bookId))
+
+    .innerJoin(editions, eq(editions.bookId, books.id))
+
+    .where(getEditionVisibilityCondition())
+
+    .orderBy(asc(categories.slug));
+
+  const grouped = new Map<
+    string,
+    {
+      id: string;
+
+      slug: string;
+
+      translations: Map<string, string>;
+
+      books: Set<string>;
+    }
+  >();
+
+  for (const row of rows) {
+    let category = grouped.get(row.categoryId);
+
+    if (!category) {
+      category = {
+        id: row.categoryId,
+
+        slug: row.categorySlug,
+
+        translations: new Map(),
+
+        books: new Set(),
+      };
+
+      grouped.set(row.categoryId, category);
+    }
+
+    if (row.translationLocale && row.translationName) {
+      category.translations.set(row.translationLocale, row.translationName);
+    }
+
+    category.books.add(row.bookId);
+  }
+
+  return Array.from(grouped.values())
+    .map((category) => ({
+      id: category.id,
+
+      slug: category.slug,
+
+      name: category.translations.get(locale) ?? category.translations.get("en") ?? category.slug,
+
+      bookCount: category.books.size,
+    }))
+
+    .sort((first, second) => first.name.localeCompare(second.name));
+}
+
 export async function getBookBySlug(slug: string, locale: ContentLocale): Promise<BookDetails | null> {
   const [book] = await db
     .select({
       id: books.id,
+
       slug: books.slug,
+
       originalTitle: books.originalTitle,
+
       originalLanguage: books.originalLanguage,
+
       originalPublicationYear: books.originalPublicationYear,
     })
+
     .from(books)
+
     .where(eq(books.slug, slug))
+
     .limit(1);
 
   if (!book) {
@@ -202,30 +381,54 @@ export async function getBookBySlug(slug: string, locale: ContentLocale): Promis
   const bookAuthorRows = await db
     .select({
       id: authors.id,
+
       slug: authors.slug,
+
       name: authors.name,
+
       position: bookAuthors.position,
     })
+
     .from(bookAuthors)
+
     .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
+
     .where(eq(bookAuthors.bookId, book.id))
+
     .orderBy(asc(bookAuthors.position));
 
   const editionRows = await db
     .select({
       id: editions.id,
+
       slug: editions.slug,
+
       language: editions.language,
+
       title: editions.title,
+
       description: editions.description,
+
       translator: editions.translator,
+
       publicationYear: editions.publicationYear,
+
       coverUrl: editions.coverUrl,
+
       sourceName: editions.sourceName,
+
       copyrightStatus: editions.copyrightStatus,
     })
+
     .from(editions)
-    .where(and(eq(editions.bookId, book.id), getEditionVisibilityCondition()));
+
+    .where(
+      and(
+        eq(editions.bookId, book.id),
+
+        getEditionVisibilityCondition(),
+      ),
+    );
 
   const edition = chooseEdition(editionRows, locale);
 
@@ -233,15 +436,76 @@ export async function getBookBySlug(slug: string, locale: ContentLocale): Promis
     return null;
   }
 
+  const categoryRows = await db
+    .select({
+      id: categories.id,
+
+      slug: categories.slug,
+
+      position: bookCategories.position,
+
+      locale: categoryTranslations.locale,
+
+      name: categoryTranslations.name,
+    })
+
+    .from(bookCategories)
+
+    .innerJoin(categories, eq(categories.id, bookCategories.categoryId))
+
+    .leftJoin(categoryTranslations, eq(categoryTranslations.categoryId, categories.id))
+
+    .where(eq(bookCategories.bookId, book.id))
+
+    .orderBy(asc(bookCategories.position));
+
+  const categoryMap = new Map<
+    string,
+    {
+      id: string;
+      slug: string;
+      position: number;
+      translations: Map<string, string>;
+    }
+  >();
+
+  for (const categoryRow of categoryRows) {
+    let category = categoryMap.get(categoryRow.id);
+
+    if (!category) {
+      category = {
+        id: categoryRow.id,
+
+        slug: categoryRow.slug,
+
+        position: categoryRow.position,
+
+        translations: new Map(),
+      };
+
+      categoryMap.set(categoryRow.id, category);
+    }
+
+    if (categoryRow.locale && categoryRow.name) {
+      category.translations.set(categoryRow.locale, categoryRow.name);
+    }
+  }
+
   const chapterRows = await db
     .select({
       id: chapters.id,
+
       slug: chapters.slug,
+
       number: chapters.number,
+
       title: chapters.title,
     })
+
     .from(chapters)
+
     .where(eq(chapters.editionId, edition.id))
+
     .orderBy(asc(chapters.number));
 
   return {
@@ -249,9 +513,21 @@ export async function getBookBySlug(slug: string, locale: ContentLocale): Promis
 
     authors: bookAuthorRows.map((author) => ({
       id: author.id,
+
       slug: author.slug,
+
       name: author.name,
     })),
+
+    categories: Array.from(categoryMap.values())
+      .sort((first, second) => first.position - second.position)
+      .map((category) => ({
+        id: category.id,
+
+        slug: category.slug,
+
+        name: category.translations.get(locale) ?? category.translations.get("en") ?? category.slug,
+      })),
 
     edition,
 
@@ -269,13 +545,26 @@ export async function getChapterBySlug(bookSlug: string, chapterSlug: string, lo
   const [chapter] = await db
     .select({
       id: chapters.id,
+
       slug: chapters.slug,
+
       number: chapters.number,
+
       title: chapters.title,
+
       content: chapters.content,
     })
+
     .from(chapters)
-    .where(and(eq(chapters.editionId, book.edition.id), eq(chapters.slug, chapterSlug)))
+
+    .where(
+      and(
+        eq(chapters.editionId, book.edition.id),
+
+        eq(chapters.slug, chapterSlug),
+      ),
+    )
+
     .limit(1);
 
   if (!chapter) {
@@ -286,6 +575,7 @@ export async function getChapterBySlug(bookSlug: string, chapterSlug: string, lo
 
   return {
     book,
+
     chapter,
 
     previous: chapterIndex > 0 ? book.chapters[chapterIndex - 1] : null,
