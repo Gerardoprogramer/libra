@@ -44,13 +44,13 @@ const categoryDefinitions = [
   },
 ];
 
-const assignments = {
+const assignments: Record<string, string[]> = {
   frankenstein: ["classic-literature", "gothic-fiction", "horror", "science-fiction"],
 
   dracula: ["classic-literature", "gothic-fiction", "horror"],
-} as const;
+};
 
-async function seedCategories() {
+async function main() {
   console.log("Seeding categories...");
 
   for (const definition of categoryDefinitions) {
@@ -68,24 +68,36 @@ async function seedCategories() {
       .returning();
 
     if (!category) {
-      throw new Error(`Could not create category ${definition.slug}`);
+      throw new Error(`Could not create category: ${definition.slug}`);
     }
 
     await db
       .insert(categoryTranslations)
-      .values([
-        {
-          categoryId: category.id,
-          locale: "en",
+      .values({
+        categoryId: category.id,
+        locale: "en",
+        name: definition.en,
+      })
+      .onConflictDoUpdate({
+        target: [categoryTranslations.categoryId, categoryTranslations.locale],
+        set: {
           name: definition.en,
         },
-        {
-          categoryId: category.id,
-          locale: "es",
+      });
+
+    await db
+      .insert(categoryTranslations)
+      .values({
+        categoryId: category.id,
+        locale: "es",
+        name: definition.es,
+      })
+      .onConflictDoUpdate({
+        target: [categoryTranslations.categoryId, categoryTranslations.locale],
+        set: {
           name: definition.es,
         },
-      ])
-      .onConflictDoNothing();
+      });
   }
 
   for (const [bookSlug, categorySlugs] of Object.entries(assignments)) {
@@ -107,7 +119,7 @@ async function seedCategories() {
         slug: categories.slug,
       })
       .from(categories)
-      .where(inArray(categories.slug, [...categorySlugs]));
+      .where(inArray(categories.slug, categorySlugs));
 
     const categoryMap = new Map(categoryRows.map((category) => [category.slug, category.id]));
 
@@ -122,22 +134,23 @@ async function seedCategories() {
         throw new Error(`Category not found: ${categorySlug}`);
       }
 
-      await db
-        .insert(bookCategories)
-        .values({
-          bookId: book.id,
-          categoryId,
-          position,
-        })
-        .onConflictDoNothing();
+      await db.insert(bookCategories).values({
+        bookId: book.id,
+        categoryId,
+        position,
+      });
     }
+
+    console.log(`${bookSlug}: ${categorySlugs.join(", ")}`);
   }
 
+  console.log("");
   console.log("Categories seeded successfully");
 }
 
-seedCategories()
+main()
   .catch((error) => {
+    console.error("");
     console.error("Category seed failed");
 
     console.error(error);

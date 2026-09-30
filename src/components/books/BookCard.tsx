@@ -5,6 +5,7 @@ import { Link } from "@/i18n/navigation";
 
 interface BookCardProps {
   book: BookListItem;
+  eager?: boolean;
 }
 
 const coverStyles = [
@@ -21,7 +22,7 @@ function getCoverStyle(slug: string) {
   return coverStyles[value % coverStyles.length];
 }
 
-export function BookCard({ book }: BookCardProps) {
+export function BookCard({ book, eager = false }: BookCardProps) {
   const coverStyle = getCoverStyle(book.slug);
 
   return (
@@ -35,6 +36,7 @@ export function BookCard({ book }: BookCardProps) {
               src={book.coverUrl}
               alt={`Cover of ${book.title}`}
               fill
+              loading={eager ? "eager" : "lazy"}
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
               className="object-cover"
             />

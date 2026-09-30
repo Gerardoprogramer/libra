@@ -92,8 +92,8 @@ export default async function BooksPage({ searchParams }: BooksPageProps) {
 
       {books.length > 0 ? (
         <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {books.map((book) => (
-            <BookCard key={book.id} book={book} />
+          {books.map((book, index) => (
+            <BookCard key={book.id} book={book} eager={index < 4} />
           ))}
         </div>
       ) : (
