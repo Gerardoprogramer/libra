@@ -7,10 +7,7 @@ config({
   path: ".env.local",
 });
 
-async function testConnection(
-  name: string,
-  connectionString: string,
-) {
+async function testConnection(name: string, connectionString: string) {
   const sql = postgres(connectionString, {
     max: 1,
     prepare: false,
@@ -23,18 +20,13 @@ async function testConnection(
 
   try {
     for (let i = 1; i <= 20; i++) {
-      const start =
-        performance.now();
+      const start = performance.now();
 
       await sql`select 1`;
 
-      const duration =
-        performance.now() -
-        start;
+      const duration = performance.now() - start;
 
-      console.log(
-        `Query ${String(i).padStart(2, "0")}: ${duration.toFixed(2)} ms`,
-      );
+      console.log(`Query ${String(i).padStart(2, "0")}: ${duration.toFixed(2)} ms`);
     }
   } finally {
     await sql.end();
@@ -43,30 +35,16 @@ async function testConnection(
 
 async function main() {
   if (!process.env.DATABASE_URL) {
-    throw new Error(
-      "DATABASE_URL is not defined",
-    );
+    throw new Error("DATABASE_URL is not defined");
   }
 
-  if (
-    !process.env
-      .DIRECT_DATABASE_URL
-  ) {
-    throw new Error(
-      "DIRECT_DATABASE_URL is not defined",
-    );
+  if (!process.env.DIRECT_DATABASE_URL) {
+    throw new Error("DIRECT_DATABASE_URL is not defined");
   }
 
-  await testConnection(
-    "Transaction pooler (DATABASE_URL)",
-    process.env.DATABASE_URL,
-  );
+  await testConnection("Transaction pooler (DATABASE_URL)", process.env.DATABASE_URL);
 
-  await testConnection(
-    "Session pooler (DIRECT_DATABASE_URL)",
-    process.env
-      .DIRECT_DATABASE_URL,
-  );
+  await testConnection("Session pooler (DIRECT_DATABASE_URL)", process.env.DIRECT_DATABASE_URL);
 }
 
 main().catch((error) => {

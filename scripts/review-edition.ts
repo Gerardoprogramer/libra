@@ -5,6 +5,8 @@ import postgres from "postgres";
 
 import { books, editions } from "../src/db/schema";
 
+import { revalidateEditorialCache } from "./lib/revalidate-cache";
+
 config({
   path: ".env.local",
 });
@@ -168,6 +170,8 @@ async function main() {
 
     console.log(`Publication: ${updated.publicationStatus}`);
 
+    await revalidateEditorialCache([`book:${edition.bookSlug}`]);
+
     return;
   }
 
@@ -190,6 +194,8 @@ async function main() {
 
     console.log(`Copyright: ${updated.copyrightStatus}`);
 
+    await revalidateEditorialCache([`book:${edition.bookSlug}`]);
+
     return;
   }
 
@@ -205,6 +211,8 @@ async function main() {
   console.log("Edition archived.");
 
   console.log(`Publication: ${updated.publicationStatus}`);
+
+  await revalidateEditorialCache([`book:${edition.bookSlug}`]);
 }
 
 main()

@@ -9,6 +9,7 @@ import { authors, bookAuthors, books, chapters, editions } from "../src/db/schem
 
 import { parseEpub } from "./lib/parse-epub";
 import { uploadCover } from "./lib/r2";
+import { revalidateEditorialCache } from "./lib/revalidate-cache";
 
 config({
   path: ".env.local",
@@ -369,7 +370,7 @@ async function main() {
     }
 
     console.log("");
-    console.log("Database import completed");
+    console.log("Database import staged for commit");
 
     console.log(`Book ID: ${book.id}`);
 
@@ -383,6 +384,11 @@ async function main() {
 
     console.log(`Publication: ${edition.publicationStatus}`);
   });
+
+  console.log("Database import committed.");
+
+  // The book tag also covers replaced/deleted chapters in every locale.
+  await revalidateEditorialCache([`book:${bookSlug}`, "library"]);
 }
 
 main()

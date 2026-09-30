@@ -6,7 +6,7 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 const nextConfig: NextConfig = {
   cacheComponents: true,
   cacheLife: {
-    // External import/publication scripts do not invalidate these entries yet.
+    // Short fallback lifetime if post-commit invalidation is unavailable.
     editorial: {
       stale: 30,
       revalidate: 60,
