@@ -1,0 +1,2 @@
+ALTER TABLE "editions" ADD COLUMN "is_preferred" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "editions_book_preferred_language_idx" ON "editions" USING btree ("book_id",lower(split_part("language", '-', 1))) WHERE "editions"."is_preferred";

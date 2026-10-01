@@ -1,4 +1,16 @@
-import { index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import {
+  boolean,
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
 
 import { books } from "./books";
 
@@ -39,6 +51,8 @@ export const editions = pgTable(
 
     coverUrl: text("cover_url"),
 
+    isPreferred: boolean("is_preferred").default(false).notNull(),
+
     sourceName: text("source_name"),
 
     sourceIdentifier: text("source_identifier"),
@@ -77,5 +91,9 @@ export const editions = pgTable(
     index("editions_copyright_status_idx").on(table.copyrightStatus),
 
     uniqueIndex("editions_source_idx").on(table.sourceName, table.sourceIdentifier),
+
+    uniqueIndex("editions_book_preferred_language_idx")
+      .on(table.bookId, sql`lower(split_part(${table.language}, '-', 1))`)
+      .where(sql`${table.isPreferred}`),
   ],
 );

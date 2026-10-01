@@ -29,6 +29,7 @@
   },
   "book": {
     "by": "por",
+    "translatedBy": "Traducción de {translator}",
     "chapters": "{count, plural, =0 {Sin capítulos} =1 {# capítulo} other {# capítulos}}",
     "showAllChapters": "{count, plural, =1 {Mostrar capítulo} other {Mostrar los # capítulos}}",
     "noChaptersAvailable": "Todavía no hay capítulos disponibles para este libro.",

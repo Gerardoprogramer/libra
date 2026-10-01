@@ -5,6 +5,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { cacheLife, cacheTag } from "next/cache";
 
 import { db } from "@/db";
+import { chooseEdition } from "@/lib/edition-selection";
 
 import {
   authors,
@@ -16,6 +17,8 @@ import {
   chapters,
   editions,
 } from "@/db/schema";
+
+import { getPublicEditionVisibilityCondition } from "./editorial-visibility";
 
 export type ContentLocale = "es" | "en";
 
@@ -126,17 +129,6 @@ interface BookCategoryRow {
 
 const fallbackCategoryTranslations = alias(categoryTranslations, "fallback_category_translations");
 
-function getPublishedEditionVisibilityCondition() {
-  return and(
-    eq(editions.publicationStatus, "PUBLISHED"),
-    or(
-      eq(editions.copyrightStatus, "PUBLIC_DOMAIN_VERIFIED"),
-      eq(editions.copyrightStatus, "LICENSED"),
-      eq(editions.copyrightStatus, "ORIGINAL"),
-    ),
-  );
-}
-
 function addBookCategory(categories: Map<string, PositionedBookCategory>, row: BookCategoryRow) {
   if (!row.categoryId || !row.categorySlug || row.categoryPosition === null) {
     return;
@@ -154,26 +146,6 @@ function getBookCategories(categories: Map<string, PositionedBookCategory>): Boo
   return Array.from(categories.values())
     .sort((first, second) => first.position - second.position)
     .map(({ id, slug, name }) => ({ id, slug, name }));
-}
-
-function getEditionVisibilityCondition() {
-  if (process.env.NODE_ENV === "development") {
-    return undefined;
-  }
-
-  return getPublishedEditionVisibilityCondition();
-}
-
-function chooseEdition<
-  T extends {
-    language: string;
-  },
->(availableEditions: T[], locale: ContentLocale) {
-  return (
-    availableEditions.find((edition) => edition.language === locale) ??
-    availableEditions.find((edition) => edition.language === "en") ??
-    availableEditions[0]
-  );
 }
 
 export async function getBooks(locale: ContentLocale, filters: BookFilters = {}): Promise<BookListItem[]> {
@@ -203,9 +175,15 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
 
       editionId: editions.id,
 
+      editionSlug: editions.slug,
+
       editionTitle: editions.title,
 
       editionLanguage: editions.language,
+
+      editionIsPreferred: editions.isPreferred,
+
+      editionCreatedAt: editions.createdAt,
 
       editionCoverUrl: editions.coverUrl,
 
@@ -243,7 +221,7 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
 
     .where(
       and(
-        getEditionVisibilityCondition(),
+        getPublicEditionVisibilityCondition(),
 
         query
           ? or(
@@ -291,7 +269,10 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
       editions: Map<
         string,
         {
+          slug: string;
           language: string;
+          isPreferred: boolean;
+          createdAt: Date;
           title: string;
           coverUrl: string | null;
         }
@@ -337,8 +318,10 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
     });
 
     currentBook.editions.set(row.editionId, {
+      slug: row.editionSlug,
       language: row.editionLanguage,
-
+      isPreferred: row.editionIsPreferred,
+      createdAt: row.editionCreatedAt,
       title: row.editionTitle,
 
       coverUrl: row.editionCoverUrl,
@@ -407,7 +390,7 @@ export async function getCategories(locale: ContentLocale): Promise<CategoryList
 
     .innerJoin(editions, eq(editions.bookId, books.id))
 
-    .where(getEditionVisibilityCondition())
+    .where(getPublicEditionVisibilityCondition())
 
     .orderBy(asc(categories.slug));
 
@@ -518,6 +501,10 @@ export async function getBookBySlug(slug: string, locale: ContentLocale): Promis
 
       language: editions.language,
 
+      isPreferred: editions.isPreferred,
+
+      createdAt: editions.createdAt,
+
       title: editions.title,
 
       description: editions.description,
@@ -539,7 +526,7 @@ export async function getBookBySlug(slug: string, locale: ContentLocale): Promis
       and(
         eq(editions.bookId, book.id),
 
-        getEditionVisibilityCondition(),
+        getPublicEditionVisibilityCondition(),
       ),
     );
 
@@ -722,7 +709,7 @@ export async function getAuthors(): Promise<AuthorListItem[]> {
     .innerJoin(bookAuthors, eq(bookAuthors.authorId, authors.id))
     .innerJoin(books, eq(books.id, bookAuthors.bookId))
     .innerJoin(editions, eq(editions.bookId, books.id))
-    .where(getEditionVisibilityCondition())
+    .where(getPublicEditionVisibilityCondition())
     .groupBy(authors.id, authors.slug, authors.name, authors.birthYear, authors.deathYear)
     .orderBy(asc(authors.name));
 }
@@ -733,7 +720,7 @@ export async function getSitemapContent(): Promise<{ bookSlugs: string[]; author
   cacheLife("editorial");
   cacheTag("library:editorial");
 
-  const visibilityCondition = getPublishedEditionVisibilityCondition();
+  const visibilityCondition = getPublicEditionVisibilityCondition();
   const [bookRows, authorRows] = await Promise.all([
     db
       .selectDistinct({ slug: books.slug })
@@ -787,8 +774,11 @@ export async function getAuthorBySlug(slug: string, locale: ContentLocale): Prom
       publicationYear: books.originalPublicationYear,
 
       editionId: editions.id,
+      editionSlug: editions.slug,
       editionTitle: editions.title,
       editionLanguage: editions.language,
+      editionIsPreferred: editions.isPreferred,
+      editionCreatedAt: editions.createdAt,
       editionCoverUrl: editions.coverUrl,
 
       categoryId: categories.id,
@@ -810,7 +800,7 @@ export async function getAuthorBySlug(slug: string, locale: ContentLocale): Prom
       fallbackCategoryTranslations,
       and(eq(fallbackCategoryTranslations.categoryId, categories.id), eq(fallbackCategoryTranslations.locale, "en")),
     )
-    .where(and(eq(bookAuthors.authorId, author.id), getEditionVisibilityCondition()))
+    .where(and(eq(bookAuthors.authorId, author.id), getPublicEditionVisibilityCondition()))
     .orderBy(asc(books.originalPublicationYear), asc(bookCategories.position));
 
   const grouped = new Map<
@@ -822,7 +812,10 @@ export async function getAuthorBySlug(slug: string, locale: ContentLocale): Prom
       editions: Map<
         string,
         {
+          slug: string;
           language: string;
+          isPreferred: boolean;
+          createdAt: Date;
           title: string;
           coverUrl: string | null;
         }
@@ -855,7 +848,10 @@ export async function getAuthorBySlug(slug: string, locale: ContentLocale): Prom
     }
 
     currentBook.editions.set(row.editionId, {
+      slug: row.editionSlug,
       language: row.editionLanguage,
+      isPreferred: row.editionIsPreferred,
+      createdAt: row.editionCreatedAt,
       title: row.editionTitle,
       coverUrl: row.editionCoverUrl,
     });

@@ -1,5 +1,5 @@
 import { config } from "dotenv";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
@@ -8,6 +8,11 @@ import { books, editions } from "../src/db/schema";
 import { parseEditionReviewArguments } from "./lib/review-edition-args";
 import { formatImportError } from "./lib/import-errors";
 import { revalidateEditorialCache } from "./lib/revalidate-cache";
+import {
+  assertEditionCanBePreferred,
+  getArchivedEditionUpdate,
+  getRejectedEditionUpdate,
+} from "./lib/review-edition-state";
 
 config({
   path: ".env.local",
@@ -17,7 +22,9 @@ if (!process.env.DIRECT_DATABASE_URL) {
   throw new Error("DIRECT_DATABASE_URL is not defined");
 }
 
-const { gutenbergId, notes, action } = parseEditionReviewArguments(process.argv.slice(2));
+const { sourceName, sourceIdentifier, notes, action, copyrightStatus } = parseEditionReviewArguments(
+  process.argv.slice(2),
+);
 
 const client = postgres(process.env.DIRECT_DATABASE_URL, {
   max: 1,
@@ -55,7 +62,7 @@ async function getEdition() {
     })
     .from(editions)
     .innerJoin(books, eq(books.id, editions.bookId))
-    .where(and(eq(editions.sourceName, "Project Gutenberg"), eq(editions.sourceIdentifier, gutenbergId)))
+    .where(and(eq(editions.sourceName, sourceName), eq(editions.sourceIdentifier, sourceIdentifier)))
     .limit(1);
 
   return edition;
@@ -97,7 +104,7 @@ async function main() {
   const edition = await getEdition();
 
   if (!edition) {
-    throw new Error(`No Project Gutenberg edition found with ID ${gutenbergId}`);
+    throw new Error(`No edition found for source ${sourceName} with identifier ${sourceIdentifier}`);
   }
 
   printEdition(edition);
@@ -109,16 +116,19 @@ async function main() {
   }
 
   if (action === "publish") {
+    if (!copyrightStatus) {
+      throw new Error("Publishing requires an explicitly reviewed copyright status.");
+    }
+
     const [updated] = await db
       .update(editions)
       .set({
-        copyrightStatus: "PUBLIC_DOMAIN_VERIFIED",
-
+        copyrightStatus,
         publicationStatus: "PUBLISHED",
 
         verifiedAt: new Date(),
 
-        copyrightNotes: notes ?? edition.copyrightNotes ?? "Public-domain status manually reviewed before publication.",
+        copyrightNotes: notes ?? edition.copyrightNotes ?? "Copyright status manually reviewed before publication.",
 
         updatedAt: new Date(),
       })
@@ -139,15 +149,7 @@ async function main() {
   if (action === "reject") {
     const [updated] = await db
       .update(editions)
-      .set({
-        copyrightStatus: "REJECTED",
-        publicationStatus: "DRAFT",
-        verifiedAt: null,
-
-        copyrightNotes: notes ?? "Edition rejected during copyright review.",
-
-        updatedAt: new Date(),
-      })
+      .set(getRejectedEditionUpdate(notes, new Date()))
       .where(eq(editions.id, edition.id))
       .returning();
 
@@ -160,18 +162,47 @@ async function main() {
     return;
   }
 
-  const [updated] = await db
-    .update(editions)
-    .set({
-      publicationStatus: "ARCHIVED",
-      updatedAt: new Date(),
-    })
-    .where(eq(editions.id, edition.id))
-    .returning();
+  if (action === "archive") {
+    const [updated] = await db
+      .update(editions)
+      .set(getArchivedEditionUpdate(new Date()))
+      .where(eq(editions.id, edition.id))
+      .returning();
 
-  console.log("Edition archived.");
+    console.log("Edition archived.");
 
-  console.log(`Publication: ${updated.publicationStatus}`);
+    console.log(`Publication: ${updated.publicationStatus}`);
+
+    await revalidateEditorialCache([`book:${edition.bookSlug}`, "library"]);
+
+    return;
+  }
+
+  assertEditionCanBePreferred(edition.publicationStatus, edition.copyrightStatus);
+
+  const language = edition.language.split("-")[0].toLowerCase();
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(editions)
+      .set({
+        isPreferred: false,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(editions.bookId, edition.bookId), sql`lower(split_part(${editions.language}, '-', 1)) = ${language}`),
+      );
+
+    await tx
+      .update(editions)
+      .set({
+        isPreferred: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(editions.id, edition.id));
+  });
+
+  console.log("Preferred edition updated.");
 
   await revalidateEditorialCache([`book:${edition.bookSlug}`, "library"]);
 }

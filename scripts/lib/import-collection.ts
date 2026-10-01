@@ -12,7 +12,10 @@ export interface CatalogEntry {
   file: string;
   gutenbergId: number;
   slug: string;
+  /** Original work's first publication year. */
   year?: number;
+  /** Publication year of this particular edition, when known. */
+  editionPublicationYear?: number;
 }
 
 export function parseCollectionManifest(value: unknown): CatalogEntry[] {
@@ -30,9 +33,11 @@ export function parseCollectionManifest(value: unknown): CatalogEntry[] {
       throw new Error(`${label}: expected a book object.`);
     }
 
-    if (Object.keys(entry).some((key) => !["file", "gutenbergId", "slug", "year"].includes(key))) {
+    if (
+      Object.keys(entry).some((key) => !["file", "gutenbergId", "slug", "year", "editionPublicationYear"].includes(key))
+    ) {
       throw new Error(
-        `${label}: only file, gutenbergId, slug and year are supported. Categories use seed-categories.ts.`,
+        `${label}: only file, gutenbergId, slug, year and editionPublicationYear are supported. Categories use seed-categories.ts.`,
       );
     }
 
@@ -81,6 +86,16 @@ export function parseCollectionManifest(value: unknown): CatalogEntry[] {
       throw new Error(`${label}: year must be an integer supported by PostgreSQL, or omitted.`);
     }
 
+    if (
+      "editionPublicationYear" in entry &&
+      (typeof entry.editionPublicationYear !== "number" ||
+        !Number.isInteger(entry.editionPublicationYear) ||
+        entry.editionPublicationYear < -2147483648 ||
+        entry.editionPublicationYear > 2147483647)
+    ) {
+      throw new Error(`${label}: editionPublicationYear must be an integer supported by PostgreSQL, or omitted.`);
+    }
+
     const normalizedFile = path.posix.normalize(file);
     // Avoid accidentally importing the same local file twice, including on Windows.
     const fileKey = normalizedFile.toLowerCase();
@@ -97,6 +112,7 @@ export function parseCollectionManifest(value: unknown): CatalogEntry[] {
       gutenbergId: entry.gutenbergId,
       slug: entry.slug,
       ...("year" in entry ? { year: entry.year as number } : {}),
+      ...("editionPublicationYear" in entry ? { editionPublicationYear: entry.editionPublicationYear as number } : {}),
     };
   });
 }
@@ -171,6 +187,7 @@ export async function importCollection(
         gutenbergId: String(entry.gutenbergId),
         slug: entry.slug,
         year: entry.year,
+        editionPublicationYear: entry.editionPublicationYear,
         apply,
       });
       succeeded++;

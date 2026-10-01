@@ -23,21 +23,31 @@ function getRequiredArgument(name: string): string {
   return value;
 }
 
+function getOptionalYear(name: string): number | undefined {
+  const argument = getArgument(name);
+
+  if (argument === undefined) {
+    return undefined;
+  }
+
+  const year = Number(argument);
+
+  if (!Number.isInteger(year) || year < -2147483648 || year > 2147483647) {
+    throw new Error(`${name} must be a PostgreSQL-supported integer.`);
+  }
+
+  return year;
+}
+
 async function main() {
   config({ path: ".env.local", quiet: true });
-
-  const publicationYearArgument = getArgument("--year");
-  const year = publicationYearArgument ? Number(publicationYearArgument) : undefined;
-
-  if (year !== undefined && Number.isNaN(year)) {
-    throw new Error("--year must be a number");
-  }
 
   await importGutenbergBook({
     file: getRequiredArgument("--file"),
     gutenbergId: getRequiredArgument("--gutenberg-id"),
     slug: getArgument("--slug"),
-    year,
+    year: getOptionalYear("--year"),
+    editionPublicationYear: getOptionalYear("--edition-year"),
     apply: process.argv.includes("--apply"),
   });
 }

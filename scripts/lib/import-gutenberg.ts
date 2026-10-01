@@ -15,6 +15,7 @@ export interface ImportGutenbergOptions {
   gutenbergId: string;
   slug?: string;
   year?: number;
+  editionPublicationYear?: number;
   apply?: boolean;
 }
 
@@ -45,9 +46,10 @@ export async function importGutenbergBook({
   gutenbergId,
   slug: requestedSlug,
   year,
+  editionPublicationYear,
   apply: shouldApply = false,
 }: ImportGutenbergOptions): Promise<void> {
-  const publicationYear = year ?? null;
+  const publicationYear = editionPublicationYear ?? null;
 
   const file = await fs.readFile(filePath);
 
@@ -64,6 +66,8 @@ export async function importGutenbergBook({
   console.log(`Creators: ${epub.creators.join(", ") || "Unknown"}`);
 
   console.log(`Language: ${epub.language}`);
+
+  console.log(`Translator: ${epub.translator ?? "Not specified"}`);
 
   console.log(`Book slug: ${bookSlug}`);
 
@@ -155,7 +159,7 @@ export async function importGutenbergBook({
 
             originalLanguage: epub.language,
 
-            originalPublicationYear: publicationYear,
+            originalPublicationYear: year ?? null,
           })
           .returning();
 
@@ -254,6 +258,8 @@ export async function importGutenbergBook({
 
           title: epub.title,
 
+          translator: epub.translator,
+
           publicationYear,
 
           coverUrl,
@@ -295,6 +301,8 @@ export async function importGutenbergBook({
             language: epub.language,
 
             title: epub.title,
+
+            translator: epub.translator,
 
             publicationYear,
 

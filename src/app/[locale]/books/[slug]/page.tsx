@@ -185,6 +185,12 @@ export default async function BookPage({ params }: BookPageProps) {
               ))}
             </div>
 
+            {book.edition.translator && (
+              <p className="text-muted-foreground mt-2 text-sm">
+                {t("translatedBy", { translator: book.edition.translator })}
+              </p>
+            )}
+
             <div className="text-muted-foreground mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
               <span>{t("chapters", { count: book.chapters.length })}</span>
               {book.edition.sourceName && <span>{book.edition.sourceName}</span>}

@@ -30,13 +30,50 @@ Do not commit `.env.local` or real credentials. `.env.example` contains names an
 ## Development and validation
 
 ```bash
+pnpm install --frozen-lockfile
 pnpm dev
 pnpm lint
 pnpm exec tsc --noEmit
 pnpm exec prettier --check .
 pnpm build
 pnpm start
+pnpm smoke:production
 ```
+
+The smoke test defaults to `http://localhost:3000`, follows the localized home/catalog/author/category routes,
+checks `/sitemap.xml` and `/robots.txt`, verifies the basic response headers, and opens one published book found in the
+sitemap. To target a different HTTPS origin intentionally, pass it as the first argument:
+
+```bash
+pnpm run smoke:production -- https://your-configured-domain.example
+```
+
+## Production operations
+
+This repository does not declare a hosting provider, container image, CI deployment workflow, or infrastructure
+configuration. Deploy to a Node.js runtime compatible with Next.js 16 and Cache Components. Confirm streaming support
+and configure production environment variables in the chosen provider; the README's prior create-next-app deployment
+boilerplate did not represent a verified Libra deployment.
+
+- Set `DATABASE_URL` to a TLS-enabled PostgreSQL connection string and `SITE_URL` to the actual HTTPS origin. Set
+  `R2_PUBLIC_URL` to the HTTPS origin used by the existing cover URLs. Do not use `r2.dev` as a production cover
+  domain; verify a custom domain is configured for the bucket.
+- `DIRECT_DATABASE_URL` is only needed by Drizzle migrations and editorial scripts. R2 write credentials are only
+  needed by import scripts. Configure both cache invalidation variables when editorial scripts must invalidate
+  deployed content immediately; otherwise cached content can persist until its configured expiry.
+- The checked-in Drizzle migrations are versioned under `drizzle/`. Review and apply them through `pnpm db:migrate`
+  against the intended database, after verifying the target and testing the migration on a non-production copy.
+  Do not use `drizzle-kit push` for production changes.
+- `use cache` uses the Next.js runtime cache. A single server instance needs no additional cache service. If the chosen
+  deployment runs multiple instances, verify that its platform coordinates Cache Components entries and tag
+  invalidations across instances; this repository does not configure a shared cache handler or invalidation
+  broadcast.
+- No database or object-storage backup/recovery policy is defined in this repository. Before launch, confirm the
+  provider's PostgreSQL backup and restore procedure, test restoration in an isolated environment, and verify how
+  cover objects can be recovered from the configured R2 bucket. Do not assume a retention period from this codebase.
+- The application adds `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, and `Permissions-Policy`.
+  Configure HSTS at the HTTPS edge only after the production domain and TLS setup are verified. No CSP is set because
+  the image, script, and streaming origins have not been verified for the production deployment.
 
 Database schema changes use Drizzle Kit:
 

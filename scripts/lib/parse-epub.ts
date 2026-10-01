@@ -16,6 +16,7 @@ export interface ParsedChapter {
 export interface ParsedEpub {
   title: string;
   creators: string[];
+  translator: string | null;
   language: string;
   cover: ParsedCover | null;
   chapters: ParsedChapter[];
@@ -65,6 +66,55 @@ function getXmlText(value: unknown): string {
   }
 
   return "";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getAttribute(value: unknown, name: string): string | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const attribute = Reflect.get(value, `@_${name}`);
+
+  return typeof attribute === "string" ? attribute.trim() : undefined;
+}
+
+function isTranslatorRole(value: string | undefined) {
+  const role = value?.toLowerCase();
+
+  return role === "trl" || role === "translator" || role === "translation";
+}
+
+function getTranslatorIds(metadata: Record<string, unknown>): Set<string> {
+  const translatorIds = new Set<string>();
+  const metadataItems = asArray(metadata.meta).filter(isRecord);
+
+  for (const item of metadataItems) {
+    if (getAttribute(item, "property") !== "role" || !isTranslatorRole(getXmlText(item))) {
+      continue;
+    }
+
+    const reference = getAttribute(item, "refines");
+
+    if (reference?.startsWith("#")) {
+      translatorIds.add(reference.slice(1));
+    }
+  }
+
+  return translatorIds;
+}
+
+function isTranslator(value: unknown, translatorIds: Set<string>) {
+  const id = getAttribute(value, "id");
+
+  return (
+    isTranslatorRole(getAttribute(value, "role")) ||
+    isTranslatorRole(getAttribute(value, "opf:role")) ||
+    (id !== undefined && translatorIds.has(id))
+  );
 }
 
 function slugify(value: string) {
@@ -134,7 +184,14 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
 
   const title = getXmlText(metadata.title) || "Untitled";
 
-  const creators = asArray(metadata.creator).map(getXmlText).filter(Boolean);
+  const translatorIds = getTranslatorIds(metadata);
+  const creators = asArray(metadata.creator).filter((creator) => !isTranslator(creator, translatorIds));
+  const translators = [
+    ...asArray(metadata.creator).filter((creator) => isTranslator(creator, translatorIds)),
+    ...asArray(metadata.contributor).filter((contributor) => isTranslator(contributor, translatorIds)),
+  ]
+    .map(getXmlText)
+    .filter(Boolean);
 
   const language = getXmlText(metadata.language).toLowerCase().slice(0, 10) || "en";
 
@@ -340,7 +397,8 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
 
   return {
     title,
-    creators,
+    creators: creators.map(getXmlText).filter(Boolean),
+    translator: translators.length > 0 ? translators.join(", ") : null,
     language,
     cover,
     chapters,

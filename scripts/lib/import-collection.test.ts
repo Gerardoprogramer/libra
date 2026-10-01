@@ -7,6 +7,7 @@ import { test, type TestContext } from "node:test";
 import JSZip from "jszip";
 
 import { initialLibrary } from "../catalog/initial-library";
+import { parseEpub } from "./parse-epub";
 import {
   importCollection,
   parseCollectionArguments,
@@ -53,13 +54,13 @@ function setEnvironment(t: TestContext, values: Record<string, string | undefine
   }
 }
 
-async function createEpub(file: string) {
+async function createEpub(file: string, additionalMetadata = "") {
   const zip = new JSZip();
   zip.file("META-INF/container.xml", '<container><rootfiles><rootfile full-path="book.opf"/></rootfiles></container>');
   zip.file(
     "book.opf",
     `<package xmlns:dc="http://purl.org/dc/elements/1.1/">
-      <metadata><dc:title>Test Book</dc:title><dc:creator>Test Author</dc:creator><dc:language>en</dc:language></metadata>
+      <metadata><dc:title>Test Book</dc:title><dc:creator>Test Author</dc:creator><dc:language>en</dc:language>${additionalMetadata}</metadata>
       <manifest>
         <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
         <item id="cover" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
@@ -75,10 +76,27 @@ async function createEpub(file: string) {
   await fs.writeFile(file, await zip.generateAsync({ type: "nodebuffer" }));
 }
 
+test("EPUB translator metadata is separated from author metadata", async (t) => {
+  const projectRoot = await createProject(t);
+  const file = path.join(projectRoot, "imports", "translated.epub");
+  await createEpub(
+    file,
+    '<dc:contributor id="translator">Spanish Translator</dc:contributor><meta refines="#translator" property="role" scheme="marc:relators">trl</meta>',
+  );
+
+  const epub = await parseEpub(await fs.readFile(file));
+
+  assert.deepEqual(epub.creators, ["Test Author"]);
+  assert.equal(epub.translator, "Spanish Translator");
+});
+
 test("the initial manifest is valid; optional years and multiple editions of a book are supported", () => {
   assert.deepEqual(parseCollectionManifest(initialLibrary), initialLibrary);
   const translated = { file: "imports/dracula-es.epub", gutenbergId: 999, slug: "dracula" };
   assert.deepEqual(parseCollectionManifest([dracula, translated]), [dracula, translated]);
+  assert.deepEqual(parseCollectionManifest([{ ...dracula, editionPublicationYear: 1920 }]), [
+    { ...dracula, editionPublicationYear: 1920 },
+  ]);
   assert.equal(parseCollectionManifest([{ ...dracula, file: "imports\\dracula.epub" }])[0].file, dracula.file);
 });
 
@@ -94,6 +112,9 @@ test("malformed manifests, unknown fields and invalid identifiers are rejected",
   }
   for (const year of ["1897", null, 1897.5, NaN, Infinity, 2147483648]) {
     assert.throws(() => parseCollectionManifest([{ ...dracula, year }]), /year/);
+  }
+  for (const editionPublicationYear of ["1920", null, 1920.5, NaN, Infinity, 2147483648]) {
+    assert.throws(() => parseCollectionManifest([{ ...dracula, editionPublicationYear }]), /editionPublicationYear/);
   }
 });
 
@@ -225,6 +246,7 @@ test("apply processes ten books sequentially and continues after book four fails
       importBook: async (options) => {
         assert.equal(options.apply, true);
         assert.equal(options.year, 1897);
+        assert.equal(options.editionPublicationYear, undefined);
         assert.equal(options.file, path.join(projectRoot, `imports/${options.slug}.epub`));
         started.push(options.gutenbergId);
         active++;

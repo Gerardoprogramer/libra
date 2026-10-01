@@ -1,19 +1,27 @@
-export type EditionReviewAction = "show" | "publish" | "reject" | "archive";
+import { isPublicCopyrightStatus, type PublicCopyrightStatus } from "../../src/lib/editorial-status";
+
+export type EditionReviewAction = "show" | "publish" | "reject" | "archive" | "prefer";
 
 export interface EditionReviewArguments {
-  gutenbergId: string;
+  sourceName: string;
+  sourceIdentifier: string;
   notes?: string;
   action: EditionReviewAction;
+  copyrightStatus?: PublicCopyrightStatus;
 }
 
 const actionFlags = new Map<string, Exclude<EditionReviewAction, "show">>([
   ["--publish", "publish"],
   ["--reject", "reject"],
   ["--archive", "archive"],
+  ["--prefer", "prefer"],
 ]);
 
 export function parseEditionReviewArguments(args: readonly string[]): EditionReviewArguments {
   let gutenbergId: string | undefined;
+  let sourceName: string | undefined;
+  let sourceIdentifier: string | undefined;
+  let copyrightStatus: PublicCopyrightStatus | undefined;
   let notes: string | undefined;
   let hasNotes = false;
   const actions: EditionReviewAction[] = [];
@@ -27,6 +35,36 @@ export function parseEditionReviewArguments(args: readonly string[]): EditionRev
         throw new Error("Expected one --gutenberg-id value.");
       }
       gutenbergId = value;
+      continue;
+    }
+
+    if (argument === "--source-name") {
+      const value = args[++index];
+      if (sourceName !== undefined || !value || value.startsWith("--")) {
+        throw new Error("Expected one --source-name value.");
+      }
+      sourceName = value;
+      continue;
+    }
+
+    if (argument === "--source-identifier") {
+      const value = args[++index];
+      if (sourceIdentifier !== undefined || !value || value.startsWith("--")) {
+        throw new Error("Expected one --source-identifier value.");
+      }
+      sourceIdentifier = value;
+      continue;
+    }
+
+    if (argument === "--copyright-status") {
+      const value = args[++index];
+      if (copyrightStatus !== undefined || !value || value.startsWith("--")) {
+        throw new Error("Expected one --copyright-status value.");
+      }
+      if (!isPublicCopyrightStatus(value)) {
+        throw new Error("Publishable copyright status must be PUBLIC_DOMAIN_VERIFIED, LICENSED or ORIGINAL.");
+      }
+      copyrightStatus = value;
       continue;
     }
 
@@ -49,17 +87,40 @@ export function parseEditionReviewArguments(args: readonly string[]): EditionRev
     throw new Error(`Unknown edition review argument: ${argument}`);
   }
 
-  if (!gutenbergId) {
-    throw new Error("Missing --gutenberg-id argument.");
+  if (gutenbergId && (sourceName || sourceIdentifier)) {
+    throw new Error("Use --gutenberg-id or the --source-name/--source-identifier pair, not both.");
+  }
+
+  if (!gutenbergId && (!sourceName || !sourceIdentifier)) {
+    throw new Error("Specify --gutenberg-id or both --source-name and --source-identifier.");
   }
 
   if (actions.length > 1) {
-    throw new Error("Only one action may be specified: --publish, --reject or --archive.");
+    throw new Error("Only one action may be specified: --publish, --reject, --archive or --prefer.");
+  }
+
+  const action = actions[0] ?? "show";
+
+  if (action === "publish" && !copyrightStatus) {
+    throw new Error("--publish requires an explicit --copyright-status.");
+  }
+
+  if (action !== "publish" && copyrightStatus) {
+    throw new Error("--copyright-status may only be used with --publish.");
+  }
+
+  const resolvedSourceName = gutenbergId !== undefined ? "Project Gutenberg" : sourceName;
+  const resolvedSourceIdentifier = gutenbergId ?? sourceIdentifier;
+
+  if (!resolvedSourceName || !resolvedSourceIdentifier) {
+    throw new Error("Specify --gutenberg-id or both --source-name and --source-identifier.");
   }
 
   return {
-    gutenbergId,
+    sourceName: resolvedSourceName,
+    sourceIdentifier: resolvedSourceIdentifier,
     notes,
-    action: actions[0] ?? "show",
+    action,
+    copyrightStatus,
   };
 }
