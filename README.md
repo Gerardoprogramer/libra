@@ -17,8 +17,9 @@ are served from Cloudflare R2.
 2. Copy `.env.example` to `.env.local` and set the values required by your environment.
 3. Set `DATABASE_URL` to the PostgreSQL connection string used by the application. It must support TLS.
 4. For direct database scripts, set `DIRECT_DATABASE_URL` to a PostgreSQL connection string that supports TLS.
-5. Set `SITE_URL` to the canonical HTTPS origin of the deployed site (for example, `https://library.example`). Without
-   it, page titles and descriptions are still generated, but absolute canonical and language-alternate URLs are omitted.
+5. In production, set `SITE_URL` to the real canonical HTTPS origin (for example, `SITE_URL=https://dominio-real.com`).
+   Do not use a placeholder domain. It is also used for the sitemap and robots directive. In development it may be
+   omitted; titles and descriptions still work, while canonical, language-alternate and sitemap URLs are omitted.
 6. Set `R2_PUBLIC_URL` to the HTTPS public base URL for the existing covers so Next.js can render them. Set the
    remaining `R2_*` values when applying imports that upload covers. `CACHE_REVALIDATION_URL` and
    `CACHE_REVALIDATION_SECRET` are optional; configure both to invalidate the deployed site's editorial cache after

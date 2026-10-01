@@ -126,6 +126,17 @@ interface BookCategoryRow {
 
 const fallbackCategoryTranslations = alias(categoryTranslations, "fallback_category_translations");
 
+function getPublishedEditionVisibilityCondition() {
+  return and(
+    eq(editions.publicationStatus, "PUBLISHED"),
+    or(
+      eq(editions.copyrightStatus, "PUBLIC_DOMAIN_VERIFIED"),
+      eq(editions.copyrightStatus, "LICENSED"),
+      eq(editions.copyrightStatus, "ORIGINAL"),
+    ),
+  );
+}
+
 function addBookCategory(categories: Map<string, PositionedBookCategory>, row: BookCategoryRow) {
   if (!row.categoryId || !row.categorySlug || row.categoryPosition === null) {
     return;
@@ -150,17 +161,7 @@ function getEditionVisibilityCondition() {
     return undefined;
   }
 
-  return and(
-    eq(editions.publicationStatus, "PUBLISHED"),
-
-    or(
-      eq(editions.copyrightStatus, "PUBLIC_DOMAIN_VERIFIED"),
-
-      eq(editions.copyrightStatus, "LICENSED"),
-
-      eq(editions.copyrightStatus, "ORIGINAL"),
-    ),
-  );
+  return getPublishedEditionVisibilityCondition();
 }
 
 function chooseEdition<
@@ -724,6 +725,36 @@ export async function getAuthors(): Promise<AuthorListItem[]> {
     .where(getEditionVisibilityCondition())
     .groupBy(authors.id, authors.slug, authors.name, authors.birthYear, authors.deathYear)
     .orderBy(asc(authors.name));
+}
+
+export async function getSitemapContent(): Promise<{ bookSlugs: string[]; authorSlugs: string[] }> {
+  "use cache";
+
+  cacheLife("editorial");
+  cacheTag("library:editorial");
+
+  const visibilityCondition = getPublishedEditionVisibilityCondition();
+  const [bookRows, authorRows] = await Promise.all([
+    db
+      .selectDistinct({ slug: books.slug })
+      .from(books)
+      .innerJoin(editions, eq(editions.bookId, books.id))
+      .where(visibilityCondition)
+      .orderBy(asc(books.slug)),
+    db
+      .selectDistinct({ slug: authors.slug })
+      .from(authors)
+      .innerJoin(bookAuthors, eq(bookAuthors.authorId, authors.id))
+      .innerJoin(books, eq(books.id, bookAuthors.bookId))
+      .innerJoin(editions, eq(editions.bookId, books.id))
+      .where(visibilityCondition)
+      .orderBy(asc(authors.slug)),
+  ]);
+
+  return {
+    bookSlugs: bookRows.map(({ slug }) => slug),
+    authorSlugs: authorRows.map(({ slug }) => slug),
+  };
 }
 
 export async function getAuthorBySlug(slug: string, locale: ContentLocale): Promise<AuthorDetails | null> {

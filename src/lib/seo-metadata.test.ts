@@ -4,10 +4,13 @@ import { afterEach, test } from "node:test";
 import { createLocalizedMetadata } from "./seo-metadata-core";
 
 const originalSiteUrl = process.env.SITE_URL;
+const originalNodeEnv = process.env.NODE_ENV;
 
 afterEach(() => {
   if (originalSiteUrl === undefined) delete process.env.SITE_URL;
   else process.env.SITE_URL = originalSiteUrl;
+  if (originalNodeEnv === undefined) Reflect.deleteProperty(process.env, "NODE_ENV");
+  else Reflect.set(process.env, "NODE_ENV", originalNodeEnv);
 });
 
 test("English metadata preserves provided editorial content and emits localized canonical and alternates", () => {
@@ -26,6 +29,8 @@ test("English metadata preserves provided editorial content and emits localized 
   assert.equal(String(metadata.alternates?.canonical), "https://libra.example/en/books/dracula");
   assert.equal(String(metadata.alternates?.languages?.en), "https://libra.example/en/books/dracula");
   assert.equal(String(metadata.alternates?.languages?.es), "https://libra.example/es/books/dracula");
+  assert.equal(typeof metadata.alternates?.languages?.en, "string");
+  assert.equal(typeof metadata.alternates?.languages?.es, "string");
   assert.equal(metadata.openGraph?.locale, "en_US");
   assert.equal(String(metadata.openGraph?.url), "https://libra.example/en/books/dracula");
   assert.deepEqual(metadata.openGraph?.images, [{ url: "https://covers.example/dracula.jpg", alt: "Dracula cover" }]);
@@ -79,6 +84,61 @@ test("noindex pages do not receive canonical or hreflang metadata", () => {
   assert.deepEqual(metadata.robots, { index: false, follow: true });
   assert.equal(metadata.alternates, undefined);
   assert.equal(metadata.openGraph?.url, undefined);
+});
+
+test("pages without a verified translated route keep their canonical but omit hreflang", () => {
+  process.env.SITE_URL = "https://libra.example";
+
+  const metadata = createLocalizedMetadata({
+    locale: "es",
+    pathname: "/books/dracula/chapter-one",
+    title: "Capítulo I — Drácula",
+    alternateLocales: false,
+  });
+
+  assert.equal(String(metadata.alternates?.canonical), "https://libra.example/es/books/dracula/chapter-one");
+  assert.equal(metadata.alternates && "languages" in metadata.alternates, false);
+});
+
+test("social images must be absolute and secure in production and select the large Twitter card", () => {
+  process.env.SITE_URL = "https://libra.example";
+  Reflect.set(process.env, "NODE_ENV", "production");
+
+  const metadata = createLocalizedMetadata({
+    locale: "en",
+    pathname: "/books/dracula",
+    title: "Dracula",
+    images: [
+      { url: "https://covers.example/dracula.jpg", alt: "Cover" },
+      { url: "/internal/r2-key.jpg", alt: "Relative path" },
+      { url: "http://covers.example/insecure.jpg", alt: "Insecure" },
+      { url: "https://user:password@covers.example/credential.jpg", alt: "Credentials" },
+      { url: "https://covers.example/dracula.jpg?token=secret", alt: "Signed URL" },
+    ],
+  });
+
+  assert.deepEqual(metadata.openGraph?.images, [{ url: "https://covers.example/dracula.jpg", alt: "Cover" }]);
+  assert.equal(
+    metadata.twitter && "card" in metadata.twitter ? metadata.twitter.card : undefined,
+    "summary_large_image",
+  );
+  assert.deepEqual(metadata.twitter?.images, [{ url: "https://covers.example/dracula.jpg", alt: "Cover" }]);
+});
+
+test("metadata without a valid cover does not invent a social image", () => {
+  process.env.SITE_URL = "https://libra.example";
+  Reflect.set(process.env, "NODE_ENV", "production");
+
+  const metadata = createLocalizedMetadata({
+    locale: "es",
+    pathname: "/books/book-without-cover",
+    title: "Libro sin portada",
+    images: [{ url: "/covers/missing.jpg" }],
+  });
+
+  assert.equal(metadata.openGraph?.images, undefined);
+  assert.equal(metadata.twitter?.images, undefined);
+  assert.equal(metadata.twitter && "card" in metadata.twitter ? metadata.twitter.card : undefined, "summary");
 });
 
 test("SITE_URL rejects credentials, paths, query strings, fragments, and insecure remote origins", () => {

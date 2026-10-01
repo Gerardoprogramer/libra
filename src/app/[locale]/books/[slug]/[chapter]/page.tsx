@@ -60,6 +60,7 @@ export async function generateMetadata({ params }: ReaderPageProps): Promise<Met
     images: result.book.edition.coverUrl
       ? [{ url: result.book.edition.coverUrl, alt: result.book.edition.title }]
       : undefined,
+    alternateLocales: false,
   });
 }
 
