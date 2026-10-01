@@ -1,8 +1,9 @@
 import path from "node:path";
 
-import { load } from "cheerio";
 import { XMLParser } from "fast-xml-parser";
 import JSZip from "jszip";
+
+import { extractEpubSections, type EpubDocument, type EpubNavigation } from "./epub-sections";
 
 export interface ParsedChapter {
   number: number;
@@ -20,6 +21,12 @@ export interface ParsedEpub {
   chapters: ParsedChapter[];
 }
 
+export interface ParsedCover {
+  data: Buffer;
+  mediaType: string;
+  extension: string;
+}
+
 interface ManifestItem {
   "@_id"?: string;
   "@_href"?: string;
@@ -29,6 +36,11 @@ interface ManifestItem {
 
 interface SpineItem {
   "@_idref"?: string;
+}
+
+interface Spine {
+  "@_toc"?: string;
+  itemref?: SpineItem | SpineItem[];
 }
 
 function asArray<T>(value: T | T[] | undefined): T[] {
@@ -55,13 +67,6 @@ function getXmlText(value: unknown): string {
   return "";
 }
 
-function cleanText(value: string) {
-  return value
-    .replace(/\u00a0/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function slugify(value: string) {
   return value
     .normalize("NFD")
@@ -79,86 +84,10 @@ function countWords(value: string) {
   return clean.split(/\s+/).length;
 }
 
-function shouldIgnoreSection(title: string) {
-  const normalized = title.toLowerCase();
-
-  const ignored = [
-    "contents",
-    "table of contents",
-    "copyright",
-    "project gutenberg license",
-    "the project gutenberg",
-    "transcriber",
-    "credits",
-    "illustrations",
-    "title page",
-  ];
-
-  return ignored.some((value) => normalized.includes(value));
-}
-
 function resolveEpubPath(opfPath: string, href: string) {
-  const cleanHref = decodeURIComponent(href.split("#")[0]);
+  const cleanHref = decodeURIComponent(href.split("#")[0].split("?")[0]);
 
   return path.posix.normalize(path.posix.join(path.posix.dirname(opfPath), cleanHref));
-}
-
-function parseHtmlSections(html: string) {
-  const $ = load(html);
-
-  $("script, style, nav, svg").remove();
-
-  const sections: {
-    title: string;
-    paragraphs: string[];
-  }[] = [];
-
-  let currentTitle = "";
-  let paragraphs: string[] = [];
-
-  function flush() {
-    if (!currentTitle) {
-      paragraphs = [];
-      return;
-    }
-
-    const content = paragraphs.join("\n\n");
-    const wordCount = countWords(content);
-
-    if (wordCount >= 50 && !shouldIgnoreSection(currentTitle)) {
-      sections.push({
-        title: currentTitle,
-        paragraphs: [...paragraphs],
-      });
-    }
-
-    currentTitle = "";
-    paragraphs = [];
-  }
-
-  $("body")
-    .find("h1, h2, h3, p")
-    .each((_, element) => {
-      const tagName = element.tagName.toLowerCase();
-
-      const text = cleanText($(element).text());
-
-      if (!text) return;
-
-      if (tagName === "h1" || tagName === "h2" || tagName === "h3") {
-        flush();
-        currentTitle = text;
-        return;
-      }
-
-      if (currentTitle) {
-        paragraphs.push(text);
-      }
-    });
-
-  flush();
-
-  return sections;
 }
 
 export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
@@ -178,11 +107,9 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
   });
 
   const containerXml = await containerFile.async("string");
-
   const container = xmlParser.parse(containerXml);
 
   const rootFiles = asArray(container?.container?.rootfiles?.rootfile);
-
   const opfPath = rootFiles[0]?.["@_full-path"];
 
   if (!opfPath) {
@@ -196,7 +123,6 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
   }
 
   const opfXml = await opfFile.async("string");
-
   const opf = xmlParser.parse(opfXml);
   const pkg = opf?.package;
 
@@ -214,7 +140,8 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
 
   const manifestItems = asArray<ManifestItem>(pkg.manifest?.item);
 
-  const spineItems = asArray<SpineItem>(pkg.spine?.itemref);
+  const spine = (pkg.spine ?? {}) as Spine;
+  const spineItems = asArray<SpineItem>(spine.itemref);
 
   const manifest = new Map<string, ManifestItem>();
 
@@ -223,6 +150,10 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
       manifest.set(item["@_id"], item);
     }
   }
+
+  /*
+   * Cover
+   */
 
   let coverItem = manifestItems.find((item) => item["@_properties"]?.split(/\s+/).includes("cover-image"));
 
@@ -261,10 +192,11 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
     }
   }
 
-  const rawSections: {
-    title: string;
-    content: string;
-  }[] = [];
+  /*
+   * Reading documents in spine order
+   */
+
+  const documents: EpubDocument[] = [];
 
   for (const spineItem of spineItems) {
     const idref = spineItem["@_idref"];
@@ -273,15 +205,16 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
 
     const item = manifest.get(idref);
 
-    if (!item) continue;
+    if (!item?.["@_href"]) continue;
 
-    const href = item["@_href"];
     const mediaType = item["@_media-type"];
     const properties = item["@_properties"] ?? "";
 
-    if (!href) continue;
-
-    if (properties.includes("nav")) {
+    /*
+     * EPUB3 nav documents are navigation metadata, not reading
+     * documents even if the package also places them in the spine.
+     */
+    if (properties.split(/\s+/).includes("nav")) {
       continue;
     }
 
@@ -289,27 +222,101 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
       continue;
     }
 
-    const filePath = resolveEpubPath(opfPath, href);
+    const filePath = resolveEpubPath(opfPath, item["@_href"]);
 
     const contentFile = zip.file(filePath);
 
     if (!contentFile) continue;
 
-    const html = await contentFile.async("string");
+    documents.push({
+      path: filePath,
+      html: await contentFile.async("string"),
+      xhtml: mediaType === "application/xhtml+xml",
+    });
+  }
 
-    const sections = parseHtmlSections(html);
+  /*
+   * EPUB navigation sources.
+   *
+   * Prefer EPUB3 nav. extractEpubSections() itself gives nav
+   * precedence over NCX if both are available.
+   */
 
-    for (const section of sections) {
-      rawSections.push({
-        title: section.title,
-        content: section.paragraphs.join("\n\n"),
-      });
+  const navigation: EpubNavigation[] = [];
+
+  const navItems = manifestItems.filter((item) => item["@_properties"]?.split(/\s+/).includes("nav"));
+
+  for (const navItem of navItems) {
+    if (!navItem["@_href"]) continue;
+
+    const navPath = resolveEpubPath(opfPath, navItem["@_href"]);
+
+    const navFile = zip.file(navPath);
+
+    if (!navFile) continue;
+
+    navigation.push({
+      path: navPath,
+      content: await navFile.async("string"),
+      kind: "nav",
+    });
+  }
+
+  /*
+   * EPUB2 NCX.
+   *
+   * First use spine@toc when present. Some EPUBs do not provide
+   * that correctly, so media type is used as a fallback.
+   */
+
+  const ncxItems: ManifestItem[] = [];
+
+  if (spine["@_toc"]) {
+    const ncxFromSpine = manifest.get(spine["@_toc"]);
+
+    if (ncxFromSpine) {
+      ncxItems.push(ncxFromSpine);
     }
   }
+
+  for (const item of manifestItems) {
+    if (item["@_media-type"] === "application/x-dtbncx+xml" && !ncxItems.includes(item)) {
+      ncxItems.push(item);
+    }
+  }
+
+  for (const ncxItem of ncxItems) {
+    if (!ncxItem["@_href"]) continue;
+
+    const ncxPath = resolveEpubPath(opfPath, ncxItem["@_href"]);
+
+    const ncxFile = zip.file(ncxPath);
+
+    if (!ncxFile) continue;
+
+    navigation.push({
+      path: ncxPath,
+      content: await ncxFile.async("string"),
+      kind: "ncx",
+    });
+  }
+
+  /*
+   * Structural chapter extraction.
+   */
+
+  const rawSections = extractEpubSections(documents, navigation, title);
 
   if (rawSections.length === 0) {
     throw new Error("No readable chapters were detected in the EPUB");
   }
+
+  /*
+   * Stable chapter slugs.
+   *
+   * Do not deduplicate sections merely because their titles match.
+   * Repeated legitimate titles receive deterministic slug suffixes.
+   */
 
   const slugUsage = new Map<string, number>();
 
@@ -338,10 +345,4 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
     cover,
     chapters,
   };
-}
-
-export interface ParsedCover {
-  data: Buffer;
-  mediaType: string;
-  extension: string;
 }

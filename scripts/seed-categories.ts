@@ -5,6 +5,8 @@ import postgres from "postgres";
 
 import { bookCategories, books, categories, categoryTranslations } from "../src/db/schema";
 
+import { revalidateEditorialCache } from "./lib/revalidate-cache";
+
 config({
   path: ".env.local",
 });
@@ -42,117 +44,211 @@ const categoryDefinitions = [
     en: "Science Fiction",
     es: "Ciencia ficción",
   },
+  {
+    slug: "fantasy",
+    en: "Fantasy",
+    es: "Fantasía",
+  },
+  {
+    slug: "adventure",
+    en: "Adventure",
+    es: "Aventura",
+  },
+  {
+    slug: "romance",
+    en: "Romance",
+    es: "Romance",
+  },
+  {
+    slug: "mystery",
+    en: "Mystery",
+    es: "Misterio",
+  },
 ];
 
 const assignments: Record<string, string[]> = {
   frankenstein: ["classic-literature", "gothic-fiction", "horror", "science-fiction"],
 
   dracula: ["classic-literature", "gothic-fiction", "horror"],
+
+  "pride-and-prejudice": ["classic-literature", "romance"],
+
+  "the-picture-of-dorian-gray": ["classic-literature", "gothic-fiction", "horror"],
+
+  "jekyll-and-hyde": ["classic-literature", "gothic-fiction", "horror"],
+
+  "alice-in-wonderland": ["classic-literature", "fantasy", "adventure"],
+
+  "adventures-of-sherlock-holmes": ["classic-literature", "mystery", "adventure"],
+
+  "the-time-machine": ["classic-literature", "science-fiction", "adventure"],
+
+  "the-war-of-the-worlds": ["classic-literature", "science-fiction", "horror"],
+
+  "moby-dick": ["classic-literature", "adventure"],
+
+  "a-christmas-carol": ["classic-literature", "fantasy"],
+
+  "the-wonderful-wizard-of-oz": ["classic-literature", "fantasy", "adventure"],
 };
 
-async function main() {
-  console.log("Seeding categories...");
-
-  for (const definition of categoryDefinitions) {
-    const [category] = await db
-      .insert(categories)
-      .values({
-        slug: definition.slug,
-      })
-      .onConflictDoUpdate({
-        target: categories.slug,
-        set: {
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-
-    if (!category) {
-      throw new Error(`Could not create category: ${definition.slug}`);
-    }
-
-    await db
-      .insert(categoryTranslations)
-      .values({
-        categoryId: category.id,
-        locale: "en",
-        name: definition.en,
-      })
-      .onConflictDoUpdate({
-        target: [categoryTranslations.categoryId, categoryTranslations.locale],
-        set: {
-          name: definition.en,
-        },
-      });
-
-    await db
-      .insert(categoryTranslations)
-      .values({
-        categoryId: category.id,
-        locale: "es",
-        name: definition.es,
-      })
-      .onConflictDoUpdate({
-        target: [categoryTranslations.categoryId, categoryTranslations.locale],
-        set: {
-          name: definition.es,
-        },
-      });
-  }
+function validateAssignments() {
+  const definedCategories = new Set(categoryDefinitions.map((category) => category.slug));
 
   for (const [bookSlug, categorySlugs] of Object.entries(assignments)) {
-    const [book] = await db
-      .select({
-        id: books.id,
-      })
-      .from(books)
-      .where(eq(books.slug, bookSlug))
-      .limit(1);
+    const duplicates = categorySlugs.filter((slug, index) => categorySlugs.indexOf(slug) !== index);
 
-    if (!book) {
-      throw new Error(`Book not found: ${bookSlug}`);
+    if (duplicates.length > 0) {
+      throw new Error(`Duplicate categories for ${bookSlug}: ${duplicates.join(", ")}`);
     }
 
-    const categoryRows = await db
+    const missing = categorySlugs.filter((slug) => !definedCategories.has(slug));
+
+    if (missing.length > 0) {
+      throw new Error(`Unknown categories for ${bookSlug}: ${missing.join(", ")}`);
+    }
+  }
+}
+
+async function main() {
+  validateAssignments();
+
+  console.log("Seeding categories...");
+
+  await db.transaction(async (tx) => {
+    // Categories + translations
+    for (const definition of categoryDefinitions) {
+      const [category] = await tx
+        .insert(categories)
+        .values({
+          slug: definition.slug,
+        })
+        .onConflictDoUpdate({
+          target: categories.slug,
+          set: {
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+
+      if (!category) {
+        throw new Error(`Could not create category: ${definition.slug}`);
+      }
+
+      await tx
+        .insert(categoryTranslations)
+        .values({
+          categoryId: category.id,
+          locale: "en",
+          name: definition.en,
+        })
+        .onConflictDoUpdate({
+          target: [categoryTranslations.categoryId, categoryTranslations.locale],
+          set: {
+            name: definition.en,
+          },
+        });
+
+      await tx
+        .insert(categoryTranslations)
+        .values({
+          categoryId: category.id,
+          locale: "es",
+          name: definition.es,
+        })
+        .onConflictDoUpdate({
+          target: [categoryTranslations.categoryId, categoryTranslations.locale],
+          set: {
+            name: definition.es,
+          },
+        });
+    }
+
+    // Resolve all categories before touching book assignments.
+    const categoryRows = await tx
       .select({
         id: categories.id,
         slug: categories.slug,
       })
       .from(categories)
-      .where(inArray(categories.slug, categorySlugs));
+      .where(
+        inArray(
+          categories.slug,
+          categoryDefinitions.map((category) => category.slug),
+        ),
+      );
 
     const categoryMap = new Map(categoryRows.map((category) => [category.slug, category.id]));
 
-    await db.delete(bookCategories).where(eq(bookCategories.bookId, book.id));
-
-    for (let position = 0; position < categorySlugs.length; position++) {
-      const categorySlug = categorySlugs[position];
-
-      const categoryId = categoryMap.get(categorySlug);
-
-      if (!categoryId) {
-        throw new Error(`Category not found: ${categorySlug}`);
+    for (const definition of categoryDefinitions) {
+      if (!categoryMap.has(definition.slug)) {
+        throw new Error(`Category not found after seed: ${definition.slug}`);
       }
-
-      await db.insert(bookCategories).values({
-        bookId: book.id,
-        categoryId,
-        position,
-      });
     }
 
-    console.log(`${bookSlug}: ${categorySlugs.join(", ")}`);
-  }
+    // Resolve every assigned book before deleting any existing relationships.
+    const bookSlugs = Object.keys(assignments);
+
+    const bookRows = await tx
+      .select({
+        id: books.id,
+        slug: books.slug,
+      })
+      .from(books)
+      .where(inArray(books.slug, bookSlugs));
+
+    const bookMap = new Map(bookRows.map((book) => [book.slug, book.id]));
+
+    const missingBooks = bookSlugs.filter((slug) => !bookMap.has(slug));
+
+    if (missingBooks.length > 0) {
+      throw new Error(`Books not found: ${missingBooks.join(", ")}`);
+    }
+
+    // Replace assignments only after every book and category has been validated.
+    for (const [bookSlug, categorySlugs] of Object.entries(assignments)) {
+      const bookId = bookMap.get(bookSlug);
+
+      if (!bookId) {
+        throw new Error(`Book not found: ${bookSlug}`);
+      }
+
+      const categoryIds = categorySlugs.map((categorySlug) => {
+        const categoryId = categoryMap.get(categorySlug);
+
+        if (!categoryId) {
+          throw new Error(`Category not found: ${categorySlug}`);
+        }
+
+        return categoryId;
+      });
+
+      await tx.delete(bookCategories).where(eq(bookCategories.bookId, bookId));
+
+      await tx.insert(bookCategories).values(
+        categoryIds.map((categoryId, position) => ({
+          bookId,
+          categoryId,
+          position,
+        })),
+      );
+
+      console.log(`${bookSlug}: ${categorySlugs.join(", ")}`);
+    }
+  });
 
   console.log("");
-  console.log("Categories seeded successfully");
+  console.log("Categories seeded successfully.");
+
+  const cacheTags = ["library", ...Object.keys(assignments).map((slug) => `book:${slug}`)];
+
+  await revalidateEditorialCache(cacheTags);
 }
 
 main()
   .catch((error) => {
     console.error("");
     console.error("Category seed failed");
-
     console.error(error);
 
     process.exitCode = 1;

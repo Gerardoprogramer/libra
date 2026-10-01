@@ -1,5 +1,6 @@
-import { getLocale, getTranslations } from "next-intl/server";
+import { Suspense } from "react";
 
+import { getLocale, getTranslations } from "next-intl/server";
 import { FiSearch } from "react-icons/fi";
 
 import { BookCard } from "@/components/books/BookCard";
@@ -17,15 +18,21 @@ interface BooksPageProps {
   }>;
 }
 
-export default async function BooksPage({ searchParams }: BooksPageProps) {
-  const locale = (await getLocale()) as ContentLocale;
+export default function BooksPage({ searchParams }: BooksPageProps) {
+  return (
+    <Suspense fallback={<BooksPageFallback />}>
+      <BooksContent searchParams={searchParams} />
+    </Suspense>
+  );
+}
 
+async function BooksContent({ searchParams }: BooksPageProps) {
+  const locale = (await getLocale()) as ContentLocale;
   const t = await getTranslations("catalog");
 
   const params = await searchParams;
 
   const query = params.q?.trim() ?? "";
-
   const selectedCategory = params.category?.trim() ?? "";
 
   const [books, categories] = await Promise.all([
@@ -33,7 +40,6 @@ export default async function BooksPage({ searchParams }: BooksPageProps) {
       query,
       category: selectedCategory,
     }),
-
     getCategories(locale),
   ]);
 
@@ -101,6 +107,38 @@ export default async function BooksPage({ searchParams }: BooksPageProps) {
           <p className="text-muted-foreground">{t("noResults")}</p>
         </div>
       )}
+    </main>
+  );
+}
+
+function BooksPageFallback() {
+  return (
+    <main className="mx-auto min-h-screen max-w-7xl px-6 py-14 md:py-20">
+      <header className="max-w-3xl">
+        <div className="bg-muted h-3 w-28 animate-pulse rounded" />
+        <div className="bg-muted mt-5 h-14 w-72 max-w-full animate-pulse rounded" />
+        <div className="bg-muted mt-5 h-6 w-full max-w-xl animate-pulse rounded" />
+      </header>
+
+      <div className="mt-10 flex gap-3 border-y py-6">
+        <div className="bg-muted h-9 flex-1 animate-pulse rounded-md" />
+        <div className="bg-muted hidden h-9 w-48 animate-pulse rounded-md md:block" />
+        <div className="bg-muted h-9 w-24 animate-pulse rounded-md" />
+      </div>
+
+      <div className="mt-8 mb-8">
+        <div className="bg-muted h-4 w-24 animate-pulse rounded" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        {Array.from({ length: 10 }).map((_, index) => (
+          <div key={index}>
+            <div className="bg-muted aspect-2/3 w-full animate-pulse rounded-md" />
+            <div className="bg-muted mt-3 h-4 w-4/5 animate-pulse rounded" />
+            <div className="bg-muted mt-2 h-3 w-1/2 animate-pulse rounded" />
+          </div>
+        ))}
+      </div>
     </main>
   );
 }
