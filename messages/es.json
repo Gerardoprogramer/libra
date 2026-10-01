@@ -19,7 +19,12 @@
   "book": {
     "by": "por",
     "chapters": "{count, plural, =0 {Sin capítulos} =1 {# capítulo} other {# capítulos}}",
+    "showAllChapters": "{count, plural, =1 {Mostrar capítulo} other {Mostrar los # capítulos}}",
+    "noChaptersAvailable": "Todavía no hay capítulos disponibles para este libro.",
+    "notFoundTitle": "Libro no encontrado — Libra",
     "startReading": "Empezar a leer",
+    "continueReading": "Continuar leyendo",
+    "readAgain": "Volver a leer",
     "addToLibrary": "Agregar a mi biblioteca",
     "removeFromLibrary": "Quitar de mi biblioteca",
     "libraryError": "No se pudo acceder a tu biblioteca. Comprueba que el navegador permita guardar datos y vuelve a intentarlo.",

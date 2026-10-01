@@ -6,8 +6,8 @@ import { notFound } from "next/navigation";
 import { FiBookOpen, FiShare2 } from "react-icons/fi";
 
 import { Badge } from "@/components/ui/badge";
+import { BookReadingAction } from "@/components/books/BookReadingAction";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 
 import { getBookBySlug, type ContentLocale } from "@/db/queries/books";
 import { LibraryButton } from "@/components/books/LibraryButton";
@@ -42,28 +42,30 @@ function getContentLocale(locale: string): ContentLocale {
 export async function generateMetadata({ params }: BookPageProps): Promise<Metadata> {
   const { locale, slug } = await params;
 
-  const book = await getBookBySlug(slug, getContentLocale(locale));
+  const [book, t] = await Promise.all([getBookBySlug(slug, getContentLocale(locale)), getTranslations("book")]);
 
   if (!book) {
     return {
-      title: "Book not found",
+      title: t("notFoundTitle"),
     };
   }
 
   const authors = book.authors.map((author) => author.name).join(", ");
 
   return {
-    title: `${book.edition.title} — ${authors}`,
-    description: book.edition.description ?? `Read ${book.edition.title} on Libra.`,
+    title: authors ? `${book.edition.title} — ${authors}` : book.edition.title,
+    description: book.edition.description ?? undefined,
   };
 }
 
 export default async function BookPage({ params }: BookPageProps) {
   const { locale, slug } = await params;
 
-  const t = await getTranslations("book");
-
-  const book = await getBookBySlug(slug, getContentLocale(locale));
+  const [book, t, readerTranslations] = await Promise.all([
+    getBookBySlug(slug, getContentLocale(locale)),
+    getTranslations("book"),
+    getTranslations("reader"),
+  ]);
 
   if (!book) {
     notFound();
@@ -76,6 +78,26 @@ export default async function BookPage({ params }: BookPageProps) {
   const year = book.edition.publicationYear ?? book.originalPublicationYear;
 
   const coverStyle = getCoverStyle(book.slug);
+
+  const renderChapters = () =>
+    book.chapters.map((chapter) => (
+      <Link
+        key={chapter.id}
+        href={`/books/${book.slug}/${chapter.slug}`}
+        className="group flex min-w-0 items-center gap-4 py-3"
+      >
+        <span className="text-muted-foreground w-8 shrink-0 text-sm tabular-nums">
+          {String(chapter.number).padStart(2, "0")}
+        </span>
+
+        <span className="font-serif leading-snug transition-transform group-hover:translate-x-1">{chapter.title}</span>
+
+        <FiBookOpen
+          aria-hidden="true"
+          className="text-muted-foreground group-hover:text-foreground ml-auto size-4 shrink-0 transition"
+        />
+      </Link>
+    ));
 
   return (
     <main className="min-h-screen">
@@ -133,7 +155,9 @@ export default async function BookPage({ params }: BookPageProps) {
               {year && <span className="text-muted-foreground text-sm">{year}</span>}
             </div>
 
-            <h1 className="max-w-3xl font-serif text-5xl tracking-tight md:text-6xl">{book.edition.title}</h1>
+            <h1 className="max-w-3xl font-serif text-4xl leading-tight tracking-tight sm:text-5xl md:text-6xl">
+              {book.edition.title}
+            </h1>
 
             <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-x-1 text-lg">
               <span>{t("by")}</span>
@@ -150,14 +174,7 @@ export default async function BookPage({ params }: BookPageProps) {
             </div>
 
             <div className="text-muted-foreground mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-              <span>
-                {t("chapters", {
-                  count: book.chapters.length,
-                })}
-              </span>
-
-              <span>{book.edition.language.toUpperCase()}</span>
-
+              <span>{t("chapters", { count: book.chapters.length })}</span>
               {book.edition.sourceName && <span>{book.edition.sourceName}</span>}
             </div>
 
@@ -167,12 +184,15 @@ export default async function BookPage({ params }: BookPageProps) {
 
             <div className="mt-9 flex flex-wrap gap-3">
               {firstChapter && (
-                <Button size="lg" asChild>
-                  <Link href={`/books/${book.slug}/${firstChapter.slug}`}>
-                    <FiBookOpen />
-                    {t("startReading")}
-                  </Link>
-                </Button>
+                <BookReadingAction
+                  bookSlug={book.slug}
+                  chapterSlugs={book.chapters.map((chapter) => chapter.slug)}
+                  firstChapterSlug={firstChapter.slug}
+                  startLabel={t("startReading")}
+                  continueLabel={t("continueReading")}
+                  readAgainLabel={t("readAgain")}
+                  progressLabel={readerTranslations("progress", { progress: "{progress}" })}
+                />
               )}
 
               <LibraryButton
@@ -193,39 +213,33 @@ export default async function BookPage({ params }: BookPageProps) {
       </section>
 
       <section className="mx-auto max-w-4xl px-6 py-14">
-        <div className="mb-7">
-          <p className="text-muted-foreground mb-2 text-xs tracking-[0.2em] uppercase">{t("contents")}</p>
+        <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-muted-foreground mb-2 text-xs tracking-[0.2em] uppercase">{t("contents")}</p>
 
-          <h2 className="font-serif text-3xl">{t("chapterList")}</h2>
+            <h2 className="font-serif text-3xl">{t("chapterList")}</h2>
+          </div>
+
+          <p className="text-muted-foreground text-sm">{t("chapters", { count: book.chapters.length })}</p>
         </div>
 
         {book.chapters.length > 0 ? (
-          <div>
-            {book.chapters.map((chapter, index) => (
-              <div key={chapter.id}>
-                <Link
-                  href={`/books/${book.slug}/${chapter.slug}`}
-                  className="group flex items-center justify-between py-5"
-                >
-                  <div className="flex items-center gap-5">
-                    <span className="text-muted-foreground w-8 text-sm tabular-nums">
-                      {String(chapter.number).padStart(2, "0")}
-                    </span>
+          <div className="divide-y">
+            {book.chapters.length > 20 && (
+              <details className="group">
+                <summary className="text-muted-foreground hover:text-foreground cursor-pointer py-4 text-sm transition">
+                  {t("showAllChapters", {
+                    count: book.chapters.length,
+                  })}
+                </summary>
+                <div className="grid gap-x-8 md:grid-cols-2">{renderChapters()}</div>
+              </details>
+            )}
 
-                    <span className="font-serif text-lg transition-transform group-hover:translate-x-1">
-                      {chapter.title}
-                    </span>
-                  </div>
-
-                  <FiBookOpen className="text-muted-foreground group-hover:text-foreground transition" />
-                </Link>
-
-                {index < book.chapters.length - 1 && <Separator />}
-              </div>
-            ))}
+            {book.chapters.length <= 20 && <div className="grid gap-x-8 md:grid-cols-2">{renderChapters()}</div>}
           </div>
         ) : (
-          <p className="text-muted-foreground">No chapters available.</p>
+          <p className="text-muted-foreground border-y py-8">{t("noChaptersAvailable")}</p>
         )}
       </section>
     </main>
