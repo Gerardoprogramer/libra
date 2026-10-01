@@ -1,8 +1,32 @@
 import { getLocale, getTranslations } from "next-intl/server";
+import type { Metadata } from "next";
 
 import { getCategories, type ContentLocale } from "@/db/queries/books";
 
 import { Link } from "@/i18n/navigation";
+import { createLocalizedMetadata } from "@/lib/seo-metadata";
+
+interface CategoriesPageProps {
+  params: Promise<{
+    locale: string;
+  }>;
+}
+
+export async function generateMetadata({ params }: CategoriesPageProps): Promise<Metadata> {
+  const { locale: routeLocale } = await params;
+  const locale: ContentLocale = routeLocale === "en" ? "en" : "es";
+  const t = await getTranslations({
+    locale,
+    namespace: "catalog",
+  });
+
+  return createLocalizedMetadata({
+    locale,
+    pathname: "/categories",
+    title: t("categoriesMetadataTitle"),
+    description: t("categoriesMetadataDescription"),
+  });
+}
 
 export default async function CategoriesPage() {
   const locale = (await getLocale()) as ContentLocale;
@@ -28,7 +52,7 @@ export default async function CategoriesPage() {
             href={`/books?category=${category.slug}`}
             className="group hover:bg-muted/40 border p-7 transition"
           >
-            <p className="font-serif text-2xl">{category.name}</p>
+            <h2 className="font-serif text-2xl">{category.name}</h2>
 
             <p className="text-muted-foreground mt-2 text-sm">
               {t("booksInCategory", {
@@ -37,7 +61,7 @@ export default async function CategoriesPage() {
             </p>
 
             <p className="text-muted-foreground group-hover:text-foreground mt-8 text-sm transition">
-              {locale === "es" ? "Explorar →" : "Explore →"}
+              {t("exploreCategory")} <span aria-hidden="true">→</span>
             </p>
           </Link>
         ))}

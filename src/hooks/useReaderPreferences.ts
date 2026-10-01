@@ -23,17 +23,27 @@ const defaultPreferences: ReaderPreferences = {
 const defaultSnapshot = JSON.stringify(defaultPreferences);
 
 function subscribe(callback: () => void) {
-  window.addEventListener("storage", callback);
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === STORAGE_KEY || event.key === null) {
+      callback();
+    }
+  };
+
+  window.addEventListener("storage", handleStorage);
   window.addEventListener(CHANGE_EVENT, callback);
 
   return () => {
-    window.removeEventListener("storage", callback);
+    window.removeEventListener("storage", handleStorage);
     window.removeEventListener(CHANGE_EVENT, callback);
   };
 }
 
-function getSnapshot() {
-  return localStorage.getItem(STORAGE_KEY) ?? defaultSnapshot;
+function getSnapshot(): string | null {
+  try {
+    return window.localStorage.getItem(STORAGE_KEY) ?? defaultSnapshot;
+  } catch {
+    return null;
+  }
 }
 
 function getServerSnapshot() {
@@ -64,9 +74,9 @@ function parsePreferences(snapshot: string): ReaderPreferences {
 }
 
 export function useReaderPreferences() {
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const snapshot = useSyncExternalStore<string | null>(subscribe, getSnapshot, getServerSnapshot);
 
-  const preferences = useMemo(() => parsePreferences(snapshot), [snapshot]);
+  const preferences = useMemo(() => parsePreferences(snapshot ?? defaultSnapshot), [snapshot]);
 
   function updatePreferences(values: Partial<ReaderPreferences>) {
     const nextPreferences: ReaderPreferences = {
@@ -74,13 +84,20 @@ export function useReaderPreferences() {
       ...values,
     };
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextPreferences));
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextPreferences));
+    } catch {
+      return false;
+    }
 
     window.dispatchEvent(new Event(CHANGE_EVENT));
+
+    return true;
   }
 
   return {
     ...preferences,
+    isAvailable: snapshot !== null,
 
     setTheme: (theme: ReaderTheme) => updatePreferences({ theme }),
 

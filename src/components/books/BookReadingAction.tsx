@@ -4,7 +4,13 @@ import { useCallback, useSyncExternalStore } from "react";
 import { FiBookOpen } from "react-icons/fi";
 
 import { Button } from "@/components/ui/button";
-import { calculateBookProgress, getReadingProgressKey, parseReadingProgress } from "@/lib/reading-progress";
+import {
+  calculateBookProgress,
+  getReadingProgressKey,
+  parseReadingProgress,
+  readReadingProgress,
+  READING_PROGRESS_CHANGE_EVENT,
+} from "@/lib/reading-progress";
 import { Link } from "@/i18n/navigation";
 
 interface BookReadingActionProps {
@@ -25,14 +31,16 @@ function subscribe(bookSlug: string, callback: () => void) {
   };
 
   window.addEventListener("storage", handleStorage);
+  window.addEventListener(READING_PROGRESS_CHANGE_EVENT, callback);
 
   return () => {
     window.removeEventListener("storage", handleStorage);
+    window.removeEventListener(READING_PROGRESS_CHANGE_EVENT, callback);
   };
 }
 
 function getProgressSnapshot(bookSlug: string) {
-  return localStorage.getItem(getReadingProgressKey(bookSlug)) ?? "";
+  return readReadingProgress(bookSlug) ?? "";
 }
 
 function getServerSnapshot() {
@@ -51,7 +59,8 @@ export function BookReadingAction({
   const subscribeToProgress = useCallback((callback: () => void) => subscribe(bookSlug, callback), [bookSlug]);
   const readProgress = useCallback(() => getProgressSnapshot(bookSlug), [bookSlug]);
   const snapshot = useSyncExternalStore(subscribeToProgress, readProgress, getServerSnapshot);
-  const progress = parseReadingProgress(snapshot);
+  const parsedProgress = parseReadingProgress(snapshot);
+  const progress = parsedProgress?.bookSlug === bookSlug ? parsedProgress : null;
   const hasValidProgress = progress && chapterSlugs.includes(progress.chapterSlug);
   const percentage = hasValidProgress ? calculateBookProgress(progress) : null;
   const isComplete = percentage === 100 && progress?.chapterSlug === chapterSlugs.at(-1);

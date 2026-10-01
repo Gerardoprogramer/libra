@@ -5,6 +5,7 @@ import postgres from "postgres";
 
 import { bookCategories, books, categories, categoryTranslations } from "../src/db/schema";
 
+import { formatImportError } from "./lib/import-errors";
 import { revalidateEditorialCache } from "./lib/revalidate-cache";
 
 config({
@@ -249,7 +250,7 @@ main()
   .catch((error) => {
     console.error("");
     console.error("Category seed failed");
-    console.error(error);
+    console.error(formatImportError(error));
 
     process.exitCode = 1;
   })

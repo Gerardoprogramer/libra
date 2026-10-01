@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 import { FiArrowRight, FiBookOpen } from "react-icons/fi";
 
@@ -11,7 +11,8 @@ import { Link } from "@/i18n/navigation";
 import {
   calculateBookProgress,
   parseReadingProgress,
-  READING_PROGRESS_PREFIX,
+  readAllReadingProgress,
+  READING_PROGRESS_CHANGE_EVENT,
   type ReadingProgress,
 } from "@/lib/reading-progress";
 
@@ -27,32 +28,33 @@ interface ContinueReadingProps {
   title: string;
   chapterLabel: string;
   continueLabel: string;
+  storageUnavailableLabel: string;
 }
 
 function subscribe(callback: () => void) {
   window.addEventListener("storage", callback);
+  window.addEventListener(READING_PROGRESS_CHANGE_EVENT, callback);
 
   return () => {
     window.removeEventListener("storage", callback);
+    window.removeEventListener(READING_PROGRESS_CHANGE_EVENT, callback);
   };
 }
 
-function getProgressSnapshot() {
+function getProgressSnapshot(bookSlugs: ReadonlySet<string>): string | null {
+  const entries = readAllReadingProgress();
+
+  if (!entries) {
+    return null;
+  }
+
   let latestValue = "";
   let latestUpdatedAt = -1;
 
-  for (let index = 0; index < localStorage.length; index++) {
-    const key = localStorage.key(index);
-
-    if (!key?.startsWith(READING_PROGRESS_PREFIX)) {
-      continue;
-    }
-
-    const value = localStorage.getItem(key);
-
+  for (const value of entries.sort()) {
     const progress = parseReadingProgress(value);
 
-    if (!progress || !value) {
+    if (!progress || !bookSlugs.has(progress.bookSlug)) {
       continue;
     }
 
@@ -71,10 +73,29 @@ function getServerSnapshot() {
   return "";
 }
 
-export function ContinueReading({ books, title, chapterLabel, continueLabel }: ContinueReadingProps) {
-  const snapshot = useSyncExternalStore(subscribe, getProgressSnapshot, getServerSnapshot);
+export function ContinueReading({
+  books,
+  title,
+  chapterLabel,
+  continueLabel,
+  storageUnavailableLabel,
+}: ContinueReadingProps) {
+  const bookSlugs = useMemo(() => new Set(books.map((book) => book.slug)), [books]);
+  const subscribeToProgress = useCallback((callback: () => void) => subscribe(callback), []);
+  const readProgress = useCallback(() => getProgressSnapshot(bookSlugs), [bookSlugs]);
+  const snapshot = useSyncExternalStore(subscribeToProgress, readProgress, getServerSnapshot);
 
   const progress = useMemo<ReadingProgress | null>(() => parseReadingProgress(snapshot), [snapshot]);
+
+  if (snapshot === null) {
+    return (
+      <section className="border-b px-6 py-8">
+        <p role="alert" className="text-muted-foreground mx-auto max-w-7xl text-sm">
+          {storageUnavailableLabel}
+        </p>
+      </section>
+    );
+  }
 
   if (!progress) {
     return null;

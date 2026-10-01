@@ -1,4 +1,5 @@
 export const READING_PROGRESS_PREFIX = "libra:progress:";
+export const READING_PROGRESS_CHANGE_EVENT = "libra:reading-progress-change";
 
 export interface ReadingProgress {
   bookSlug: string;
@@ -31,6 +32,51 @@ export function getReadingProgressKey(bookSlug: string) {
   return `${READING_PROGRESS_PREFIX}${bookSlug}`;
 }
 
+export function readReadingProgress(bookSlug: string): string | null {
+  try {
+    return window.localStorage.getItem(getReadingProgressKey(bookSlug)) ?? "";
+  } catch {
+    return null;
+  }
+}
+
+export function readAllReadingProgress(): string[] | null {
+  try {
+    const entries: string[] = [];
+
+    for (let index = 0; index < window.localStorage.length; index++) {
+      const key = window.localStorage.key(index);
+
+      if (!key?.startsWith(READING_PROGRESS_PREFIX)) {
+        continue;
+      }
+
+      const value = window.localStorage.getItem(key);
+      const progress = parseReadingProgress(value);
+
+      if (value && progress && key === getReadingProgressKey(progress.bookSlug)) {
+        entries.push(value);
+      }
+    }
+
+    return entries;
+  } catch {
+    return null;
+  }
+}
+
+export function saveReadingProgress(progress: ReadingProgress): boolean {
+  try {
+    window.localStorage.setItem(getReadingProgressKey(progress.bookSlug), JSON.stringify(progress));
+  } catch {
+    return false;
+  }
+
+  window.dispatchEvent(new Event(READING_PROGRESS_CHANGE_EVENT));
+
+  return true;
+}
+
 export function parseReadingProgress(value: string | null): ReadingProgress | null {
   if (!value) {
     return null;
@@ -41,11 +87,28 @@ export function parseReadingProgress(value: string | null): ReadingProgress | nu
 
     if (
       typeof parsed.bookSlug !== "string" ||
+      !parsed.bookSlug.trim() ||
       typeof parsed.chapterSlug !== "string" ||
+      !parsed.chapterSlug.trim() ||
       typeof parsed.chapterTitle !== "string" ||
       typeof parsed.chapterNumber !== "number" ||
+      !Number.isInteger(parsed.chapterNumber) ||
+      parsed.chapterNumber < 1 ||
       typeof parsed.percentage !== "number" ||
+      !Number.isFinite(parsed.percentage) ||
+      parsed.percentage < 0 ||
+      parsed.percentage > 100 ||
       typeof parsed.updatedAt !== "string"
+    ) {
+      return null;
+    }
+
+    if (
+      (parsed.chapterIndex !== undefined && (!Number.isInteger(parsed.chapterIndex) || parsed.chapterIndex < 0)) ||
+      (parsed.totalChapters !== undefined && (!Number.isInteger(parsed.totalChapters) || parsed.totalChapters < 1)) ||
+      (typeof parsed.chapterIndex === "number" &&
+        typeof parsed.totalChapters === "number" &&
+        parsed.chapterIndex >= parsed.totalChapters)
     ) {
       return null;
     }

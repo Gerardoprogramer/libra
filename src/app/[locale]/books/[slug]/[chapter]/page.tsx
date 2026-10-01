@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import { ReaderView } from "@/components/reader/ReaderView";
 
 import { getChapterBySlug, type ContentLocale } from "@/db/queries/books";
+import { createLocalizedMetadata } from "@/lib/seo-metadata";
 
 interface ReaderPageProps {
   params: Promise<{
@@ -20,21 +22,45 @@ function getContentLocale(locale: string): ContentLocale {
 
 export async function generateMetadata({ params }: ReaderPageProps): Promise<Metadata> {
   const { locale, slug, chapter } = await params;
+  const contentLocale = getContentLocale(locale);
 
-  const result = await getChapterBySlug(slug, chapter, getContentLocale(locale));
+  const [result, t] = await Promise.all([
+    getChapterBySlug(slug, chapter, contentLocale),
+    getTranslations({
+      locale: contentLocale,
+      namespace: "reader",
+    }),
+  ]);
 
   if (!result) {
-    return {
-      title: "Chapter not found",
-    };
+    return createLocalizedMetadata({
+      locale: contentLocale,
+      pathname: `/books/${encodeURIComponent(slug)}/${encodeURIComponent(chapter)}`,
+      title: t("chapterNotFoundTitle"),
+      robots: {
+        index: false,
+        follow: true,
+      },
+    });
   }
 
   const authors = result.book.authors.map((author) => author.name).join(", ");
 
-  return {
+  return createLocalizedMetadata({
+    locale: contentLocale,
+    pathname: `/books/${encodeURIComponent(slug)}/${encodeURIComponent(chapter)}`,
     title: `${result.chapter.title} — ${result.book.edition.title}`,
-    description: `Read ${result.chapter.title} from ${result.book.edition.title} by ${authors} on Libra.`,
-  };
+    description: authors
+      ? t("chapterMetadataDescription", {
+          chapter: result.chapter.title,
+          book: result.book.edition.title,
+          authors,
+        })
+      : undefined,
+    images: result.book.edition.coverUrl
+      ? [{ url: result.book.edition.coverUrl, alt: result.book.edition.title }]
+      : undefined,
+  });
 }
 
 export default async function ReaderPage({ params }: ReaderPageProps) {
@@ -63,9 +89,14 @@ export default async function ReaderPage({ params }: ReaderPageProps) {
       chapterNumber={currentChapter.number}
       chapterIndex={chapterIndex}
       totalChapters={book.chapters.length}
-      paragraphs={paragraphs}
       previousHref={previous ? `/books/${book.slug}/${previous.slug}` : undefined}
       nextHref={next ? `/books/${book.slug}/${next.slug}` : undefined}
-    />
+    >
+      {paragraphs.map((paragraph, index) => (
+        <p key={index} className="mb-7 font-serif leading-[1.95] opacity-90">
+          {paragraph}
+        </p>
+      ))}
+    </ReaderView>
   );
 }

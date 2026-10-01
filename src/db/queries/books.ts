@@ -853,6 +853,10 @@ export async function getAuthorBySlug(slug: string, locale: ContentLocale): Prom
     ];
   });
 
+  if (authorBooks.length === 0) {
+    return null;
+  }
+
   return {
     ...author,
     books: authorBooks,

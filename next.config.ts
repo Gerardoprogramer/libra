@@ -3,6 +3,30 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
+function getR2RemotePatterns() {
+  const configuredUrl = process.env.R2_PUBLIC_URL;
+
+  if (!configuredUrl) {
+    return [];
+  }
+
+  const publicUrl = new URL(configuredUrl);
+
+  if (
+    publicUrl.protocol !== "https:" ||
+    publicUrl.username ||
+    publicUrl.password ||
+    publicUrl.search ||
+    publicUrl.hash
+  ) {
+    throw new Error("R2_PUBLIC_URL must be an HTTPS URL without credentials, query or fragment.");
+  }
+
+  const baseUrl = `${publicUrl.origin}${publicUrl.pathname.replace(/\/$/, "")}`;
+
+  return [new URL(`${baseUrl}/**`)];
+}
+
 const nextConfig: NextConfig = {
   cacheComponents: true,
   cacheLife: {
@@ -14,7 +38,7 @@ const nextConfig: NextConfig = {
     },
   },
   images: {
-    remotePatterns: process.env.R2_PUBLIC_URL ? [new URL(`${process.env.R2_PUBLIC_URL}/**`)] : [],
+    remotePatterns: getR2RemotePatterns(),
   },
 };
 

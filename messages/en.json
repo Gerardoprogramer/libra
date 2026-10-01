@@ -5,16 +5,27 @@
     "authors": "Authors",
     "library": "Library",
     "search": "Search",
-    "account": "Account"
+    "menu": "Menu",
+    "language": "Language: {locale}"
   },
   "home": {
+    "metadataTitle": "Libra — A library without walls",
+    "metadataDescription": "Discover timeless books, beautifully presented and free to read.",
     "eyebrow": "A library without walls",
     "titleFirst": "Great stories",
     "titleSecond": "never get old.",
     "description": "Discover timeless books, beautifully presented and free to read.",
     "discover": "Discover",
-    "trending": "Trending this week",
-    "viewAll": "View all"
+    "browseBooks": "Browse books",
+    "collectionTitle": "Explore the library",
+    "viewAll": "View all books"
+  },
+  "errors": {
+    "errorTitle": "Something went wrong",
+    "errorDescription": "The page could not be loaded. Please try again.",
+    "retry": "Try again",
+    "notFoundTitle": "Page not found",
+    "notFoundDescription": "The page you are looking for is not available."
   },
   "book": {
     "by": "by",
@@ -40,9 +51,25 @@
     "progress": "{progress}% read",
     "narrow": "Narrow",
     "medium": "Medium",
-    "wide": "Wide"
+    "wide": "Wide",
+    "lightTheme": "Light theme",
+    "sepiaTheme": "Sepia theme",
+    "darkTheme": "Dark theme",
+    "decreaseTextSize": "Decrease text size",
+    "increaseTextSize": "Increase text size",
+    "readingWidth": "Reading width",
+    "storageUnavailable": "Reading settings or progress could not be saved. Check that your browser allows site storage.",
+    "chapterNotFoundTitle": "Chapter not found — Libra",
+    "chapterMetadataDescription": "Read {chapter} from {book} by {authors} on Libra."
   },
   "catalog": {
+    "booksMetadataTitle": "Explore the library — Libra",
+    "booksMetadataDescription": "Discover timeless books, authors and stories available to read on Libra.",
+    "categoriesMetadataTitle": "Categories — Libra",
+    "categoriesMetadataDescription": "Browse the library by genre and literary category.",
+    "exploreCategory": "Explore",
+    "searchLabel": "Search books by title or author",
+    "categoryFilterLabel": "Filter books by category",
     "eyebrow": "The collection",
     "title": "Explore the library",
     "description": "Discover timeless books, authors and stories available to read on Libra.",
@@ -58,6 +85,7 @@
     "booksInCategory": "{count, plural, =1 {# book} other {# books}}"
   },
   "author": {
+    "listingMetadataTitle": "Authors — Libra",
     "listingEyebrow": "The writers",
     "listingTitle": "Authors",
     "listingDescription": "Discover the authors behind the stories in Libra's collection.",
@@ -76,13 +104,15 @@
   "continueReading": {
     "title": "Continue reading",
     "chapter": "Chapter",
-    "continue": "Continue reading"
+    "continue": "Continue reading",
+    "storageUnavailable": "Reading progress is unavailable. Check that your browser allows site storage."
   },
   "recentlyRead": {
     "title": "Recently read",
     "continue": "Continue"
   },
   "library": {
+    "metadataTitle": "My library — Libra",
     "eyebrow": "Your collection",
     "title": "My library",
     "description": "Save the stories you want to read, revisit or keep close at hand.",

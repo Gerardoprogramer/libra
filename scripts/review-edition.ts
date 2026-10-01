@@ -5,6 +5,7 @@ import postgres from "postgres";
 
 import { books, editions } from "../src/db/schema";
 
+import { formatImportError } from "./lib/import-errors";
 import { revalidateEditorialCache } from "./lib/revalidate-cache";
 
 config({
@@ -219,7 +220,7 @@ main()
   .catch((error) => {
     console.error("");
     console.error("Edition review failed");
-    console.error(error);
+    console.error(formatImportError(error));
 
     process.exitCode = 1;
   })

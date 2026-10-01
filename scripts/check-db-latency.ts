@@ -3,6 +3,8 @@ import { performance } from "node:perf_hooks";
 import { config } from "dotenv";
 import postgres from "postgres";
 
+import { formatImportError } from "./lib/import-errors";
+
 config({
   path: ".env.local",
 });
@@ -48,6 +50,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  console.error(formatImportError(error));
   process.exitCode = 1;
 });

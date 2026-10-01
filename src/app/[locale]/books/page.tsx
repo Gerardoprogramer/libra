@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 
 import { getLocale, getTranslations } from "next-intl/server";
 import { FiSearch } from "react-icons/fi";
@@ -10,15 +11,38 @@ import { Input } from "@/components/ui/input";
 import { getBooks, getCategories, type ContentLocale } from "@/db/queries/books";
 
 import { Link } from "@/i18n/navigation";
+import { createLocalizedMetadata } from "@/lib/seo-metadata";
 
 interface BooksPageProps {
-  searchParams: Promise<{
-    q?: string;
-    category?: string;
+  params: Promise<{
+    locale: string;
   }>;
 }
 
-export default function BooksPage({ searchParams }: BooksPageProps) {
+interface BooksContentProps {
+  searchParams: Promise<{
+    q?: string | string[];
+    category?: string | string[];
+  }>;
+}
+
+export async function generateMetadata({ params }: BooksPageProps): Promise<Metadata> {
+  const { locale: routeLocale } = await params;
+  const locale: ContentLocale = routeLocale === "en" ? "en" : "es";
+  const t = await getTranslations({
+    locale,
+    namespace: "catalog",
+  });
+
+  return createLocalizedMetadata({
+    locale,
+    pathname: "/books",
+    title: t("booksMetadataTitle"),
+    description: t("booksMetadataDescription"),
+  });
+}
+
+export default function BooksPage({ searchParams }: BooksContentProps) {
   return (
     <Suspense fallback={<BooksPageFallback />}>
       <BooksContent searchParams={searchParams} />
@@ -26,14 +50,14 @@ export default function BooksPage({ searchParams }: BooksPageProps) {
   );
 }
 
-async function BooksContent({ searchParams }: BooksPageProps) {
+async function BooksContent({ searchParams }: BooksContentProps) {
   const locale = (await getLocale()) as ContentLocale;
   const t = await getTranslations("catalog");
 
   const params = await searchParams;
 
-  const query = params.q?.trim() ?? "";
-  const selectedCategory = params.category?.trim() ?? "";
+  const query = (typeof params.q === "string" ? params.q : "").trim();
+  const selectedCategory = (typeof params.category === "string" ? params.category : "").trim();
 
   const [books, categories] = await Promise.all([
     getBooks(locale, {
@@ -57,12 +81,22 @@ async function BooksContent({ searchParams }: BooksPageProps) {
 
       <form method="get" className="mt-10 flex flex-col gap-3 border-y py-6 md:flex-row">
         <div className="relative flex-1">
-          <FiSearch className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+          <FiSearch
+            aria-hidden="true"
+            className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2"
+          />
 
-          <Input name="q" defaultValue={query} placeholder={t("searchPlaceholder")} className="pl-9" />
+          <label className="sr-only" htmlFor="book-search">
+            {t("searchLabel")}
+          </label>
+          <Input id="book-search" name="q" defaultValue={query} placeholder={t("searchPlaceholder")} className="pl-9" />
         </div>
 
+        <label className="sr-only" htmlFor="book-category">
+          {t("categoryFilterLabel")}
+        </label>
         <select
+          id="book-category"
           name="category"
           defaultValue={selectedCategory}
           className="border-input bg-background h-9 rounded-md border px-3 text-sm outline-none"
@@ -77,7 +111,7 @@ async function BooksContent({ searchParams }: BooksPageProps) {
         </select>
 
         <Button type="submit">
-          <FiSearch />
+          <FiSearch aria-hidden="true" />
           {t("search")}
         </Button>
 

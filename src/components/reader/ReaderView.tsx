@@ -1,7 +1,9 @@
 "use client";
 
 import { Link } from "@/i18n/navigation";
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { FiArrowLeft, FiChevronLeft, FiChevronRight, FiMinus, FiMoon, FiPlus, FiSun } from "react-icons/fi";
 import { TbCoffee } from "react-icons/tb";
 
@@ -9,7 +11,12 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useReaderPreferences } from "@/hooks/useReaderPreferences";
-import { getReadingProgressKey, parseReadingProgress, type ReadingProgress } from "@/lib/reading-progress";
+import {
+  parseReadingProgress,
+  readReadingProgress,
+  saveReadingProgress,
+  type ReadingProgress,
+} from "@/lib/reading-progress";
 
 type ReaderTheme = "light" | "sepia" | "dark";
 type ReaderWidth = "narrow" | "medium" | "wide";
@@ -25,7 +32,7 @@ interface ReaderViewProps {
   chapterIndex: number;
 
   totalChapters: number;
-  paragraphs: string[];
+  children: ReactNode;
 
   previousHref?: string;
   nextHref?: string;
@@ -52,15 +59,27 @@ export function ReaderView({
   chapterNumber,
   chapterIndex,
   totalChapters,
-  paragraphs,
+  children,
   previousHref,
   nextHref,
 }: ReaderViewProps) {
   const articleRef = useRef<HTMLElement>(null);
   const hasRestoredProgress = useRef(false);
-  const { theme, width, fontSize, setTheme, setWidth, setFontSize } = useReaderPreferences();
+  const progressStorageAvailable = useRef(true);
+  const lastSavedPercentage = useRef<number | null>(null);
+  const {
+    theme,
+    width,
+    fontSize,
+    isAvailable: preferencesAvailable,
+    setTheme,
+    setWidth,
+    setFontSize,
+  } = useReaderPreferences();
+  const t = useTranslations("reader");
 
   const [progress, setProgress] = useState(0);
+  const [storageError, setStorageError] = useState(false);
 
   useEffect(() => {
     const article = articleRef.current;
@@ -70,16 +89,33 @@ export function ReaderView({
     }
 
     hasRestoredProgress.current = false;
+    progressStorageAvailable.current = true;
 
-    const progressKey = getReadingProgressKey(bookSlug);
+    const savedSnapshot = readReadingProgress(bookSlug);
+    const parsedProgress = parseReadingProgress(savedSnapshot);
+    const savedProgress = parsedProgress?.bookSlug === bookSlug ? parsedProgress : null;
 
-    const savedProgress = parseReadingProgress(localStorage.getItem(progressKey));
-
-    const savedPercentage = savedProgress?.chapterSlug === chapterSlug ? savedProgress.percentage : 0;
+    const savedPercentage =
+      savedProgress?.chapterSlug === chapterSlug ? Math.min(100, Math.max(0, savedProgress.percentage)) : 0;
 
     setProgress(savedPercentage);
+    lastSavedPercentage.current = savedProgress?.chapterSlug === chapterSlug ? savedPercentage : null;
+
+    const progressStorageBlocked = savedSnapshot === null;
+
+    if (progressStorageBlocked) {
+      progressStorageAvailable.current = false;
+    }
 
     const saveProgress = (percentage: number) => {
+      if (!progressStorageAvailable.current) {
+        return;
+      }
+
+      if (lastSavedPercentage.current === percentage) {
+        return;
+      }
+
       const readingProgress: ReadingProgress = {
         bookSlug,
         chapterSlug,
@@ -91,7 +127,12 @@ export function ReaderView({
         updatedAt: new Date().toISOString(),
       };
 
-      localStorage.setItem(progressKey, JSON.stringify(readingProgress));
+      if (!saveReadingProgress(readingProgress)) {
+        progressStorageAvailable.current = false;
+        setStorageError(true);
+      } else {
+        lastSavedPercentage.current = percentage;
+      }
     };
 
     const calculateProgress = () => {
@@ -124,8 +165,13 @@ export function ReaderView({
       saveProgress(percentage);
     };
 
+    let restoreScrollFrame = 0;
     const restoreFrame = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+      if (progressStorageBlocked) {
+        setStorageError(true);
+      }
+
+      restoreScrollFrame = requestAnimationFrame(() => {
         const currentArticle = articleRef.current;
 
         if (!currentArticle) {
@@ -161,22 +207,43 @@ export function ReaderView({
 
     return () => {
       cancelAnimationFrame(restoreFrame);
+      cancelAnimationFrame(restoreScrollFrame);
 
       window.removeEventListener("scroll", updateProgress);
     };
   }, [bookSlug, chapterSlug, chapterTitle, chapterNumber, chapterIndex, totalChapters]);
 
   function decreaseFontSize() {
-    setFontSize(fontSize - 2);
+    if (!setFontSize(fontSize - 2)) {
+      setStorageError(true);
+    }
   }
 
   function increaseFontSize() {
-    setFontSize(fontSize + 2);
+    if (!setFontSize(fontSize + 2)) {
+      setStorageError(true);
+    }
+  }
+
+  function changeTheme(nextTheme: ReaderTheme) {
+    if (!setTheme(nextTheme)) {
+      setStorageError(true);
+    }
+  }
+
+  function changeWidth(nextWidth: string | undefined) {
+    if (nextWidth !== "narrow" && nextWidth !== "medium" && nextWidth !== "wide") {
+      return;
+    }
+
+    if (!setWidth(nextWidth)) {
+      setStorageError(true);
+    }
   }
 
   return (
     <div className={cn("min-h-screen transition-colors duration-300", themeClasses[theme])}>
-      <div className="sticky top-16 z-40 h-1 bg-current/10">
+      <div aria-hidden="true" className="sticky top-16 z-40 h-1 bg-current/10">
         <div className="h-full bg-current transition-[width]" style={{ width: `${progress}%` }} />
       </div>
 
@@ -186,7 +253,7 @@ export function ReaderView({
             href={`/books/${bookSlug}`}
             className="inline-flex items-center gap-2 text-sm opacity-60 transition hover:opacity-100"
           >
-            <FiArrowLeft />
+            <FiArrowLeft aria-hidden="true" />
             {bookTitle}
           </Link>
 
@@ -195,52 +262,57 @@ export function ReaderView({
               <Button
                 size="icon"
                 variant="ghost"
-                onClick={() => setTheme("light")}
+                aria-label={t("lightTheme")}
+                onClick={() => changeTheme("light")}
                 className={cn(theme === "light" && "bg-current/10")}
               >
-                <FiSun />
+                <FiSun aria-hidden="true" />
               </Button>
 
               <Button
                 size="icon"
                 variant="ghost"
-                onClick={() => setTheme("sepia")}
+                aria-label={t("sepiaTheme")}
+                onClick={() => changeTheme("sepia")}
                 className={cn(theme === "sepia" && "bg-current/10")}
               >
-                <TbCoffee />
+                <TbCoffee aria-hidden="true" />
               </Button>
 
               <Button
                 size="icon"
                 variant="ghost"
-                onClick={() => setTheme("dark")}
+                aria-label={t("darkTheme")}
+                onClick={() => changeTheme("dark")}
                 className={cn(theme === "dark" && "bg-current/10")}
               >
-                <FiMoon />
+                <FiMoon aria-hidden="true" />
               </Button>
             </div>
 
             <div className="flex items-center rounded-lg border border-current/15 p-1">
-              <Button size="icon" variant="ghost" onClick={decreaseFontSize}>
-                <FiMinus />
+              <Button size="icon" variant="ghost" aria-label={t("decreaseTextSize")} onClick={decreaseFontSize}>
+                <FiMinus aria-hidden="true" />
               </Button>
 
-              <span className="w-10 text-center text-sm">{fontSize}</span>
+              <span aria-live="polite" className="w-10 text-center text-sm">
+                {fontSize}
+              </span>
 
-              <Button size="icon" variant="ghost" onClick={increaseFontSize}>
-                <FiPlus />
+              <Button size="icon" variant="ghost" aria-label={t("increaseTextSize")} onClick={increaseFontSize}>
+                <FiPlus aria-hidden="true" />
               </Button>
             </div>
 
-            <Select value={width} onValueChange={(value) => setWidth(value as ReaderWidth)}>
-              <SelectTrigger className="w-32 border-current/15 bg-transparent">
+            <Select value={width} onValueChange={changeWidth}>
+              <SelectTrigger aria-label={t("readingWidth")} className="w-32 border-current/15 bg-transparent">
                 <SelectValue />
               </SelectTrigger>
 
               <SelectContent>
-                <SelectItem value="narrow">Narrow</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="wide">Wide</SelectItem>
+                <SelectItem value="narrow">{t("narrow")}</SelectItem>
+                <SelectItem value="medium">{t("medium")}</SelectItem>
+                <SelectItem value="wide">{t("wide")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -248,6 +320,12 @@ export function ReaderView({
       </div>
 
       <main className="px-6 pb-24">
+        {(storageError || !preferencesAvailable) && (
+          <p role="alert" className="mx-auto mt-6 max-w-3xl text-sm text-red-700">
+            {t("storageUnavailable")}
+          </p>
+        )}
+
         <header className="mx-auto max-w-3xl py-12 text-center md:py-16">
           <p className="mb-3 text-xs tracking-[0.25em] uppercase opacity-50">{bookTitle}</p>
 
@@ -256,12 +334,8 @@ export function ReaderView({
           <p className="mt-4 text-sm opacity-50">{author}</p>
         </header>
 
-        <article ref={articleRef} className={cn("mx-auto transition-all", widthClasses[width])}>
-          {paragraphs.map((paragraph, index) => (
-            <p key={index} className="mb-7 font-serif leading-[1.95] opacity-90" style={{ fontSize }}>
-              {paragraph}
-            </p>
-          ))}
+        <article ref={articleRef} className={cn("mx-auto transition-all", widthClasses[width])} style={{ fontSize }}>
+          {children}
         </article>
 
         <footer className={cn("mx-auto mt-20 border-t border-current/10 pt-8", widthClasses[width])}>
@@ -269,8 +343,8 @@ export function ReaderView({
             {previousHref ? (
               <Button variant="outline" asChild>
                 <Link href={previousHref}>
-                  <FiChevronLeft />
-                  Previous
+                  <FiChevronLeft aria-hidden="true" />
+                  {t("previous")}
                 </Link>
               </Button>
             ) : (
@@ -278,23 +352,21 @@ export function ReaderView({
             )}
 
             <div className="text-center">
-              <p className="text-xs opacity-50">
-                Chapter {chapterNumber} of {totalChapters}
-              </p>
+              <p className="text-xs opacity-50">{t("chapterOf", { current: chapterNumber, total: totalChapters })}</p>
 
-              <p className="mt-1 text-xs opacity-40">{progress}% read</p>
+              <p className="mt-1 text-xs opacity-40">{t("progress", { progress })}</p>
             </div>
 
             {nextHref ? (
               <Button asChild>
                 <Link href={nextHref}>
-                  Next
-                  <FiChevronRight />
+                  {t("next")}
+                  <FiChevronRight aria-hidden="true" />
                 </Link>
               </Button>
             ) : (
               <Button variant="outline" asChild>
-                <Link href={`/books/${bookSlug}`}>Finish</Link>
+                <Link href={`/books/${bookSlug}`}>{t("finish")}</Link>
               </Button>
             )}
           </div>

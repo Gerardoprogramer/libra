@@ -26,7 +26,17 @@ export async function uploadCover({ bookSlug, gutenbergId, data, mediaType, exte
   const secretAccessKey = getEnv("R2_SECRET_ACCESS_KEY");
   const bucketName = getEnv("R2_BUCKET_NAME");
 
-  const publicUrl = getEnv("R2_PUBLIC_URL").replace(/\/$/, "");
+  const publicUrl = new URL(getEnv("R2_PUBLIC_URL"));
+
+  if (
+    publicUrl.protocol !== "https:" ||
+    publicUrl.username ||
+    publicUrl.password ||
+    publicUrl.search ||
+    publicUrl.hash
+  ) {
+    throw new Error("R2_PUBLIC_URL must be an HTTPS URL without credentials, query or fragment.");
+  }
 
   const client = new S3Client({
     region: "auto",
@@ -41,15 +51,19 @@ export async function uploadCover({ bookSlug, gutenbergId, data, mediaType, exte
 
   const key = `covers/${bookSlug}-${gutenbergId}-${hash}.${extension}`;
 
-  await client.send(
-    new PutObjectCommand({
-      Bucket: bucketName,
-      Key: key,
-      Body: data,
-      ContentType: mediaType,
-      CacheControl: "public, max-age=31536000, immutable",
-    }),
-  );
+  try {
+    await client.send(
+      new PutObjectCommand({
+        Bucket: bucketName,
+        Key: key,
+        Body: data,
+        ContentType: mediaType,
+        CacheControl: "public, max-age=31536000, immutable",
+      }),
+    );
 
-  return `${publicUrl}/${key}`;
+    return `${publicUrl.origin}${publicUrl.pathname.replace(/\/$/, "")}/${key}`;
+  } finally {
+    client.destroy();
+  }
 }

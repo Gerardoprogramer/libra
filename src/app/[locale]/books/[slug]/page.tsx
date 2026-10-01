@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
@@ -11,6 +12,7 @@ import { Button } from "@/components/ui/button";
 
 import { getBookBySlug, type ContentLocale } from "@/db/queries/books";
 import { LibraryButton } from "@/components/books/LibraryButton";
+import { createLocalizedMetadata } from "@/lib/seo-metadata";
 
 import { Link } from "@/i18n/navigation";
 
@@ -45,17 +47,26 @@ export async function generateMetadata({ params }: BookPageProps): Promise<Metad
   const [book, t] = await Promise.all([getBookBySlug(slug, getContentLocale(locale)), getTranslations("book")]);
 
   if (!book) {
-    return {
+    return createLocalizedMetadata({
+      locale: getContentLocale(locale),
+      pathname: `/books/${encodeURIComponent(slug)}`,
       title: t("notFoundTitle"),
-    };
+      robots: {
+        index: false,
+        follow: true,
+      },
+    });
   }
 
   const authors = book.authors.map((author) => author.name).join(", ");
 
-  return {
+  return createLocalizedMetadata({
+    locale: getContentLocale(locale),
+    pathname: `/books/${encodeURIComponent(slug)}`,
     title: authors ? `${book.edition.title} — ${authors}` : book.edition.title,
     description: book.edition.description ?? undefined,
-  };
+    images: book.edition.coverUrl ? [{ url: book.edition.coverUrl, alt: book.edition.title }] : undefined,
+  });
 }
 
 export default async function BookPage({ params }: BookPageProps) {
@@ -106,16 +117,17 @@ export default async function BookPage({ params }: BookPageProps) {
           <div>
             <div
               className={`relative mx-auto aspect-2/3 w-full max-w-70 overflow-hidden rounded-lg bg-linear-to-br ${coverStyle} shadow-2xl`}
-              style={
-                book.edition.coverUrl
-                  ? {
-                      backgroundImage: `url("${book.edition.coverUrl}")`,
-                      backgroundPosition: "center",
-                      backgroundSize: "cover",
-                    }
-                  : undefined
-              }
             >
+              {book.edition.coverUrl && (
+                <Image
+                  src={book.edition.coverUrl}
+                  alt=""
+                  fill
+                  sizes="(max-width: 768px) 80vw, 280px"
+                  className="object-cover"
+                />
+              )}
+
               {!book.edition.coverUrl && (
                 <>
                   <div className="absolute inset-0 bg-black/10" />
@@ -125,7 +137,7 @@ export default async function BookPage({ params }: BookPageProps) {
                   </div>
 
                   <div className="absolute inset-x-7 top-1/2 -translate-y-1/2 text-center">
-                    <h2 className="font-serif text-3xl leading-tight text-white">{book.edition.title}</h2>
+                    <p className="font-serif text-3xl leading-tight text-white">{book.edition.title}</p>
 
                     <div className="mx-auto my-5 h-px w-12 bg-white/40" />
 

@@ -5,16 +5,27 @@
     "authors": "Autores",
     "library": "Biblioteca",
     "search": "Buscar",
-    "account": "Cuenta"
+    "menu": "Menú",
+    "language": "Idioma: {locale}"
   },
   "home": {
+    "metadataTitle": "Libra — Una biblioteca sin fronteras",
+    "metadataDescription": "Descubre libros atemporales, presentados con elegancia y completamente gratis.",
     "eyebrow": "Una biblioteca sin fronteras",
     "titleFirst": "Grandes historias",
     "titleSecond": "nunca envejecen.",
     "description": "Descubre libros atemporales, presentados con elegancia y completamente gratis.",
     "discover": "Descubrir",
-    "trending": "Tendencias de la semana",
-    "viewAll": "Ver todos"
+    "browseBooks": "Explorar libros",
+    "collectionTitle": "Explora la biblioteca",
+    "viewAll": "Ver todos los libros"
+  },
+  "errors": {
+    "errorTitle": "Algo salió mal",
+    "errorDescription": "No se pudo cargar la página. Inténtalo de nuevo.",
+    "retry": "Reintentar",
+    "notFoundTitle": "Página no encontrada",
+    "notFoundDescription": "La página que buscas no está disponible."
   },
   "book": {
     "by": "por",
@@ -40,9 +51,25 @@
     "progress": "{progress}% leído",
     "narrow": "Estrecho",
     "medium": "Medio",
-    "wide": "Amplio"
+    "wide": "Amplio",
+    "lightTheme": "Tema claro",
+    "sepiaTheme": "Tema sepia",
+    "darkTheme": "Tema oscuro",
+    "decreaseTextSize": "Reducir tamaño del texto",
+    "increaseTextSize": "Aumentar tamaño del texto",
+    "readingWidth": "Ancho de lectura",
+    "storageUnavailable": "No se pudieron guardar las preferencias o el progreso de lectura. Comprueba que el navegador permita guardar datos.",
+    "chapterNotFoundTitle": "Capítulo no encontrado — Libra",
+    "chapterMetadataDescription": "Lee {chapter} de {book}, de {authors}, en Libra."
   },
   "catalog": {
+    "booksMetadataTitle": "Explora la biblioteca — Libra",
+    "booksMetadataDescription": "Descubre libros, autores e historias atemporales disponibles para leer en Libra.",
+    "categoriesMetadataTitle": "Categorías — Libra",
+    "categoriesMetadataDescription": "Explora la biblioteca por género y categoría literaria.",
+    "exploreCategory": "Explorar",
+    "searchLabel": "Buscar libros por título o autor",
+    "categoryFilterLabel": "Filtrar libros por categoría",
     "eyebrow": "La colección",
     "title": "Explora la biblioteca",
     "description": "Descubre libros, autores e historias atemporales disponibles para leer en Libra.",
@@ -58,6 +85,7 @@
     "booksInCategory": "{count, plural, =1 {# libro} other {# libros}}"
   },
   "author": {
+    "listingMetadataTitle": "Autores — Libra",
     "listingEyebrow": "Los escritores",
     "listingTitle": "Autores",
     "listingDescription": "Descubre a los autores detrás de las historias de la colección de Libra.",
@@ -76,13 +104,15 @@
   "continueReading": {
     "title": "Continuar leyendo",
     "chapter": "Capítulo",
-    "continue": "Continuar leyendo"
+    "continue": "Continuar leyendo",
+    "storageUnavailable": "El progreso de lectura no está disponible. Comprueba que el navegador permita guardar datos."
   },
   "recentlyRead": {
     "title": "Leídos recientemente",
     "continue": "Continuar"
   },
   "library": {
+    "metadataTitle": "Mi biblioteca — Libra",
     "eyebrow": "Tu colección",
     "title": "Mi biblioteca",
     "description": "Guarda las historias que quieres leer, releer o tener siempre a mano.",

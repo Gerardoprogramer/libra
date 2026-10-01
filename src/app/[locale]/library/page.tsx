@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 
@@ -5,6 +6,33 @@ import { LibraryGrid } from "@/components/library/LibraryGrid";
 import { LibraryGridSkeleton } from "@/components/library/LibraryGridSkeleton";
 
 import { getBooks, type ContentLocale } from "@/db/queries/books";
+import { createLocalizedMetadata } from "@/lib/seo-metadata";
+
+interface LibraryPageProps {
+  params: Promise<{
+    locale: string;
+  }>;
+}
+
+export async function generateMetadata({ params }: LibraryPageProps): Promise<Metadata> {
+  const { locale: routeLocale } = await params;
+  const locale: ContentLocale = routeLocale === "en" ? "en" : "es";
+  const t = await getTranslations({
+    locale,
+    namespace: "library",
+  });
+
+  return createLocalizedMetadata({
+    locale,
+    pathname: "/library",
+    title: t("metadataTitle"),
+    description: t("description"),
+    robots: {
+      index: false,
+      follow: false,
+    },
+  });
+}
 
 async function LibraryBooks({ locale }: { locale: ContentLocale }) {
   const [books, t, bookTranslations] = await Promise.all([

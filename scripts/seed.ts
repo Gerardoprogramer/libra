@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 import { authors, bookAuthors, books, chapters, editions } from "../src/db/schema";
+import { formatImportError } from "./lib/import-errors";
 
 config({
   path: ".env.local",
@@ -157,7 +158,7 @@ async function seed() {
 seed()
   .catch((error) => {
     console.error("Seed failed");
-    console.error(error);
+    console.error(formatImportError(error));
     process.exitCode = 1;
   })
   .finally(async () => {

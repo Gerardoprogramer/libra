@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { BookCard } from "@/components/books/BookCard";
 
 import { getAuthorBySlug, type ContentLocale } from "@/db/queries/books";
+import { createLocalizedMetadata } from "@/lib/seo-metadata";
 
 interface AuthorPageProps {
   params: Promise<{
@@ -25,18 +26,26 @@ export async function generateMetadata({ params }: AuthorPageProps): Promise<Met
   const [author, t] = await Promise.all([getAuthorBySlug(slug, getContentLocale(locale)), getTranslations("author")]);
 
   if (!author) {
-    return {
+    return createLocalizedMetadata({
+      locale: getContentLocale(locale),
+      pathname: `/authors/${encodeURIComponent(slug)}`,
       title: t("notFoundTitle"),
-    };
+      robots: {
+        index: false,
+        follow: true,
+      },
+    });
   }
 
-  return {
+  return createLocalizedMetadata({
+    locale: getContentLocale(locale),
+    pathname: `/authors/${encodeURIComponent(slug)}`,
     title: `${author.name} — Libra`,
     description: t("metadataDescription", {
       count: author.books.length,
       name: author.name,
     }),
-  };
+  });
 }
 
 export default async function AuthorPage({ params }: AuthorPageProps) {

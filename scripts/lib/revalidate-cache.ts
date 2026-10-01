@@ -35,6 +35,12 @@ export async function revalidateEditorialCache(requestedTags: string[]): Promise
         "CACHE_REVALIDATION_URL must be an HTTP(S) endpoint without credentials, query or fragment.",
       );
     }
+
+    const isLoopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+
+    if (url.protocol !== "https:" && !isLoopback) {
+      return warnInvalidation("CACHE_REVALIDATION_URL must use HTTPS outside localhost.");
+    }
   } catch {
     return warnInvalidation("invalid CACHE_REVALIDATION_URL.");
   }

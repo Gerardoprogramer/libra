@@ -1,6 +1,6 @@
 "use client";
 
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { FiGlobe } from "react-icons/fi";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import type { Locale } from "@/i18n/routing";
 
 export function LanguageSwitcher() {
   const locale = useLocale();
+  const t = useTranslations("nav");
   const pathname = usePathname();
   const router = useRouter();
 
@@ -31,8 +32,15 @@ export function LanguageSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-2 uppercase">
-          <FiGlobe />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-2 uppercase"
+          aria-label={t("language", {
+            locale,
+          })}
+        >
+          <FiGlobe aria-hidden="true" />
           {locale}
         </Button>
       </DropdownMenuTrigger>

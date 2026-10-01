@@ -47,7 +47,7 @@ export function BookCard({ book, eager = false }: BookCardProps) {
           {book.coverUrl ? (
             <Image
               src={book.coverUrl}
-              alt={`Cover of ${book.title}`}
+              alt=""
               fill
               loading={eager ? "eager" : "lazy"}
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
@@ -58,7 +58,7 @@ export function BookCard({ book, eager = false }: BookCardProps) {
               <span className="text-xs font-medium tracking-[0.2em] text-white/60 uppercase">{book.language}</span>
 
               <div>
-                <h3 className="font-serif text-xl leading-tight">{book.title}</h3>
+                <p className="font-serif text-xl leading-tight">{book.title}</p>
 
                 <p className="mt-2 text-sm text-white/65">{book.author}</p>
               </div>
