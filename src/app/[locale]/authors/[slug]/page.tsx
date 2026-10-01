@@ -22,39 +22,40 @@ function getContentLocale(locale: string): ContentLocale {
 export async function generateMetadata({ params }: AuthorPageProps): Promise<Metadata> {
   const { locale, slug } = await params;
 
-  const author = await getAuthorBySlug(slug, getContentLocale(locale));
+  const [author, t] = await Promise.all([getAuthorBySlug(slug, getContentLocale(locale)), getTranslations("author")]);
 
   if (!author) {
     return {
-      title: "Author not found",
+      title: t("notFoundTitle"),
     };
   }
 
-  const bookCount = author.books.length;
-
   return {
     title: `${author.name} — Libra`,
-
-    description:
-      bookCount > 0
-        ? `Read ${bookCount} ${bookCount === 1 ? "book" : "books"} by ${author.name} on Libra.`
-        : `Explore ${author.name} on Libra.`,
+    description: t("metadataDescription", {
+      count: author.books.length,
+      name: author.name,
+    }),
   };
 }
 
 export default async function AuthorPage({ params }: AuthorPageProps) {
   const { locale, slug } = await params;
 
-  const t = await getTranslations("author");
-
-  const author = await getAuthorBySlug(slug, getContentLocale(locale));
+  const [author, t] = await Promise.all([getAuthorBySlug(slug, getContentLocale(locale)), getTranslations("author")]);
 
   if (!author) {
     notFound();
   }
 
   const lifespan =
-    author.birthYear || author.deathYear ? `${author.birthYear ?? "?"} — ${author.deathYear ?? "?"}` : null;
+    author.birthYear !== null && author.deathYear !== null
+      ? `${author.birthYear} — ${author.deathYear}`
+      : author.birthYear !== null
+        ? t("born", { year: author.birthYear })
+        : author.deathYear !== null
+          ? t("died", { year: author.deathYear })
+          : null;
 
   return (
     <main className="min-h-screen">

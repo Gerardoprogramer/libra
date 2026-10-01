@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, countDistinct, eq, ilike, or } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 
 import { db } from "@/db";
@@ -99,6 +99,15 @@ export interface AuthorDetails {
   birthYear: number | null;
   deathYear: number | null;
   books: BookListItem[];
+}
+
+export interface AuthorListItem {
+  id: string;
+  slug: string;
+  name: string;
+  birthYear: number | null;
+  deathYear: number | null;
+  bookCount: number;
 }
 
 function getEditionVisibilityCondition() {
@@ -610,6 +619,30 @@ export async function getChapterBySlug(bookSlug: string, chapterSlug: string, lo
 
     next: chapterIndex < book.chapters.length - 1 ? book.chapters[chapterIndex + 1] : null,
   };
+}
+
+export async function getAuthors(): Promise<AuthorListItem[]> {
+  "use cache";
+
+  cacheLife("editorial");
+  cacheTag("library:editorial");
+
+  return db
+    .select({
+      id: authors.id,
+      slug: authors.slug,
+      name: authors.name,
+      birthYear: authors.birthYear,
+      deathYear: authors.deathYear,
+      bookCount: countDistinct(books.id),
+    })
+    .from(authors)
+    .innerJoin(bookAuthors, eq(bookAuthors.authorId, authors.id))
+    .innerJoin(books, eq(books.id, bookAuthors.bookId))
+    .innerJoin(editions, eq(editions.bookId, books.id))
+    .where(getEditionVisibilityCondition())
+    .groupBy(authors.id, authors.slug, authors.name, authors.birthYear, authors.deathYear)
+    .orderBy(asc(authors.name));
 }
 
 export async function getAuthorBySlug(slug: string, locale: ContentLocale): Promise<AuthorDetails | null> {

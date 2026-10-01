@@ -2,6 +2,7 @@
   "nav": {
     "discover": "Discover",
     "categories": "Categories",
+    "authors": "Authors",
     "library": "Library",
     "search": "Search",
     "account": "Account"
@@ -52,11 +53,20 @@
     "booksInCategory": "{count, plural, =1 {# book} other {# books}}"
   },
   "author": {
+    "listingEyebrow": "The writers",
+    "listingTitle": "Authors",
+    "listingDescription": "Discover the authors behind the stories in Libra's collection.",
+    "authorBookCount": "{count, plural, =1 {# book} other {# books}}",
+    "noAuthors": "No authors are available yet.",
     "eyebrow": "Author",
     "booksEyebrow": "Bibliography",
     "books": "Books",
     "bookCount": "{count, plural, =0 {No books} =1 {# book} other {# books}}",
-    "noBooks": "No books are available from this author yet."
+    "noBooks": "No books are available from this author yet.",
+    "born": "Born {year}",
+    "died": "Died {year}",
+    "notFoundTitle": "Author not found — Libra",
+    "metadataDescription": "{count, plural, =0 {Explore {name} on Libra.} =1 {Read # book by {name} on Libra.} other {Read # books by {name} on Libra.}}"
   },
   "continueReading": {
     "title": "Continue reading",

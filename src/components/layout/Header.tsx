@@ -28,6 +28,10 @@ export async function Header() {
             {t("categories")}
           </Link>
 
+          <Link href="/authors" className="text-muted-foreground hover:text-foreground transition">
+            {t("authors")}
+          </Link>
+
           <Link href="/library" className="text-muted-foreground hover:text-foreground transition">
             {t("library")}
           </Link>
