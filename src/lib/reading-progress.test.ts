@@ -8,6 +8,7 @@ import {
   READING_PROGRESS_CHANGE_EVENT,
   READING_PROGRESS_PREFIX,
   saveReadingProgress,
+  calculateBookProgress,
   type ReadingProgress,
 } from "./reading-progress";
 
@@ -73,12 +74,26 @@ test("malformed, mismatched and out-of-range progress entries are ignored", () =
     null,
     "{",
     JSON.stringify({ ...progress, percentage: 101 }),
+    JSON.stringify({ ...progress, percentage: -1 }),
     JSON.stringify({ ...progress, percentage: Number.NaN }),
     JSON.stringify({ ...progress, chapterNumber: 0 }),
+    JSON.stringify({ ...progress, chapterNumber: 1.5 }),
     JSON.stringify({ ...progress, chapterIndex: 10 }),
+    JSON.stringify({ ...progress, totalChapters: 0 }),
+    JSON.stringify({ ...progress, updatedAt: "not-a-date" }),
   ]) {
     assert.equal(parseReadingProgress(value), null);
   }
+});
+
+test("zero and complete chapter progress are valid and calculate to their expected book percentages", () => {
+  const progress = makeProgress("dracula");
+
+  assert.equal(parseReadingProgress(JSON.stringify({ ...progress, percentage: 0 }))?.percentage, 0);
+  assert.equal(parseReadingProgress(JSON.stringify({ ...progress, percentage: 100 }))?.percentage, 100);
+  assert.equal(calculateBookProgress({ ...progress, percentage: 0 }), 0);
+  assert.equal(calculateBookProgress({ ...progress, percentage: 100 }), 10);
+  assert.equal(calculateBookProgress({ ...progress, chapterIndex: 9, totalChapters: 10, percentage: 100 }), 100);
 });
 
 test("saved progress is enumerable and notifies same-tab subscribers", () => {
@@ -93,6 +108,17 @@ test("saved progress is enumerable and notifies same-tab subscribers", () => {
   assert.deepEqual(readAllReadingProgress(), [JSON.stringify(progress)]);
   assert.equal(notifications, 1);
   assert.equal(values.has(`${READING_PROGRESS_PREFIX}dracula`), true);
+});
+
+test("empty storage and unrelated or unexpected keys do not create reading progress", () => {
+  const { values } = createBrowser();
+
+  assert.deepEqual(readAllReadingProgress(), []);
+  values.set("unrelated:key", "not progress");
+  values.set(`${READING_PROGRESS_PREFIX}dracula`, "not JSON");
+  values.set(`${READING_PROGRESS_PREFIX}frankenstein`, JSON.stringify({ unexpected: true }));
+
+  assert.deepEqual(readAllReadingProgress(), []);
 });
 
 test("blocked and quota-limited storage fail without throwing or reporting success", () => {

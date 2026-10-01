@@ -8,13 +8,8 @@ import { FiArrowRight, FiBookOpen } from "react-icons/fi";
 
 import { Link } from "@/i18n/navigation";
 
-import {
-  calculateBookProgress,
-  parseReadingProgress,
-  readAllReadingProgress,
-  READING_PROGRESS_CHANGE_EVENT,
-  type ReadingProgress,
-} from "@/lib/reading-progress";
+import { calculateBookProgress, readAllReadingProgress, READING_PROGRESS_CHANGE_EVENT } from "@/lib/reading-progress";
+import { getRecentlyReadProgress } from "@/lib/reading-history";
 
 interface BookSummary {
   slug: string;
@@ -54,7 +49,7 @@ function getServerSnapshot() {
 export function RecentlyRead({ books, title, continueLabel, limit = 4 }: RecentlyReadProps) {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  const history = useMemo(() => {
+  const recentProgress = useMemo(() => {
     let values: string[];
 
     try {
@@ -63,41 +58,24 @@ export function RecentlyRead({ books, title, continueLabel, limit = 4 }: Recentl
       return [];
     }
 
-    return values
-      .map((value) => parseReadingProgress(value))
-      .filter((progress): progress is ReadingProgress => progress !== null)
-      .sort((first, second) => Date.parse(second.updatedAt) - Date.parse(first.updatedAt));
-  }, [snapshot]);
+    return getRecentlyReadProgress(values, new Set(books.map((book) => book.slug)), limit);
+  }, [books, limit, snapshot]);
 
-  // El primero ya aparece en Continue Reading.
-  // Primero filtramos libros disponibles y dejamos un registro reciente por libro.
-  const validItems = history
-    .map((progress) => {
-      const book = books.find((item) => item.slug === progress.bookSlug);
+  const recentItems = recentProgress.flatMap((progress) => {
+    const book = books.find((item) => item.slug === progress.bookSlug);
 
-      if (!book) {
-        return null;
-      }
+    if (!book) {
+      return [];
+    }
 
-      return {
+    return [
+      {
         book,
         progress,
         percentage: calculateBookProgress(progress),
-      };
-    })
-    .filter((item): item is NonNullable<typeof item> => item !== null);
-
-  const seenBookSlugs = new Set<string>();
-  const uniqueItems = validItems.filter((item) => {
-    if (seenBookSlugs.has(item.book.slug)) {
-      return false;
-    }
-
-    seenBookSlugs.add(item.book.slug);
-
-    return true;
+      },
+    ];
   });
-  const recentItems = uniqueItems.slice(1, limit + 1);
 
   if (recentItems.length === 0) {
     return null;

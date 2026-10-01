@@ -15,6 +15,7 @@ import {
   READING_PROGRESS_CHANGE_EVENT,
   type ReadingProgress,
 } from "@/lib/reading-progress";
+import { getLatestReadingProgress } from "@/lib/reading-history";
 
 interface BookSummary {
   slug: string;
@@ -48,25 +49,8 @@ function getProgressSnapshot(bookSlugs: ReadonlySet<string>): string | null {
     return null;
   }
 
-  let latestValue = "";
-  let latestUpdatedAt = -1;
-
-  for (const value of entries.sort()) {
-    const progress = parseReadingProgress(value);
-
-    if (!progress || !bookSlugs.has(progress.bookSlug)) {
-      continue;
-    }
-
-    const updatedAt = Date.parse(progress.updatedAt);
-
-    if (updatedAt > latestUpdatedAt) {
-      latestUpdatedAt = updatedAt;
-      latestValue = value;
-    }
-  }
-
-  return latestValue;
+  const progress = getLatestReadingProgress(entries, bookSlugs);
+  return progress ? JSON.stringify(progress) : "";
 }
 
 function getServerSnapshot() {

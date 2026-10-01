@@ -5,6 +5,7 @@ import postgres from "postgres";
 
 import { books, editions } from "../src/db/schema";
 
+import { parseEditionReviewArguments } from "./lib/review-edition-args";
 import { formatImportError } from "./lib/import-errors";
 import { revalidateEditorialCache } from "./lib/revalidate-cache";
 
@@ -16,48 +17,7 @@ if (!process.env.DIRECT_DATABASE_URL) {
   throw new Error("DIRECT_DATABASE_URL is not defined");
 }
 
-type Action = "show" | "publish" | "reject" | "archive";
-
-function getArgument(name: string): string | undefined {
-  const index = process.argv.indexOf(name);
-
-  if (index === -1) {
-    return undefined;
-  }
-
-  return process.argv[index + 1];
-}
-
-function getRequiredArgument(name: string): string {
-  const value = getArgument(name);
-
-  if (!value) {
-    throw new Error(`Missing ${name} argument`);
-  }
-
-  return value;
-}
-
-function getAction(): Action {
-  if (process.argv.includes("--publish")) {
-    return "publish";
-  }
-
-  if (process.argv.includes("--reject")) {
-    return "reject";
-  }
-
-  if (process.argv.includes("--archive")) {
-    return "archive";
-  }
-
-  return "show";
-}
-
-const gutenbergId = getRequiredArgument("--gutenberg-id");
-
-const notes = getArgument("--notes");
-const action = getAction();
+const { gutenbergId, notes, action } = parseEditionReviewArguments(process.argv.slice(2));
 
 const client = postgres(process.env.DIRECT_DATABASE_URL, {
   max: 1,
