@@ -1,6 +1,7 @@
 import Image from "next/image";
 
-import type { BookListItem } from "@/db/queries/books";
+import { Badge } from "@/components/ui/badge";
+import type { BookCategory, BookListItem } from "@/db/queries/books";
 import { Link } from "@/i18n/navigation";
 
 interface BookCardProps {
@@ -16,6 +17,17 @@ const coverStyles = [
   "from-sky-950 to-slate-950",
 ];
 
+function getVisibleCategories(categories: BookCategory[]) {
+  const visibleCategories = categories.slice(0, 3);
+  const classicLiterature = categories.find((category) => category.slug === "classic-literature");
+
+  if (classicLiterature && !visibleCategories.some((category) => category.id === classicLiterature.id)) {
+    visibleCategories[2] = classicLiterature;
+  }
+
+  return visibleCategories;
+}
+
 function getCoverStyle(slug: string) {
   const value = Array.from(slug).reduce((total, character) => total + character.charCodeAt(0), 0);
 
@@ -24,6 +36,7 @@ function getCoverStyle(slug: string) {
 
 export function BookCard({ book, eager = false }: BookCardProps) {
   const coverStyle = getCoverStyle(book.slug);
+  const visibleCategories = getVisibleCategories(book.categories);
 
   return (
     <article>
@@ -68,6 +81,16 @@ export function BookCard({ book, eager = false }: BookCardProps) {
 
             <span>{book.language}</span>
           </div>
+
+          {visibleCategories.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {visibleCategories.map((category) => (
+                <Badge key={category.id} variant="secondary" className="max-w-full px-1.5 text-[10px] font-normal">
+                  {category.name}
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
       </Link>
     </article>

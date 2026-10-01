@@ -1,6 +1,7 @@
 import "server-only";
 
-import { and, asc, countDistinct, eq, ilike, or } from "drizzle-orm";
+import { and, asc, countDistinct, eq, exists, ilike, or } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { cacheLife, cacheTag } from "next/cache";
 
 import { db } from "@/db";
@@ -37,6 +38,7 @@ export interface BookListItem {
   year: number | null;
   language: string;
   coverUrl: string | null;
+  categories: BookCategory[];
 }
 
 export interface CategoryListItem extends BookCategory {
@@ -110,6 +112,39 @@ export interface AuthorListItem {
   bookCount: number;
 }
 
+interface PositionedBookCategory extends BookCategory {
+  position: number;
+}
+
+interface BookCategoryRow {
+  categoryId: string | null;
+  categorySlug: string | null;
+  categoryName: string | null;
+  fallbackCategoryName: string | null;
+  categoryPosition: number | null;
+}
+
+const fallbackCategoryTranslations = alias(categoryTranslations, "fallback_category_translations");
+
+function addBookCategory(categories: Map<string, PositionedBookCategory>, row: BookCategoryRow) {
+  if (!row.categoryId || !row.categorySlug || row.categoryPosition === null) {
+    return;
+  }
+
+  categories.set(row.categoryId, {
+    id: row.categoryId,
+    slug: row.categorySlug,
+    name: row.categoryName ?? row.fallbackCategoryName ?? row.categorySlug,
+    position: row.categoryPosition,
+  });
+}
+
+function getBookCategories(categories: Map<string, PositionedBookCategory>): BookCategory[] {
+  return Array.from(categories.values())
+    .sort((first, second) => first.position - second.position)
+    .map(({ id, slug, name }) => ({ id, slug, name }));
+}
+
 function getEditionVisibilityCondition() {
   if (process.env.NODE_ENV === "development") {
     return undefined;
@@ -172,6 +207,16 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
       editionLanguage: editions.language,
 
       editionCoverUrl: editions.coverUrl,
+
+      categoryId: categories.id,
+
+      categorySlug: categories.slug,
+
+      categoryName: categoryTranslations.name,
+
+      fallbackCategoryName: fallbackCategoryTranslations.name,
+
+      categoryPosition: bookCategories.position,
     })
     .from(books)
 
@@ -184,6 +229,16 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
     .leftJoin(bookCategories, eq(bookCategories.bookId, books.id))
 
     .leftJoin(categories, eq(categories.id, bookCategories.categoryId))
+
+    .leftJoin(
+      categoryTranslations,
+      and(eq(categoryTranslations.categoryId, categories.id), eq(categoryTranslations.locale, locale)),
+    )
+
+    .leftJoin(
+      fallbackCategoryTranslations,
+      and(eq(fallbackCategoryTranslations.categoryId, categories.id), eq(fallbackCategoryTranslations.locale, "en")),
+    )
 
     .where(
       and(
@@ -199,11 +254,21 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
             )
           : undefined,
 
-        category ? eq(categories.slug, category) : undefined,
+        category
+          ? exists(
+              db
+                .select({
+                  categoryId: bookCategories.categoryId,
+                })
+                .from(bookCategories)
+                .innerJoin(categories, eq(categories.id, bookCategories.categoryId))
+                .where(and(eq(bookCategories.bookId, books.id), eq(categories.slug, category))),
+            )
+          : undefined,
       ),
     )
 
-    .orderBy(asc(books.originalTitle), asc(bookAuthors.position));
+    .orderBy(asc(books.originalTitle), asc(bookAuthors.position), asc(bookCategories.position));
 
   const grouped = new Map<
     string,
@@ -230,6 +295,16 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
           coverUrl: string | null;
         }
       >;
+
+      categories: Map<
+        string,
+        {
+          id: string;
+          slug: string;
+          name: string;
+          position: number;
+        }
+      >;
     }
   >();
 
@@ -247,6 +322,8 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
         authors: new Map(),
 
         editions: new Map(),
+
+        categories: new Map(),
       };
 
       grouped.set(row.bookId, currentBook);
@@ -265,6 +342,8 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
 
       coverUrl: row.editionCoverUrl,
     });
+
+    addBookCategory(currentBook.categories, row);
   }
 
   return Array.from(grouped.values()).flatMap((book) => {
@@ -294,6 +373,8 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
         language: selectedEdition.language,
 
         coverUrl: selectedEdition.coverUrl,
+
+        categories: getBookCategories(book.categories),
       },
     ];
   });
@@ -678,12 +759,28 @@ export async function getAuthorBySlug(slug: string, locale: ContentLocale): Prom
       editionTitle: editions.title,
       editionLanguage: editions.language,
       editionCoverUrl: editions.coverUrl,
+
+      categoryId: categories.id,
+      categorySlug: categories.slug,
+      categoryName: categoryTranslations.name,
+      fallbackCategoryName: fallbackCategoryTranslations.name,
+      categoryPosition: bookCategories.position,
     })
     .from(bookAuthors)
     .innerJoin(books, eq(books.id, bookAuthors.bookId))
     .innerJoin(editions, eq(editions.bookId, books.id))
+    .leftJoin(bookCategories, eq(bookCategories.bookId, books.id))
+    .leftJoin(categories, eq(categories.id, bookCategories.categoryId))
+    .leftJoin(
+      categoryTranslations,
+      and(eq(categoryTranslations.categoryId, categories.id), eq(categoryTranslations.locale, locale)),
+    )
+    .leftJoin(
+      fallbackCategoryTranslations,
+      and(eq(fallbackCategoryTranslations.categoryId, categories.id), eq(fallbackCategoryTranslations.locale, "en")),
+    )
     .where(and(eq(bookAuthors.authorId, author.id), getEditionVisibilityCondition()))
-    .orderBy(asc(books.originalPublicationYear));
+    .orderBy(asc(books.originalPublicationYear), asc(bookCategories.position));
 
   const grouped = new Map<
     string,
@@ -699,6 +796,15 @@ export async function getAuthorBySlug(slug: string, locale: ContentLocale): Prom
           coverUrl: string | null;
         }
       >;
+      categories: Map<
+        string,
+        {
+          id: string;
+          slug: string;
+          name: string;
+          position: number;
+        }
+      >;
     }
   >();
 
@@ -711,6 +817,7 @@ export async function getAuthorBySlug(slug: string, locale: ContentLocale): Prom
         slug: row.bookSlug,
         year: row.publicationYear,
         editions: new Map(),
+        categories: new Map(),
       };
 
       grouped.set(row.bookId, currentBook);
@@ -721,6 +828,8 @@ export async function getAuthorBySlug(slug: string, locale: ContentLocale): Prom
       title: row.editionTitle,
       coverUrl: row.editionCoverUrl,
     });
+
+    addBookCategory(currentBook.categories, row);
   }
 
   const authorBooks = Array.from(grouped.values()).flatMap((book) => {
@@ -739,6 +848,7 @@ export async function getAuthorBySlug(slug: string, locale: ContentLocale): Prom
         year: book.year,
         language: selectedEdition.language,
         coverUrl: selectedEdition.coverUrl,
+        categories: getBookCategories(book.categories),
       },
     ];
   });
