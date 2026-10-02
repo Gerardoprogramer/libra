@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { renderToStaticMarkup } from "react-dom/server";
 import { NextIntlClientProvider } from "next-intl";
+import { load } from "cheerio";
 
 import { BookCard } from "./BookCard";
 import type { BookCategory, BookListItem } from "@/db/queries/books";
@@ -84,4 +85,20 @@ test("BookCard handles missing categories and covers with the existing fallback 
   const withCover = renderBookCard(makeBook({ coverUrl: "/covers/dracula.jpg" }));
   assert.match(withCover, /<img/);
   assert.match(withCover, /alt=""/);
+});
+
+test("BookCard displays the edition language independently of the UI locale, cover and year", () => {
+  for (const locale of ["en", "es"] as const) {
+    for (const language of ["en", "es", "es-MX"]) {
+      for (const coverUrl of [null, "/covers/dracula.jpg"]) {
+        for (const year of [null, 1897]) {
+          const $ = load(renderBookCard(makeBook({ language, coverUrl, year }), locale));
+          const caption = $("h3").parent();
+          assert.equal(caption.find("span").last().text(), language);
+          assert.equal($("a").attr("href"), `/${locale}/books/dracula`);
+          assert.equal($("article").length, 1);
+        }
+      }
+    }
+  }
 });

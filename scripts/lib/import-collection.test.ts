@@ -17,7 +17,14 @@ import {
 import { formatImportError } from "./import-errors";
 import { importGutenbergBook, type ImportGutenbergOptions } from "./import-gutenberg";
 
-const dracula: CatalogEntry = { file: "imports/dracula.epub", gutenbergId: 345, slug: "dracula", year: 1897 };
+const dracula: CatalogEntry = {
+  file: "imports/dracula.epub",
+  gutenbergId: 345,
+  slug: "dracula",
+  originalTitle: "Dracula",
+  originalLanguage: "en",
+  year: 1897,
+};
 
 function captureOutput() {
   const lines: string[] = [];
@@ -92,7 +99,13 @@ test("EPUB translator metadata is separated from author metadata", async (t) => 
 
 test("the initial manifest is valid; optional years and multiple editions of a book are supported", () => {
   assert.deepEqual(parseCollectionManifest(initialLibrary), initialLibrary);
-  const translated = { file: "imports/dracula-es.epub", gutenbergId: 999, slug: "dracula" };
+  const translated = {
+    file: "imports/dracula-es.epub",
+    gutenbergId: 999,
+    slug: "dracula",
+    originalTitle: "Dracula",
+    originalLanguage: "en",
+  };
   assert.deepEqual(parseCollectionManifest([dracula, translated]), [dracula, translated]);
   assert.deepEqual(parseCollectionManifest([{ ...dracula, editionPublicationYear: 1920 }]), [
     { ...dracula, editionPublicationYear: 1920 },
@@ -183,7 +196,13 @@ test("the whole manifest is validated before any import starts", async (t) => {
 
 test("a missing EPUB is reported, later books still run, and the result signals failure", async (t) => {
   const projectRoot = await createProject(t);
-  const second = { file: "imports/second.epub", gutenbergId: 84, slug: "second" };
+  const second = {
+    file: "imports/second.epub",
+    gutenbergId: 84,
+    slug: "second",
+    originalTitle: "Second",
+    originalLanguage: "en",
+  };
   await fs.writeFile(path.join(projectRoot, second.file), "runner fixture");
   const calls: ImportGutenbergOptions[] = [];
   const { logger, lines } = captureOutput();
@@ -231,6 +250,8 @@ test("apply processes ten books sequentially and continues after book four fails
     file: `imports/book-${index + 1}.epub`,
     gutenbergId: index + 1,
     slug: `book-${index + 1}`,
+    originalTitle: `Book ${index + 1}`,
+    originalLanguage: "en",
     year: 1897,
   }));
   for (const entry of entries) await fs.writeFile(path.join(projectRoot, entry.file), "runner fixture");
@@ -269,7 +290,13 @@ test("apply processes ten books sequentially and continues after book four fails
 
 test("fail-fast stops both on a missing EPUB and on an importer failure", async (t) => {
   const projectRoot = await createProject(t);
-  const second = { file: "imports/second.epub", gutenbergId: 84, slug: "second" };
+  const second = {
+    file: "imports/second.epub",
+    gutenbergId: 84,
+    slug: "second",
+    originalTitle: "Second",
+    originalLanguage: "en",
+  };
   let calls = 0;
   const dependencies = {
     logger: captureOutput().logger,
@@ -316,7 +343,14 @@ test("the single shared importer defaults to dry-run even with an unusable datab
   await createEpub(file);
   setEnvironment(t, { DIRECT_DATABASE_URL: "invalid-database-url", R2_ACCOUNT_ID: undefined });
   t.mock.method(console, "log", () => {});
-  await importGutenbergBook({ file, gutenbergId: "345", slug: "dracula", year: 1897 });
+  await importGutenbergBook({
+    file,
+    gutenbergId: "345",
+    slug: "dracula",
+    originalTitle: "Dracula",
+    originalLanguage: "en",
+    year: 1897,
+  });
 });
 
 test("real apply requires database configuration before attempting any cover upload", async (t) => {
@@ -326,14 +360,26 @@ test("real apply requires database configuration before attempting any cover upl
   setEnvironment(t, { DIRECT_DATABASE_URL: undefined, R2_ACCOUNT_ID: undefined });
   t.mock.method(console, "log", () => {});
   await assert.rejects(
-    importGutenbergBook({ file, gutenbergId: "345", apply: true }),
+    importGutenbergBook({
+      file,
+      gutenbergId: "345",
+      originalTitle: "Dracula",
+      originalLanguage: "en",
+      apply: true,
+    }),
     /DIRECT_DATABASE_URL is not defined/,
   );
 });
 
 test("a corrupt EPUB fails individually while the next real dry-run succeeds", async (t) => {
   const projectRoot = await createProject(t);
-  const second = { file: "imports/second.epub", gutenbergId: 84, slug: "second" };
+  const second = {
+    file: "imports/second.epub",
+    gutenbergId: 84,
+    slug: "second",
+    originalTitle: "Second",
+    originalLanguage: "en",
+  };
   await fs.writeFile(path.join(projectRoot, dracula.file), "Not a zip");
   await createEpub(path.join(projectRoot, second.file));
   t.mock.method(console, "log", () => {});

@@ -42,7 +42,14 @@
     "libraryError": "Your library could not be accessed. Check that your browser allows saving data and try again.",
     "share": "Share book",
     "contents": "Contents",
-    "chapterList": "Chapters"
+    "chapterList": "Chapters",
+    "originalPublicationYear": "Originally published in {year}",
+    "editionDetails": "This edition",
+    "editionLanguage": "Language: {language}",
+    "editionYear": "Edition from {year}",
+    "source": "Source",
+    "viewSource": "View source",
+    "sourceIdentifier": "Identifier: {identifier}"
   },
   "reader": {
     "previous": "Previous",

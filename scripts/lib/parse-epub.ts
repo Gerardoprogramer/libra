@@ -154,6 +154,7 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
     attributeNamePrefix: "@_",
     removeNSPrefix: true,
     trimValues: true,
+    parseTagValue: false,
   });
 
   const containerXml = await containerFile.async("string");
@@ -182,7 +183,11 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
 
   const metadata = pkg.metadata ?? {};
 
-  const title = getXmlText(metadata.title) || "Untitled";
+  const title = getXmlText(metadata.title);
+
+  if (!title) {
+    throw new Error("Invalid EPUB: a single non-empty dc:title is required; no title will be invented.");
+  }
 
   const translatorIds = getTranslatorIds(metadata);
   const creators = asArray(metadata.creator).filter((creator) => !isTranslator(creator, translatorIds));
@@ -193,7 +198,13 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
     .map(getXmlText)
     .filter(Boolean);
 
-  const language = getXmlText(metadata.language).toLowerCase().slice(0, 10) || "en";
+  const language = getXmlText(metadata.language).toLowerCase();
+
+  if (!language || language.length > 10) {
+    throw new Error(
+      "Invalid EPUB: a single non-empty dc:language of at most 10 characters is required; no language will be inferred or truncated.",
+    );
+  }
 
   const manifestItems = asArray<ManifestItem>(pkg.manifest?.item);
 

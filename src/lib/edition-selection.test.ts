@@ -16,7 +16,8 @@ test("locale selection prefers an explicitly selected edition among same-languag
   const editions = [
     edition("spanish-translation-a", "es", false, "2019-01-01"),
     edition("spanish-translation-b", "es", true, "2021-01-01"),
-    edition("english-original", "en"),
+    edition("english-alternative", "en", false, "2018-01-01"),
+    edition("english-original", "en", true),
   ];
 
   assert.equal(chooseEdition(editions, "es")?.slug, "spanish-translation-b");
@@ -41,4 +42,20 @@ test("English remains the fallback when no edition matches the requested locale"
 
   assert.equal(chooseEdition(editions, "es")?.slug, "english-original");
   assert.equal(chooseEdition([], "es"), undefined);
+});
+
+test("fallback uses base-language matches, then creation date and slug independently of input order", () => {
+  const baseAndRegional = [edition("regional", "es-MX", false, "2018-01-01"), edition("base", "es")];
+  const otherLanguages = [
+    edition("z-last", "fr"),
+    edition("a-first", "de"),
+    edition("newer", "it", false, "2022-01-01"),
+  ];
+
+  for (const candidates of [baseAndRegional, [...baseAndRegional].reverse()]) {
+    assert.equal(chooseEdition(candidates, "es")?.slug, "base");
+  }
+  for (const candidates of [otherLanguages, [...otherLanguages].reverse()]) {
+    assert.equal(chooseEdition(candidates, "es")?.slug, "a-first");
+  }
 });

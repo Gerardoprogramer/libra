@@ -3,6 +3,10 @@
 El manifiesto `initial-library.ts` referencia EPUB locales. No descarga archivos ni publica ediciones.
 Los comandos se ejecutan desde la raíz del proyecto.
 
+Para preparar nuevas ediciones españolas, consulta la [auditoría y requisitos de metadatos](./spanish-readiness.md).
+El lector EPUB requiere un título y un idioma únicos y no vacíos: no inventa `Untitled` ni asume inglés.
+Los idiomas de más de 10 caracteres se rechazan en vez de truncarse, de acuerdo con el límite actual del schema.
+
 ```bash
 # Analiza todos los EPUB, muestra capítulos y portadas; no requiere credenciales.
 pnpm import:collection

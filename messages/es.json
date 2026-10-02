@@ -42,7 +42,14 @@
     "libraryError": "No se pudo acceder a tu biblioteca. Comprueba que el navegador permita guardar datos y vuelve a intentarlo.",
     "share": "Compartir libro",
     "contents": "Contenido",
-    "chapterList": "Capítulos"
+    "chapterList": "Capítulos",
+    "originalPublicationYear": "Publicada originalmente en {year}",
+    "editionDetails": "Esta edición",
+    "editionLanguage": "Idioma: {language}",
+    "editionYear": "Edición de {year}",
+    "source": "Fuente",
+    "viewSource": "Ver fuente",
+    "sourceIdentifier": "Identificador: {identifier}"
   },
   "reader": {
     "previous": "Anterior",

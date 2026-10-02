@@ -46,6 +46,8 @@ async function main() {
     file: getRequiredArgument("--file"),
     gutenbergId: getRequiredArgument("--gutenberg-id"),
     slug: getArgument("--slug"),
+    originalTitle: getRequiredArgument("--original-title"),
+    originalLanguage: getRequiredArgument("--original-language"),
     year: getOptionalYear("--year"),
     editionPublicationYear: getOptionalYear("--edition-year"),
     apply: process.argv.includes("--apply"),

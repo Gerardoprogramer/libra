@@ -12,8 +12,16 @@ export interface CatalogEntry {
   file: string;
   gutenbergId: number;
   slug: string;
+
+  /** Original work title. */
+  originalTitle: string;
+
+  /** Original work language. */
+  originalLanguage: string;
+
   /** Original work's first publication year. */
   year?: number;
+
   /** Publication year of this particular edition, when known. */
   editionPublicationYear?: number;
 }
@@ -34,11 +42,39 @@ export function parseCollectionManifest(value: unknown): CatalogEntry[] {
     }
 
     if (
-      Object.keys(entry).some((key) => !["file", "gutenbergId", "slug", "year", "editionPublicationYear"].includes(key))
+      Object.keys(entry).some(
+        (key) =>
+          ![
+            "file",
+            "gutenbergId",
+            "slug",
+            "originalTitle",
+            "originalLanguage",
+            "year",
+            "editionPublicationYear",
+          ].includes(key),
+      )
     ) {
       throw new Error(
         `${label}: only file, gutenbergId, slug, year and editionPublicationYear are supported. Categories use seed-categories.ts.`,
       );
+    }
+
+    if (
+      !("originalTitle" in entry) ||
+      typeof entry.originalTitle !== "string" ||
+      entry.originalTitle.trim().length === 0 ||
+      entry.originalTitle.length > 500
+    ) {
+      throw new Error(`${label}: originalTitle must be a non-empty string.`);
+    }
+
+    if (
+      !("originalLanguage" in entry) ||
+      typeof entry.originalLanguage !== "string" ||
+      !/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(entry.originalLanguage)
+    ) {
+      throw new Error(`${label}: originalLanguage must be a valid language code.`);
     }
 
     if (!("file" in entry) || typeof entry.file !== "string") {
@@ -111,6 +147,8 @@ export function parseCollectionManifest(value: unknown): CatalogEntry[] {
       file: normalizedFile,
       gutenbergId: entry.gutenbergId,
       slug: entry.slug,
+      originalTitle: entry.originalTitle.trim(),
+      originalLanguage: entry.originalLanguage,
       ...("year" in entry ? { year: entry.year as number } : {}),
       ...("editionPublicationYear" in entry ? { editionPublicationYear: entry.editionPublicationYear as number } : {}),
     };
@@ -186,6 +224,8 @@ export async function importCollection(
         file,
         gutenbergId: String(entry.gutenbergId),
         slug: entry.slug,
+        originalTitle: entry.originalTitle,
+        originalLanguage: entry.originalLanguage,
         year: entry.year,
         editionPublicationYear: entry.editionPublicationYear,
         apply,

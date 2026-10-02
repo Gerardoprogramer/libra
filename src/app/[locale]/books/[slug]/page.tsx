@@ -8,6 +8,7 @@ import { FiBookOpen, FiShare2 } from "react-icons/fi";
 
 import { Badge } from "@/components/ui/badge";
 import { BookReadingAction } from "@/components/books/BookReadingAction";
+import { EditionDetails } from "@/components/books/EditionDetails";
 import { Button } from "@/components/ui/button";
 
 import { getBookBySlug, type ContentLocale } from "@/db/queries/books";
@@ -86,8 +87,6 @@ export default async function BookPage({ params }: BookPageProps) {
 
   const firstChapter = book.chapters[0];
 
-  const year = book.edition.publicationYear ?? book.originalPublicationYear;
-
   const coverStyle = getCoverStyle(book.slug);
 
   const renderChapters = () =>
@@ -144,9 +143,9 @@ export default async function BookPage({ params }: BookPageProps) {
                     <p className="text-sm text-white/70">{authors}</p>
                   </div>
 
-                  {year && (
+                  {(book.edition.publicationYear ?? book.originalPublicationYear) && (
                     <p className="absolute inset-x-0 bottom-8 text-center text-xs tracking-widest text-white/40">
-                      {year}
+                      {book.edition.publicationYear ?? book.originalPublicationYear}
                     </p>
                   )}
                 </>
@@ -155,17 +154,15 @@ export default async function BookPage({ params }: BookPageProps) {
           </div>
 
           <div className="flex flex-col justify-center">
-            <div className="mb-5 flex flex-wrap items-center gap-2">
-              {book.categories.map((category) => (
-                <Badge key={category.id} variant="secondary" asChild>
-                  <Link href={`/books?category=${category.slug}`}>{category.name}</Link>
-                </Badge>
-              ))}
-
-              <Badge variant="outline">{book.edition.language.toUpperCase()}</Badge>
-
-              {year && <span className="text-muted-foreground text-sm">{year}</span>}
-            </div>
+            {book.categories.length > 0 && (
+              <div className="mb-5 flex flex-wrap items-center gap-2">
+                {book.categories.map((category) => (
+                  <Badge key={category.id} variant="secondary" asChild>
+                    <Link href={`/books?category=${category.slug}`}>{category.name}</Link>
+                  </Badge>
+                ))}
+              </div>
+            )}
 
             <h1 className="max-w-3xl font-serif text-4xl leading-tight tracking-tight sm:text-5xl md:text-6xl">
               {book.edition.title}
@@ -185,16 +182,13 @@ export default async function BookPage({ params }: BookPageProps) {
               ))}
             </div>
 
-            {book.edition.translator && (
+            {book.originalPublicationYear !== null && (
               <p className="text-muted-foreground mt-2 text-sm">
-                {t("translatedBy", { translator: book.edition.translator })}
+                {t("originalPublicationYear", { year: book.originalPublicationYear })}
               </p>
             )}
 
-            <div className="text-muted-foreground mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-              <span>{t("chapters", { count: book.chapters.length })}</span>
-              {book.edition.sourceName && <span>{book.edition.sourceName}</span>}
-            </div>
+            <EditionDetails edition={book.edition} chapterCount={book.chapters.length} />
 
             {book.edition.description && (
               <p className="text-muted-foreground mt-8 max-w-2xl text-base leading-8">{book.edition.description}</p>

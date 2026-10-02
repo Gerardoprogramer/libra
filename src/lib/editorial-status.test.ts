@@ -71,3 +71,38 @@ test("copyright review only accepts explicitly verified publishable classificati
   assert.equal(isPublicCopyrightStatus("PENDING_REVIEW"), false);
   assert.equal(isPublicCopyrightStatus("REJECTED"), false);
 });
+
+test("an ineligible preferred edition cannot displace a public fallback", () => {
+  for (const [publicationStatus, copyrightStatus] of [
+    ["DRAFT", "PUBLIC_DOMAIN_VERIFIED"],
+    ["PUBLISHED", "PENDING_REVIEW"],
+    ["PUBLISHED", "REJECTED"],
+  ]) {
+    const hidden = {
+      slug: "hidden-preferred",
+      language: "es",
+      isPreferred: true,
+      createdAt: new Date("2019-01-01"),
+      publicationStatus,
+      copyrightStatus,
+    };
+    const visible = {
+      ...hidden,
+      slug: "public-fallback",
+      isPreferred: false,
+      publicationStatus: "PUBLISHED",
+      copyrightStatus: "LICENSED",
+    };
+    const publicEditions = [hidden, visible].filter((edition) =>
+      isPublicEditionStatus(edition.publicationStatus, edition.copyrightStatus),
+    );
+    assert.equal(chooseEdition(publicEditions, "es")?.slug, "public-fallback");
+    assert.equal(
+      chooseEdition(
+        publicEditions.filter((edition) => edition.isPreferred),
+        "es",
+      ),
+      undefined,
+    );
+  }
+});

@@ -86,6 +86,10 @@ export interface BookDetails {
 
     sourceName: string | null;
 
+    sourceIdentifier: string | null;
+
+    sourceUrl: string | null;
+
     copyrightStatus: "PUBLIC_DOMAIN_VERIFIED" | "LICENSED" | "ORIGINAL" | "PENDING_REVIEW" | "REJECTED";
   };
 
@@ -225,11 +229,20 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
 
         query
           ? or(
-              ilike(editions.title, `%${query}%`),
-
               ilike(books.originalTitle, `%${query}%`),
-
               ilike(authors.name, `%${query}%`),
+              exists(
+                db
+                  .select({ id: editions.id })
+                  .from(editions)
+                  .where(
+                    and(
+                      eq(editions.bookId, books.id),
+                      getPublicEditionVisibilityCondition(),
+                      ilike(editions.title, `%${query}%`),
+                    ),
+                  ),
+              ),
             )
           : undefined,
 
@@ -516,6 +529,10 @@ export async function getBookBySlug(slug: string, locale: ContentLocale): Promis
       coverUrl: editions.coverUrl,
 
       sourceName: editions.sourceName,
+
+      sourceIdentifier: editions.sourceIdentifier,
+
+      sourceUrl: editions.sourceUrl,
 
       copyrightStatus: editions.copyrightStatus,
     })

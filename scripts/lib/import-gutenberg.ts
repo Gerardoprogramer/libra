@@ -14,6 +14,8 @@ export interface ImportGutenbergOptions {
   file: string;
   gutenbergId: string;
   slug?: string;
+  originalTitle: string;
+  originalLanguage: string;
   year?: number;
   editionPublicationYear?: number;
   apply?: boolean;
@@ -45,6 +47,8 @@ export async function importGutenbergBook({
   file: filePath,
   gutenbergId,
   slug: requestedSlug,
+  originalTitle,
+  originalLanguage,
   year,
   editionPublicationYear,
   apply: shouldApply = false,
@@ -155,9 +159,9 @@ export async function importGutenbergBook({
           .values({
             slug: bookSlug,
 
-            originalTitle: epub.title,
+            originalTitle,
 
-            originalLanguage: epub.language,
+            originalLanguage,
 
             originalPublicationYear: year ?? null,
           })
@@ -304,9 +308,9 @@ export async function importGutenbergBook({
 
             translator: epub.translator,
 
-            publicationYear,
+            ...(editionPublicationYear !== undefined ? { publicationYear: editionPublicationYear } : {}),
 
-            coverUrl,
+            ...(epub.cover ? { coverUrl } : {}),
 
             sourceUrl: `https://www.gutenberg.org/ebooks/${gutenbergId}`,
 
