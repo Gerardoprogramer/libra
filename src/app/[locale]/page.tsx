@@ -113,7 +113,13 @@ export default async function Home() {
 
           <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:grid-cols-3 lg:grid-cols-5">
             {books.slice(0, 5).map((book, index) => (
-              <BookCard key={book.id} book={book} eager={index < 2} />
+              <BookCard
+                key={book.id}
+                book={book}
+                eager={index < 2}
+                fetchPriority={index === 0 ? "high" : "auto"}
+                sizes="(max-width: 639px) calc((100vw - 4.5rem) / 2), (max-width: 1023px) calc((100vw - 6rem) / 3), 230px"
+              />
             ))}
           </div>
         </section>

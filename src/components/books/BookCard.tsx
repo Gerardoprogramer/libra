@@ -7,6 +7,8 @@ import { Link } from "@/i18n/navigation";
 interface BookCardProps {
   book: BookListItem;
   eager?: boolean;
+  sizes?: string;
+  fetchPriority?: "high" | "low" | "auto";
 }
 
 const coverStyles = [
@@ -34,7 +36,7 @@ function getCoverStyle(slug: string) {
   return coverStyles[value % coverStyles.length];
 }
 
-export function BookCard({ book, eager = false }: BookCardProps) {
+export function BookCard({ book, eager = false, sizes, fetchPriority }: BookCardProps) {
   const coverStyle = getCoverStyle(book.slug);
   const visibleCategories = getVisibleCategories(book.categories);
 
@@ -50,7 +52,11 @@ export function BookCard({ book, eager = false }: BookCardProps) {
               alt=""
               fill
               loading={eager ? "eager" : "lazy"}
-              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+              fetchPriority={fetchPriority}
+              sizes={
+                sizes ??
+                "(max-width: 639px) calc((100vw - 4.5rem) / 2), (max-width: 767px) calc((100vw - 6rem) / 3), (max-width: 1023px) 25vw, 230px"
+              }
               className="object-cover"
             />
           ) : (

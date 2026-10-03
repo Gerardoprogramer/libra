@@ -39,6 +39,7 @@ const nextConfig: NextConfig = {
   },
   images: {
     remotePatterns: getR2RemotePatterns(),
+    imageSizes: [32, 48, 64, 96, 128, 256, 320, 384],
   },
   async headers() {
     return [
