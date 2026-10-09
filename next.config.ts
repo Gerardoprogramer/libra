@@ -39,7 +39,9 @@ const nextConfig: NextConfig = {
   },
   images: {
     remotePatterns: getR2RemotePatterns(),
-    imageSizes: [32, 48, 64, 96, 128, 256, 320, 384],
+    // Match 280px covers and avoid rounding dense-screen requests up to 640px.
+    imageSizes: [32, 48, 64, 96, 128, 256, 280, 320, 384, 448, 512, 560],
+    qualities: [50, 65, 75],
   },
   async headers() {
     return [

@@ -108,15 +108,65 @@ function isByline(title: string) {
   return normalized.length <= 100 && /^by\s+[\p{L}\p{M}.'’\-\s]+$/iu.test(normalized);
 }
 
+function normalizeStructuralTitle(value: string) {
+  return cleanText(value)
+    .replace(/[.:]+$/, "")
+    .trim();
+}
+
+function isRomanMarker(value: string) {
+  const normalized = normalizeStructuralTitle(value);
+
+  return /^[\s\-–—]*[ivxlcdm]+[\s\-–—]*$/i.test(normalized);
+}
+
+function isLowercaseRomanMarker(value: string) {
+  const normalized = normalizeStructuralTitle(value);
+
+  if (!isRomanMarker(normalized)) {
+    return false;
+  }
+
+  const letters = normalized.replace(/[^ivxlcdm]/gi, "");
+
+  return letters.length > 0 && letters === letters.toLowerCase();
+}
+
+function isUppercaseRomanMarker(value: string) {
+  const normalized = normalizeStructuralTitle(value);
+
+  if (!isRomanMarker(normalized)) {
+    return false;
+  }
+
+  const letters = normalized.replace(/[^ivxlcdm]/gi, "");
+
+  return letters.length > 0 && letters === letters.toUpperCase();
+}
+
 function isContents(title: string) {
-  return /^(?:contents|table of contents|list of chapters)[\s.:]*$/i.test(title);
+  return /^(?:contents|table of contents|list of chapters|index|índice(?:\s+general)?|tabla de contenidos?|tabla de capítulos|tabla de capitulos|capítulos|capitulos|sumario)[\s.:]*$/iu.test(
+    normalizeStructuralTitle(title),
+  );
+}
+
+function isPartSection(title: string) {
+  const normalized = normalizeStructuralTitle(title).replace(/\s+/g, " ");
+
+  return (
+    /^(?:parte|part)\s+(?:[ivxlcdm]+|\d+|[\p{L}]+)$/iu.test(normalized) ||
+    /^(?:[ivxlcdm]+|\d+|[\p{L}]+)\s+(?:parte|part)$/iu.test(normalized)
+  );
 }
 
 function isNonReading(title: string) {
   return (
     isContents(title) ||
     isByline(title) ||
-    /^(?:(?:list of )?illustrations|copyright(?: page)?|title page|colophon|credits)[\s.:]*$/i.test(title) ||
+    isPartSection(title) ||
+    isLowercaseRomanMarker(title) ||
+    /^fin de (?:la\s+)?(?:parte|novela)\b/iu.test(normalizeStructuralTitle(title)) ||
+    /^(?:(?:list of )?illustrations|copyright(?: page)?|title page|colophon|credits)[\s.:]*$/iu.test(title) ||
     /^(?:the (?:full )?)?project gutenberg\b.*(?:license|ebook)/i.test(title) ||
     /\bproject gutenberg collection\b/i.test(title) ||
     /^transcriber[’']?s?\s+notes?\b/i.test(title)
@@ -272,6 +322,118 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
       .join("\n\n");
   }
 
+  function mergeRomanChapterHeading(
+    document: DocumentIndex,
+    position: number,
+    heading: DomElement | undefined,
+    title: string,
+  ) {
+    if (!heading) {
+      return {
+        position,
+        heading,
+        title,
+      };
+    }
+
+    const headingElements = document.elements.filter((element) => document.$(element).is(headings));
+
+    const headingIndex = headingElements.indexOf(heading);
+
+    if (headingIndex < 0) {
+      return {
+        position,
+        heading,
+        title,
+      };
+    }
+
+    const headingTitle = headingText(document.$, heading);
+
+    // Case 1:
+    // -I-
+    // Chapter title
+    //
+    // Combine both headings into one chapter boundary.
+    if (isUppercaseRomanMarker(headingTitle)) {
+      const nextHeading = headingElements[headingIndex + 1];
+
+      if (!nextHeading) {
+        return {
+          position,
+          heading,
+          title,
+        };
+      }
+
+      const nextPosition = positions.get(nextHeading)!;
+      const nextTitle = headingText(document.$, nextHeading);
+
+      if (
+        !nextTitle ||
+        isRomanMarker(nextTitle) ||
+        isNonReading(nextTitle) ||
+        textBetween(position, nextPosition, undefined, true)
+      ) {
+        return {
+          position,
+          heading,
+          title,
+        };
+      }
+
+      return {
+        position: nextPosition,
+        heading: nextHeading,
+        title: `${headingTitle} ${nextTitle}`,
+      };
+    }
+
+    // Case 2:
+    // Chapter title
+    // -i-
+    //
+    // The EPUB navigation may point directly to the lowercase
+    // subsection. Reconstruct the parent chapter from the two
+    // headings immediately before it.
+    if (isLowercaseRomanMarker(headingTitle)) {
+      const chapterTitleHeading = headingElements[headingIndex - 1];
+      const chapterMarkerHeading = headingElements[headingIndex - 2];
+
+      if (!chapterTitleHeading || !chapterMarkerHeading) {
+        return {
+          position,
+          heading,
+          title,
+        };
+      }
+
+      const chapterTitle = headingText(document.$, chapterTitleHeading);
+
+      const chapterMarker = headingText(document.$, chapterMarkerHeading);
+
+      if (!chapterTitle || !chapterMarker || !isUppercaseRomanMarker(chapterMarker) || isRomanMarker(chapterTitle)) {
+        return {
+          position,
+          heading,
+          title,
+        };
+      }
+
+      return {
+        position: positions.get(chapterTitleHeading)!,
+        heading: chapterTitleHeading,
+        title: `${chapterMarker} ${chapterTitle}`,
+      };
+    }
+
+    return {
+      position,
+      heading,
+      title,
+    };
+  }
+
   function resolveEntry(entry: NavigationEntry): Boundary | null {
     if (!entry.href) return null;
     const href = resolveEpubHref(entry.base, entry.href);
@@ -298,6 +460,11 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
 
     const cleanHeading = heading ? headingText($, heading) : "";
     let title = entry.label || cleanHeading;
+    const mergedHeading = mergeRomanChapterHeading(document, position, heading, title);
+
+    position = mergedHeading.position;
+    heading = mergedHeading.heading;
+    title = mergedHeading.title;
     // Auto-generated TOCs may copy a heading including its illustration caption.
     if (heading && $(heading).find(captions).length && cleanText(title) === headingText($, heading, false))
       title = cleanHeading;
@@ -408,9 +575,12 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
   // Fill missing peers from heading hierarchy without turning a chapter's subheadings into chapters.
   for (const document of indexes) {
     for (const heading of document.elements.filter((element) => document.$(element).is(headings))) {
-      const position = positions.get(heading)!;
+      let position = positions.get(heading)!;
+
       if (boundaries.has(position) || protectedPosition(position)) continue;
-      const title = headingText(document.$, heading);
+
+      let title = headingText(document.$, heading);
+
       if (
         !title ||
         excludedElement(document.$, heading) ||
@@ -419,17 +589,40 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
           .parents()
           .toArray()
           .some((element) => excludedElement(document.$, element))
-      )
+      ) {
         continue;
+      }
+
+      const mergedHeading = mergeRomanChapterHeading(document, position, heading, title);
+
+      position = mergedHeading.position;
+      title = mergedHeading.title;
+
+      const effectiveHeading = mergedHeading.heading ?? heading;
+
+      if (boundaries.has(position) || protectedPosition(position)) continue;
+
       const previous = [...boundaries.values()]
         .filter((boundary) => boundary.position < position)
         .sort((a, b) => b.position - a.position)[0];
-      const level = Number(heading.name.slice(1));
-      if (previous && !previous.ignored && level > previous.level && !isNonReading(title)) continue;
+
+      const level = Number(effectiveHeading.name.slice(1));
+
+      if (previous && !previous.ignored && level > previous.level && !isNonReading(title)) {
+        continue;
+      }
+
       const titlePage =
-        (heading.name === "h1" && isBookTitle(title, bookTitle)) ||
-        document.$(heading).closest(".title,.title2,[epub\\:type~='titlepage']").length > 0;
-      boundaries.set(position, { position, title, heading, level, ignored: Boolean(titlePage || isNonReading(title)) });
+        (effectiveHeading.name === "h1" && isBookTitle(title, bookTitle)) ||
+        document.$(effectiveHeading).closest(".title,.title2,[epub\\:type~='titlepage']").length > 0;
+
+      boundaries.set(position, {
+        position,
+        title,
+        heading: effectiveHeading,
+        level,
+        ignored: Boolean(titlePage || isNonReading(title)),
+      });
     }
   }
 

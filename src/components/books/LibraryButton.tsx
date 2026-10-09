@@ -44,7 +44,14 @@ export function LibraryButton({
       >
         <FiHeart aria-hidden="true" className={cn(isSaved && "fill-current")} />
 
-        {label}
+        <span className="grid">
+          <span className="col-start-1 row-start-1">{label}</span>
+          {[addLabel, removeLabel].map((text) => (
+            <span key={text} aria-hidden="true" className="invisible col-start-1 row-start-1">
+              {text}
+            </span>
+          ))}
+        </span>
       </Button>
 
       {(hasError || (isReady && !isAvailable)) && (

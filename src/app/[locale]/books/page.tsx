@@ -133,7 +133,13 @@ async function BooksContent({ searchParams }: BooksContentProps) {
       {books.length > 0 ? (
         <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {books.map((book, index) => (
-            <BookCard key={book.id} book={book} eager={index < 4} />
+            <BookCard
+              key={book.id}
+              book={book}
+              eager={index < 2}
+              preload={index === 0}
+              fetchPriority={index === 0 ? undefined : "auto"}
+            />
           ))}
         </div>
       ) : (

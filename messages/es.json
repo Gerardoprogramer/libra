@@ -6,7 +6,8 @@
     "library": "Biblioteca",
     "search": "Buscar",
     "menu": "Menú",
-    "language": "Idioma: {locale}"
+    "language": "Idioma: {locale}",
+    "languageLoadError": "No se pudo cargar el selector de idioma. Inténtalo de nuevo."
   },
   "home": {
     "metadataTitle": "Libra — Una biblioteca sin fronteras",
@@ -28,6 +29,8 @@
     "notFoundDescription": "La página que buscas no está disponible."
   },
   "book": {
+    "metadataDescription": "Lee {title} de {authors} gratis en línea en Libra. Explora esta edición digital y sus capítulos.",
+    "metadataDescriptionWithoutAuthors": "Lee {title} gratis en línea en Libra. Explora esta edición digital y sus capítulos.",
     "by": "por",
     "translatedBy": "Traducción de {translator}",
     "chapters": "{count, plural, =0 {Sin capítulos} =1 {# capítulo} other {# capítulos}}",

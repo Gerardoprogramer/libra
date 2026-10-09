@@ -3,13 +3,12 @@
 import { Link } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { FiArrowLeft, FiChevronLeft, FiChevronRight, FiMinus, FiMoon, FiPlus, FiSun } from "react-icons/fi";
 import { TbCoffee } from "react-icons/tb";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useReaderPreferences } from "@/hooks/useReaderPreferences";
 import {
   parseReadingProgress,
@@ -25,6 +24,7 @@ interface ReaderViewProps {
   bookSlug: string;
   bookTitle: string;
   author: string;
+  contentLanguage: string;
 
   chapterSlug: string;
   chapterTitle: string;
@@ -50,10 +50,26 @@ const widthClasses: Record<ReaderWidth, string> = {
   wide: "max-w-[820px]",
 };
 
+const optionThemeStyles: Record<ReaderTheme, CSSProperties> = {
+  light: {
+    backgroundColor: "#ffffff",
+    color: "#18181b",
+  },
+  sepia: {
+    backgroundColor: "#f4ecd8",
+    color: "#433422",
+  },
+  dark: {
+    backgroundColor: "#161616",
+    color: "#e4e4e7",
+  },
+} satisfies Record<ReaderTheme, React.CSSProperties>;
+
 export function ReaderView({
   bookSlug,
   bookTitle,
   author,
+  contentLanguage,
   chapterSlug,
   chapterTitle,
   chapterNumber,
@@ -153,16 +169,26 @@ export function ReaderView({
       return Math.round(percentage);
     };
 
+    let progressFrame = 0;
+
     const updateProgress = () => {
-      if (!hasRestoredProgress.current) {
+      if (progressFrame) {
         return;
       }
 
-      const percentage = calculateProgress();
+      progressFrame = requestAnimationFrame(() => {
+        progressFrame = 0;
 
-      setProgress(percentage);
+        if (!hasRestoredProgress.current) {
+          return;
+        }
 
-      saveProgress(percentage);
+        const percentage = calculateProgress();
+
+        setProgress((current) => (current === percentage ? current : percentage));
+
+        saveProgress(percentage);
+      });
     };
 
     let restoreScrollFrame = 0;
@@ -208,6 +234,7 @@ export function ReaderView({
     return () => {
       cancelAnimationFrame(restoreFrame);
       cancelAnimationFrame(restoreScrollFrame);
+      cancelAnimationFrame(progressFrame);
 
       window.removeEventListener("scroll", updateProgress);
     };
@@ -251,7 +278,7 @@ export function ReaderView({
         <div className="flex flex-col gap-5 border-b border-current/10 pb-6 lg:flex-row lg:items-center lg:justify-between">
           <Link
             href={`/books/${bookSlug}`}
-            className="inline-flex items-center gap-2 text-sm opacity-60 transition hover:opacity-100"
+            className="inline-flex items-center gap-2 text-sm text-current/75 transition hover:text-current"
           >
             <FiArrowLeft aria-hidden="true" />
             {bookTitle}
@@ -304,17 +331,27 @@ export function ReaderView({
               </Button>
             </div>
 
-            <Select value={width} onValueChange={changeWidth}>
-              <SelectTrigger aria-label={t("readingWidth")} className="w-32 border-current/15 bg-transparent">
-                <SelectValue />
-              </SelectTrigger>
+            <select
+              value={width}
+              onChange={(event) => changeWidth(event.target.value)}
+              aria-label={t("readingWidth")}
+              className="h-9 w-32 rounded-lg border border-current/15 bg-transparent px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-current/30"
+              style={{
+                colorScheme: theme === "dark" ? "dark" : "light",
+              }}
+            >
+              <option value="narrow" style={optionThemeStyles[theme]}>
+                {t("narrow")}
+              </option>
 
-              <SelectContent>
-                <SelectItem value="narrow">{t("narrow")}</SelectItem>
-                <SelectItem value="medium">{t("medium")}</SelectItem>
-                <SelectItem value="wide">{t("wide")}</SelectItem>
-              </SelectContent>
-            </Select>
+              <option value="medium" style={optionThemeStyles[theme]}>
+                {t("medium")}
+              </option>
+
+              <option value="wide" style={optionThemeStyles[theme]}>
+                {t("wide")}
+              </option>
+            </select>
           </div>
         </div>
       </div>
@@ -326,15 +363,20 @@ export function ReaderView({
           </p>
         )}
 
-        <header className="mx-auto max-w-3xl py-12 text-center md:py-16">
-          <p className="mb-3 text-xs tracking-[0.25em] uppercase opacity-50">{bookTitle}</p>
+        <header lang={contentLanguage} className="mx-auto max-w-3xl py-12 text-center md:py-16">
+          <p className="mb-3 text-xs tracking-[0.25em] text-current/75 uppercase">{bookTitle}</p>
 
           <h1 className="font-serif text-4xl tracking-tight md:text-5xl">{chapterTitle}</h1>
 
-          <p className="mt-4 text-sm opacity-50">{author}</p>
+          <p className="mt-4 text-sm text-current/75">{author}</p>
         </header>
 
-        <article ref={articleRef} className={cn("mx-auto transition-all", widthClasses[width])} style={{ fontSize }}>
+        <article
+          ref={articleRef}
+          lang={contentLanguage}
+          className={cn("mx-auto", widthClasses[width])}
+          style={{ fontSize }}
+        >
           {children}
         </article>
 
@@ -352,9 +394,11 @@ export function ReaderView({
             )}
 
             <div className="text-center">
-              <p className="text-xs opacity-50">{t("chapterOf", { current: chapterNumber, total: totalChapters })}</p>
+              <p className="text-xs text-current/75">
+                {t("chapterOf", { current: chapterNumber, total: totalChapters })}
+              </p>
 
-              <p className="mt-1 text-xs opacity-40">{t("progress", { progress })}</p>
+              <p className="mt-1 text-xs text-current/75">{t("progress", { progress })}</p>
             </div>
 
             {nextHref ? (

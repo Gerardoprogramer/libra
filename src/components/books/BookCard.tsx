@@ -9,6 +9,7 @@ interface BookCardProps {
   eager?: boolean;
   sizes?: string;
   fetchPriority?: "high" | "low" | "auto";
+  preload?: boolean;
 }
 
 const coverStyles = [
@@ -36,7 +37,7 @@ function getCoverStyle(slug: string) {
   return coverStyles[value % coverStyles.length];
 }
 
-export function BookCard({ book, eager = false, sizes, fetchPriority }: BookCardProps) {
+export function BookCard({ book, eager = false, sizes, fetchPriority, preload }: BookCardProps) {
   const coverStyle = getCoverStyle(book.slug);
   const visibleCategories = getVisibleCategories(book.categories);
 
@@ -51,8 +52,10 @@ export function BookCard({ book, eager = false, sizes, fetchPriority }: BookCard
               src={book.coverUrl}
               alt=""
               fill
-              loading={eager ? "eager" : "lazy"}
-              fetchPriority={fetchPriority}
+              preload={preload}
+              loading={preload ? undefined : eager ? "eager" : "lazy"}
+              fetchPriority={preload ? undefined : fetchPriority}
+              quality={fetchPriority === "high" ? 75 : 65}
               sizes={
                 sizes ??
                 "(max-width: 639px) calc((100vw - 4.5rem) / 2), (max-width: 767px) calc((100vw - 6rem) / 3), (max-width: 1023px) 25vw, 230px"
@@ -73,7 +76,7 @@ export function BookCard({ book, eager = false, sizes, fetchPriority }: BookCard
         </div>
 
         <div className="mt-4">
-          <h3 className="font-serif text-lg leading-tight">{book.title}</h3>
+          <h2 className="font-serif text-lg leading-tight">{book.title}</h2>
 
           <p className="text-muted-foreground mt-1 text-sm">{book.author}</p>
 

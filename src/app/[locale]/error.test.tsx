@@ -15,7 +15,7 @@ test("the localized route error presents translated retry guidance in English an
     ["es", es, ["Algo salió mal", "Inténtalo de nuevo.", "Reintentar"]],
   ] as const) {
     const markup = renderToStaticMarkup(
-      <NextIntlClientProvider locale={locale} messages={messages}>
+      <NextIntlClientProvider locale={locale} messages={{ errors: messages.errors }} timeZone="UTC">
         <LocaleError error={new Error("private detail")} retry={() => {}} />
       </NextIntlClientProvider>,
     );

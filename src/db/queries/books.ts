@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, countDistinct, eq, exists, ilike, or } from "drizzle-orm";
+import { and, asc, countDistinct, eq, exists, ilike, inArray, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { cacheLife, cacheTag } from "next/cache";
 
@@ -731,20 +731,41 @@ export async function getAuthors(): Promise<AuthorListItem[]> {
     .orderBy(asc(authors.name));
 }
 
-export async function getSitemapContent(): Promise<{ bookSlugs: string[]; authorSlugs: string[] }> {
+export async function getSitemapContent(): Promise<{
+  books: {
+    slug: string;
+    locales: ContentLocale[];
+  }[];
+  chapters: {
+    bookSlug: string;
+    slug: string;
+    locale: ContentLocale;
+  }[];
+  authorSlugs: string[];
+}> {
   "use cache";
 
   cacheLife("editorial");
   cacheTag("library:editorial");
 
   const visibilityCondition = getPublicEditionVisibilityCondition();
-  const [bookRows, authorRows] = await Promise.all([
+
+  const [editionRows, authorRows] = await Promise.all([
     db
-      .selectDistinct({ slug: books.slug })
+      .select({
+        bookId: books.id,
+        bookSlug: books.slug,
+        id: editions.id,
+        language: editions.language,
+        slug: editions.slug,
+        isPreferred: editions.isPreferred,
+        createdAt: editions.createdAt,
+      })
       .from(books)
       .innerJoin(editions, eq(editions.bookId, books.id))
       .where(visibilityCondition)
-      .orderBy(asc(books.slug)),
+      .orderBy(asc(books.slug), asc(editions.slug)),
+
     db
       .selectDistinct({ slug: authors.slug })
       .from(authors)
@@ -755,8 +776,108 @@ export async function getSitemapContent(): Promise<{ bookSlugs: string[]; author
       .orderBy(asc(authors.slug)),
   ]);
 
+  const editionsByBookId = new Map<
+    string,
+    {
+      slug: string;
+      editions: (typeof editionRows)[number][];
+    }
+  >();
+
+  for (const row of editionRows) {
+    const book = editionsByBookId.get(row.bookId);
+
+    if (book) {
+      book.editions.push(row);
+    } else {
+      editionsByBookId.set(row.bookId, {
+        slug: row.bookSlug,
+        editions: [row],
+      });
+    }
+  }
+
+  const sitemapBooks: {
+    slug: string;
+    locales: ContentLocale[];
+  }[] = [];
+
+  const selectedEditionById = new Map<
+    string,
+    {
+      bookSlug: string;
+      locale: ContentLocale;
+    }
+  >();
+
+  for (const { slug, editions: bookEditions } of editionsByBookId.values()) {
+    const availableLocales = new Set<ContentLocale>();
+
+    for (const edition of bookEditions) {
+      const language = edition.language.toLowerCase().split("-")[0];
+
+      if (language === "en" || language === "es") {
+        availableLocales.add(language);
+      }
+    }
+
+    const locales = (["en", "es"] as ContentLocale[]).filter((locale) => availableLocales.has(locale));
+
+    if (locales.length === 0) {
+      continue;
+    }
+
+    sitemapBooks.push({
+      slug,
+      locales,
+    });
+
+    for (const locale of locales) {
+      const selectedEdition = chooseEdition(bookEditions, locale);
+
+      if (!selectedEdition) {
+        continue;
+      }
+
+      selectedEditionById.set(selectedEdition.id, {
+        bookSlug: slug,
+        locale,
+      });
+    }
+  }
+
+  const chapterRows =
+    selectedEditionById.size > 0
+      ? await db
+          .select({
+            editionId: chapters.editionId,
+            slug: chapters.slug,
+            number: chapters.number,
+          })
+          .from(chapters)
+          .where(inArray(chapters.editionId, Array.from(selectedEditionById.keys())))
+          .orderBy(asc(chapters.editionId), asc(chapters.number))
+      : [];
+
+  const sitemapChapters = chapterRows.flatMap((chapter) => {
+    const selectedEdition = selectedEditionById.get(chapter.editionId);
+
+    if (!selectedEdition) {
+      return [];
+    }
+
+    return [
+      {
+        bookSlug: selectedEdition.bookSlug,
+        slug: chapter.slug,
+        locale: selectedEdition.locale,
+      },
+    ];
+  });
+
   return {
-    bookSlugs: bookRows.map(({ slug }) => slug),
+    books: sitemapBooks,
+    chapters: sitemapChapters,
     authorSlugs: authorRows.map(({ slug }) => slug),
   };
 }

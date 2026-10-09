@@ -4,6 +4,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import { FiBookOpen } from "react-icons/fi";
 
 import { Button } from "@/components/ui/button";
+import { Link } from "@/i18n/navigation";
 import {
   calculateBookProgress,
   getReadingProgressKey,
@@ -11,7 +12,6 @@ import {
   readReadingProgress,
   READING_PROGRESS_CHANGE_EVENT,
 } from "@/lib/reading-progress";
-import { Link } from "@/i18n/navigation";
 
 interface BookReadingActionProps {
   bookSlug: string;
@@ -57,23 +57,42 @@ export function BookReadingAction({
   progressLabel,
 }: BookReadingActionProps) {
   const subscribeToProgress = useCallback((callback: () => void) => subscribe(bookSlug, callback), [bookSlug]);
+
   const readProgress = useCallback(() => getProgressSnapshot(bookSlug), [bookSlug]);
+
   const snapshot = useSyncExternalStore(subscribeToProgress, readProgress, getServerSnapshot);
+
   const parsedProgress = parseReadingProgress(snapshot);
   const progress = parsedProgress?.bookSlug === bookSlug ? parsedProgress : null;
-  const hasValidProgress = progress && chapterSlugs.includes(progress.chapterSlug);
+
+  const hasValidProgress = progress !== null && chapterSlugs.includes(progress.chapterSlug);
+
   const percentage = hasValidProgress ? calculateBookProgress(progress) : null;
-  const isComplete = percentage === 100 && progress?.chapterSlug === chapterSlugs.at(-1);
+
+  const lastChapterSlug = chapterSlugs[chapterSlugs.length - 1];
+
+  const isComplete = percentage === 100 && progress?.chapterSlug === lastChapterSlug;
+
   const chapterSlug = hasValidProgress && !isComplete ? progress.chapterSlug : firstChapterSlug;
+
   const label = isComplete ? readAgainLabel : hasValidProgress ? continueLabel : startLabel;
+
   const progressText = percentage === null ? null : progressLabel.replace("{progress}", String(percentage));
 
   return (
-    <div className="min-w-0">
+    <div className="min-h-20 min-w-0">
       <Button size="lg" asChild>
         <Link href={`/books/${bookSlug}/${chapterSlug}`}>
-          <FiBookOpen />
-          {label}
+          <FiBookOpen aria-hidden="true" />
+          <span className="grid">
+            <span className="col-start-1 row-start-1">{label}</span>
+            {/* Reserve the widest translated label before localStorage hydrates. */}
+            {[startLabel, continueLabel, readAgainLabel].map((text) => (
+              <span key={text} aria-hidden="true" className="invisible col-start-1 row-start-1">
+                {text}
+              </span>
+            ))}
+          </span>
         </Link>
       </Button>
 
@@ -85,10 +104,12 @@ export function BookReadingAction({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={percentage}
+            aria-valuetext={progressText ?? undefined}
             className="bg-muted h-1.5 overflow-hidden rounded-full"
           >
             <div className="bg-primary h-full transition-[width]" style={{ width: `${percentage}%` }} />
           </div>
+
           <p className="text-muted-foreground mt-1.5 text-xs">{progressText}</p>
         </div>
       )}

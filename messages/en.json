@@ -6,7 +6,8 @@
     "library": "Library",
     "search": "Search",
     "menu": "Menu",
-    "language": "Language: {locale}"
+    "language": "Language: {locale}",
+    "languageLoadError": "The language selector could not be loaded. Please try again."
   },
   "home": {
     "metadataTitle": "Libra — A library without walls",
@@ -28,6 +29,8 @@
     "notFoundDescription": "The page you are looking for is not available."
   },
   "book": {
+    "metadataDescription": "Read {title} by {authors} online for free on Libra. Explore this digital edition and its chapters.",
+    "metadataDescriptionWithoutAuthors": "Read {title} online for free on Libra. Explore this digital edition and its chapters.",
     "by": "by",
     "translatedBy": "Translated by {translator}",
     "chapters": "{count, plural, =0 {No chapters} =1 {# chapter} other {# chapters}}",

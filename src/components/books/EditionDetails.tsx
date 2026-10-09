@@ -50,7 +50,7 @@ export function EditionDetails({ edition, chapterCount }: EditionDetailsProps) {
       {edition.translator && <p className="mt-2">{t("translatedBy", { translator: edition.translator })}</p>}
 
       {(edition.sourceName || identifier || sourceHref) && (
-        <p className="mt-2 break-words">
+        <p className="mt-2 wrap-break-word">
           {edition.sourceName && `${t("source")}: `}
           {sourceHref ? (
             <a

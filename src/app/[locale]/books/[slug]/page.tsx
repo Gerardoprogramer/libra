@@ -11,7 +11,7 @@ import { BookReadingAction } from "@/components/books/BookReadingAction";
 import { EditionDetails } from "@/components/books/EditionDetails";
 import { Button } from "@/components/ui/button";
 
-import { getBookBySlug, type ContentLocale } from "@/db/queries/books";
+import { getBookBySlug, getSitemapContent, type ContentLocale } from "@/db/queries/books";
 import { LibraryButton } from "@/components/books/LibraryButton";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
 
@@ -38,43 +38,80 @@ function getCoverStyle(slug: string) {
   return coverStyles[value % coverStyles.length];
 }
 
-function getContentLocale(locale: string): ContentLocale {
+function getInterfaceLocale(locale: string): ContentLocale {
   return locale === "en" ? "en" : "es";
+}
+
+function getLanguageCode(language: string) {
+  return language.toLowerCase().split("-")[0];
+}
+
+export async function generateStaticParams() {
+  const { books } = await getSitemapContent();
+
+  return books.map(({ slug }) => ({
+    slug,
+  }));
 }
 
 export async function generateMetadata({ params }: BookPageProps): Promise<Metadata> {
   const { locale, slug } = await params;
+  const interfaceLocale = getInterfaceLocale(locale);
 
-  const [book, t] = await Promise.all([getBookBySlug(slug, getContentLocale(locale)), getTranslations("book")]);
+  const [book, t] = await Promise.all([
+    getBookBySlug(slug, interfaceLocale),
+    getTranslations({
+      locale: interfaceLocale,
+      namespace: "book",
+    }),
+  ]);
 
   if (!book) {
     return createLocalizedMetadata({
-      locale: getContentLocale(locale),
+      locale: interfaceLocale,
       pathname: `/books/${encodeURIComponent(slug)}`,
       title: t("notFoundTitle"),
       robots: {
         index: false,
         follow: true,
       },
+      alternateLocales: false,
     });
   }
 
   const authors = book.authors.map((author) => author.name).join(", ");
 
+  const contentLanguage = getLanguageCode(book.edition.language);
+
+  const isContentLocaleMatch = contentLanguage === interfaceLocale;
+
   return createLocalizedMetadata({
-    locale: getContentLocale(locale),
+    locale: interfaceLocale,
     pathname: `/books/${encodeURIComponent(slug)}`,
     title: authors ? `${book.edition.title} — ${authors}` : book.edition.title,
-    description: book.edition.description ?? undefined,
+    description:
+      book.edition.description?.trim() ||
+      t(authors ? "metadataDescription" : "metadataDescriptionWithoutAuthors", {
+        title: book.edition.title,
+        authors,
+      }),
+    robots: isContentLocaleMatch
+      ? undefined
+      : {
+          index: false,
+          follow: true,
+        },
+    alternateLocales: false,
     images: book.edition.coverUrl ? [{ url: book.edition.coverUrl, alt: book.edition.title }] : undefined,
   });
 }
 
 export default async function BookPage({ params }: BookPageProps) {
   const { locale, slug } = await params;
+  const interfaceLocale = getInterfaceLocale(locale);
 
   const [book, t, readerTranslations] = await Promise.all([
-    getBookBySlug(slug, getContentLocale(locale)),
+    getBookBySlug(slug, interfaceLocale),
     getTranslations("book"),
     getTranslations("reader"),
   ]);
@@ -122,8 +159,10 @@ export default async function BookPage({ params }: BookPageProps) {
                   src={book.edition.coverUrl}
                   alt=""
                   fill
-                  preload
-                  sizes="(max-width: 768px) 280px, 280px"
+                  loading="eager"
+                  fetchPriority="high"
+                  sizes="(max-width: 328px) calc(100vw - 48px), 280px"
+                  quality={50}
                   className="object-cover"
                 />
               )}

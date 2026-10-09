@@ -5,57 +5,165 @@ import { createPublicSitemap, createRobotsMetadata } from "./public-index";
 
 test("sitemap includes localized public indexes and unique book and author routes", () => {
   const sitemap = createPublicSitemap(new URL("https://libra.example"), {
-    bookSlugs: ["dracula", "frankenstein", "dracula"],
+    books: [
+      { slug: "dracula", locales: ["en"] },
+      { slug: "frankenstein", locales: ["en"] },
+      { slug: "marianela", locales: ["es"] },
+      { slug: "dracula", locales: ["en"] },
+    ],
+    chapters: [],
     authorSlugs: ["mary-shelley"],
   });
+
   const urls = sitemap.map(({ url }) => url);
 
-  assert.equal(urls.length, 14);
+  assert.equal(urls.length, 13);
+
   for (const locale of ["en", "es"]) {
-    for (const path of [
-      "/",
-      "/books",
-      "/authors",
-      "/categories",
-      "/books/dracula",
-      "/books/frankenstein",
-      "/authors/mary-shelley",
-    ]) {
-      assert.ok(urls.includes(`https://libra.example/${locale}${path === "/" ? "" : path}`));
+    for (const path of ["/", "/books", "/authors", "/categories", "/authors/mary-shelley"]) {
+      const expectedUrl = `https://libra.example/${locale}${path === "/" ? "" : path}`;
+
+      assert.ok(urls.includes(expectedUrl));
     }
   }
+
+  assert.ok(urls.includes("https://libra.example/en/books/dracula"));
+  assert.ok(urls.includes("https://libra.example/en/books/frankenstein"));
+  assert.ok(urls.includes("https://libra.example/es/books/marianela"));
+
+  assert.ok(!urls.includes("https://libra.example/es/books/dracula"));
+  assert.ok(!urls.includes("https://libra.example/es/books/frankenstein"));
+  assert.ok(!urls.includes("https://libra.example/en/books/marianela"));
+
   assert.equal(new Set(urls).size, urls.length);
 });
 
-test("sitemap emits reciprocal language alternates only for configured locales", () => {
+test("sitemap includes chapters only in their actual content locale", () => {
   const sitemap = createPublicSitemap(new URL("https://libra.example"), {
-    bookSlugs: ["dracula"],
-    authorSlugs: ["mary-shelley"],
+    books: [
+      { slug: "dracula", locales: ["en"] },
+      { slug: "marianela", locales: ["es"] },
+    ],
+    chapters: [
+      {
+        bookSlug: "dracula",
+        slug: "chapter-1",
+        locale: "en",
+      },
+      {
+        bookSlug: "dracula",
+        slug: "chapter-2",
+        locale: "en",
+      },
+      {
+        bookSlug: "marianela",
+        slug: "capitulo-1",
+        locale: "es",
+      },
+    ],
+    authorSlugs: [],
   });
-  const entry = sitemap.find(({ url }) => url === "https://libra.example/es/books/dracula");
+
+  const urls = sitemap.map(({ url }) => url);
+
+  assert.ok(urls.includes("https://libra.example/en/books/dracula/chapter-1"));
+  assert.ok(urls.includes("https://libra.example/en/books/dracula/chapter-2"));
+  assert.ok(urls.includes("https://libra.example/es/books/marianela/capitulo-1"));
+
+  assert.ok(!urls.includes("https://libra.example/es/books/dracula/chapter-1"));
+  assert.ok(!urls.includes("https://libra.example/en/books/marianela/capitulo-1"));
+
+  const englishChapter = sitemap.find(({ url }) => url === "https://libra.example/en/books/dracula/chapter-1");
+
+  const spanishChapter = sitemap.find(({ url }) => url === "https://libra.example/es/books/marianela/capitulo-1");
+
+  assert.ok(englishChapter);
+  assert.ok(spanishChapter);
+
+  assert.equal(englishChapter?.alternates?.languages, undefined);
+  assert.equal(spanishChapter?.alternates?.languages, undefined);
+
+  assert.equal(new Set(urls).size, urls.length);
+});
+
+test("sitemap emits reciprocal language alternates only when a book has multiple content locales", () => {
+  const sitemap = createPublicSitemap(new URL("https://libra.example"), {
+    books: [
+      {
+        slug: "dracula",
+        locales: ["en", "es"],
+      },
+    ],
+    chapters: [],
+    authorSlugs: [],
+  });
+
+  const entry = sitemap.find(({ url }) => url === "https://libra.example/en/books/dracula");
 
   assert.deepEqual(entry?.alternates?.languages, {
     en: "https://libra.example/en/books/dracula",
     es: "https://libra.example/es/books/dracula",
   });
+
+  const spanishEntry = sitemap.find(({ url }) => url === "https://libra.example/es/books/dracula");
+
+  assert.deepEqual(spanishEntry?.alternates?.languages, {
+    en: "https://libra.example/en/books/dracula",
+    es: "https://libra.example/es/books/dracula",
+  });
+});
+
+test("sitemap does not create language alternates for a book with only one content locale", () => {
+  const sitemap = createPublicSitemap(new URL("https://libra.example"), {
+    books: [
+      {
+        slug: "marianela",
+        locales: ["es"],
+      },
+    ],
+    chapters: [],
+    authorSlugs: [],
+  });
+
+  const entry = sitemap.find(({ url }) => url === "https://libra.example/es/books/marianela");
+
+  assert.ok(entry);
+  assert.equal(entry?.alternates?.languages, undefined);
+
+  assert.ok(!sitemap.some(({ url }) => url === "https://libra.example/en/books/marianela"));
 });
 
 test("sitemap is empty when SITE_URL is not configured", () => {
-  assert.deepEqual(createPublicSitemap(null, { bookSlugs: ["dracula"], authorSlugs: ["mary-shelley"] }), []);
+  assert.deepEqual(
+    createPublicSitemap(null, {
+      books: [{ slug: "dracula", locales: ["en"] }],
+      chapters: [],
+      authorSlugs: ["mary-shelley"],
+    }),
+    [],
+  );
 });
 
 test("sitemap excludes user libraries, readers, endpoints, and non-public routes", () => {
   const sitemap = createPublicSitemap(new URL("https://libra.example"), {
-    bookSlugs: ["dracula"],
+    books: [{ slug: "dracula", locales: ["en"] }],
+    chapters: [
+      {
+        bookSlug: "dracula",
+        slug: "chapter-1",
+        locale: "en",
+      },
+    ],
     authorSlugs: ["mary-shelley"],
   });
+
   const urls = sitemap.map(({ url }) => url);
 
   assert.ok(urls.every((url) => url.startsWith("https://")));
   assert.ok(urls.every((url) => !url.includes("/library")));
   assert.ok(urls.every((url) => !url.includes("/api/")));
-  assert.ok(urls.every((url) => !url.includes("/chapter")));
   assert.ok(urls.every((url) => !url.includes("?")));
+  assert.ok(urls.every((url) => !url.includes("/read/")));
 });
 
 test("robots allows public pages and disallows local libraries and API endpoints", () => {

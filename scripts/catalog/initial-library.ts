@@ -99,4 +99,20 @@ export const initialLibrary = [
     originalLanguage: "en",
     year: 1900,
   },
+  {
+    file: "imports/marianela-17340.epub",
+    gutenbergId: 17340,
+    slug: "marianela",
+    originalTitle: "Marianela",
+    originalLanguage: "es",
+    year: 1878,
+  },
+  {
+    file: "imports/fortunata-y-jacinta-17013.epub",
+    gutenbergId: 17013,
+    slug: "fortunata-y-jacinta",
+    originalTitle: "Fortunata y Jacinta: dos historias de casadas",
+    originalLanguage: "es",
+    year: 1887,
+  },
 ] satisfies CatalogEntry[];

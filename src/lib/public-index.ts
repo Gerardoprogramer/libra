@@ -13,29 +13,68 @@ function getLocalizedUrl(siteUrl: URL, locale: ContentLocale, pathname: string) 
 
 export function createPublicSitemap(
   siteUrl: URL | null,
-  content: { bookSlugs: readonly string[]; authorSlugs: readonly string[] },
+  content: {
+    books: readonly {
+      slug: string;
+      locales: readonly ContentLocale[];
+    }[];
+    chapters: readonly {
+      bookSlug: string;
+      slug: string;
+      locale: ContentLocale;
+    }[];
+    authorSlugs: readonly string[];
+  },
 ): MetadataRoute.Sitemap {
   if (!siteUrl) {
     return [];
   }
 
   const localizedEntries = new Map<string, MetadataRoute.Sitemap[number]>();
-  const paths = [
-    ...staticPaths,
-    ...content.bookSlugs.map((slug) => `/books/${encodeURIComponent(slug)}`),
-    ...content.authorSlugs.map((slug) => `/authors/${encodeURIComponent(slug)}`),
-  ];
 
-  for (const pathname of new Set(paths)) {
+  const authorPaths = content.authorSlugs.map((slug) => `/authors/${encodeURIComponent(slug)}`);
+
+  for (const pathname of [...staticPaths, ...authorPaths]) {
     const languages = Object.fromEntries(locales.map((locale) => [locale, getLocalizedUrl(siteUrl, locale, pathname)]));
 
     for (const locale of locales) {
       const url = languages[locale];
+
       localizedEntries.set(url, {
         url,
         alternates: { languages },
       });
     }
+  }
+
+  for (const book of content.books) {
+    const languages = Object.fromEntries(
+      book.locales.map((locale) => [
+        locale,
+        getLocalizedUrl(siteUrl, locale, `/books/${encodeURIComponent(book.slug)}`),
+      ]),
+    );
+
+    for (const locale of book.locales) {
+      const url = languages[locale];
+
+      localizedEntries.set(url, {
+        url,
+        ...(book.locales.length > 1 ? { alternates: { languages } } : {}),
+      });
+    }
+  }
+
+  for (const chapter of content.chapters) {
+    const url = getLocalizedUrl(
+      siteUrl,
+      chapter.locale,
+      `/books/${encodeURIComponent(chapter.bookSlug)}/${encodeURIComponent(chapter.slug)}`,
+    );
+
+    localizedEntries.set(url, {
+      url,
+    });
   }
 
   return [...localizedEntries.values()];

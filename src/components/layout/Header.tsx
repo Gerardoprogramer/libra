@@ -1,4 +1,4 @@
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 
 import { FiMenu, FiSearch } from "react-icons/fi";
 import { HiOutlineBookOpen } from "react-icons/hi2";
@@ -6,14 +6,15 @@ import { HiOutlineBookOpen } from "react-icons/hi2";
 import { LanguageSwitcher } from "@/components/layout/LanguageSwitcher";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
+import type { Locale } from "@/i18n/routing";
 
 export async function Header() {
-  const t = await getTranslations("nav");
+  const [t, locale] = await Promise.all([getTranslations("nav"), getLocale()]);
 
   return (
     <header className="bg-background/90 sticky top-0 z-50 border-b backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center px-6">
-        <Link href="/" className="mr-10 flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2 md:mr-10">
           <HiOutlineBookOpen aria-hidden="true" className="size-6" />
 
           <span className="font-serif text-xl font-semibold tracking-tight">Libra</span>
@@ -60,7 +61,11 @@ export async function Header() {
             </nav>
           </details>
 
-          <LanguageSwitcher />
+          <LanguageSwitcher
+            locale={locale as Locale}
+            label={t("language", { locale })}
+            errorLabel={t("languageLoadError")}
+          />
 
           <Button variant="ghost" size="icon" asChild>
             <Link href="/books" aria-label={t("search")}>
