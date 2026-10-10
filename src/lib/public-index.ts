@@ -85,7 +85,7 @@ export function createRobotsMetadata(siteUrl: URL | null): MetadataRoute.Robots 
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/api/", "/library", "/en/library", "/es/library"],
+      disallow: ["/api/"],
     },
     ...(siteUrl ? { sitemap: new URL("/sitemap.xml", siteUrl).href } : {}),
   };

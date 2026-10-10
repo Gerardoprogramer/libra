@@ -882,6 +882,34 @@ export async function getSitemapContent(): Promise<{
   };
 }
 
+export async function getBookContentLocales(slug: string): Promise<ContentLocale[]> {
+  "use cache";
+
+  cacheLife("editorial");
+  cacheTag(`book:${slug}`, "library:editorial");
+
+  const rows = await db
+    .selectDistinct({
+      language: editions.language,
+    })
+    .from(editions)
+    .innerJoin(books, eq(books.id, editions.bookId))
+    .where(and(eq(books.slug, slug), getPublicEditionVisibilityCondition()))
+    .orderBy(asc(editions.language));
+
+  const locales = new Set<ContentLocale>();
+
+  for (const row of rows) {
+    const language = row.language.toLowerCase().split("-")[0];
+
+    if (language === "en" || language === "es") {
+      locales.add(language);
+    }
+  }
+
+  return Array.from(locales);
+}
+
 export async function getAuthorBySlug(slug: string, locale: ContentLocale): Promise<AuthorDetails | null> {
   "use cache";
 

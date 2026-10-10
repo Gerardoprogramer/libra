@@ -11,7 +11,7 @@ import { BookReadingAction } from "@/components/books/BookReadingAction";
 import { EditionDetails } from "@/components/books/EditionDetails";
 import { Button } from "@/components/ui/button";
 
-import { getBookBySlug, getSitemapContent, type ContentLocale } from "@/db/queries/books";
+import { getBookBySlug, getBookContentLocales, getSitemapContent, type ContentLocale } from "@/db/queries/books";
 import { LibraryButton } from "@/components/books/LibraryButton";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
@@ -60,12 +60,13 @@ export async function generateMetadata({ params }: BookPageProps): Promise<Metad
   const { locale, slug } = await params;
   const interfaceLocale = getInterfaceLocale(locale);
 
-  const [book, t] = await Promise.all([
+  const [book, t, contentLocales] = await Promise.all([
     getBookBySlug(slug, interfaceLocale),
     getTranslations({
       locale: interfaceLocale,
       namespace: "book",
     }),
+    getBookContentLocales(slug),
   ]);
 
   if (!book) {
@@ -103,8 +104,11 @@ export async function generateMetadata({ params }: BookPageProps): Promise<Metad
           index: false,
           follow: true,
         },
-    alternateLocales: false,
-    images: book.edition.coverUrl ? [{ url: book.edition.coverUrl, alt: book.edition.title }] : undefined,
+    alternateLocales:
+      isContentLocaleMatch && contentLocales.length > 1 ? contentLocales : false,
+    images: book.edition.coverUrl
+      ? [{ url: book.edition.coverUrl, alt: book.edition.title }]
+      : undefined,
   });
 }
 

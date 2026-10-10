@@ -17,6 +17,10 @@ interface BooksPageProps {
   params: Promise<{
     locale: string;
   }>;
+  searchParams: Promise<{
+    q?: string | string[];
+    category?: string | string[];
+  }>;
 }
 
 interface BooksContentProps {
@@ -26,19 +30,32 @@ interface BooksContentProps {
   }>;
 }
 
-export async function generateMetadata({ params }: BooksPageProps): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: BooksPageProps): Promise<Metadata> {
   const { locale: routeLocale } = await params;
+  const { q } = await searchParams;
+
   const locale: ContentLocale = routeLocale === "en" ? "en" : "es";
+
   const t = await getTranslations({
     locale,
     namespace: "catalog",
   });
+
+  const hasSearchQuery =
+    typeof q === "string" ? q.trim().length > 0 : Array.isArray(q) && q.some((value) => value.trim().length > 0);
 
   return createLocalizedMetadata({
     locale,
     pathname: "/books",
     title: t("booksMetadataTitle"),
     description: t("booksMetadataDescription"),
+    robots: hasSearchQuery
+      ? {
+          index: false,
+          follow: true,
+        }
+      : undefined,
+    alternateLocales: hasSearchQuery ? false : undefined,
   });
 }
 
@@ -89,12 +106,14 @@ async function BooksContent({ searchParams }: BooksContentProps) {
           <label className="sr-only" htmlFor="book-search">
             {t("searchLabel")}
           </label>
+
           <Input id="book-search" name="q" defaultValue={query} placeholder={t("searchPlaceholder")} className="pl-9" />
         </div>
 
         <label className="sr-only" htmlFor="book-category">
           {t("categoryFilterLabel")}
         </label>
+
         <select
           id="book-category"
           name="category"

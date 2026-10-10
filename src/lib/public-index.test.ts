@@ -166,12 +166,12 @@ test("sitemap excludes user libraries, readers, endpoints, and non-public routes
   assert.ok(urls.every((url) => !url.includes("/read/")));
 });
 
-test("robots allows public pages and disallows local libraries and API endpoints", () => {
+test("robots allows public pages and disallows API endpoints", () => {
   const robots = createRobotsMetadata(new URL("https://libra.example"));
   const rules = robots.rules as { allow?: string; disallow?: string[] };
 
   assert.equal(rules.allow, "/");
-  assert.deepEqual(rules.disallow, ["/api/", "/library", "/en/library", "/es/library"]);
+  assert.deepEqual(rules.disallow, ["/api/"]);
   assert.equal(robots.sitemap, "https://libra.example/sitemap.xml");
 });
 
