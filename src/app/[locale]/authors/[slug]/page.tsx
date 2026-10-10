@@ -8,6 +8,8 @@ import { BookCard } from "@/components/books/BookCard";
 
 import { getAuthorBySlug, type ContentLocale } from "@/db/queries/books";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { getConfiguredSiteUrl } from "@/lib/site-url";
 
 interface AuthorPageProps {
   params: Promise<{
@@ -66,45 +68,108 @@ export default async function AuthorPage({ params }: AuthorPageProps) {
           ? t("died", { year: author.deathYear })
           : null;
 
+  const siteUrl = getConfiguredSiteUrl();
+
+  const authorUrl = siteUrl
+    ? new URL(`/${getContentLocale(locale)}/authors/${encodeURIComponent(author.slug)}`, siteUrl).href
+    : null;
+
+  const authorStructuredData =
+    siteUrl && authorUrl
+      ? {
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "WebPage",
+              "@id": `${authorUrl}#webpage`,
+              url: authorUrl,
+              name: `${author.name} — Libra`,
+              inLanguage: getContentLocale(locale),
+              mainEntity: {
+                "@id": `${authorUrl}#person`,
+              },
+              breadcrumb: {
+                "@id": `${authorUrl}#breadcrumb`,
+              },
+            },
+            {
+              "@type": "Person",
+              "@id": `${authorUrl}#person`,
+              name: author.name,
+              url: authorUrl,
+              ...(author.birthYear !== null ? { birthDate: String(author.birthYear) } : {}),
+              ...(author.deathYear !== null ? { deathDate: String(author.deathYear) } : {}),
+            },
+            {
+              "@type": "BreadcrumbList",
+              "@id": `${authorUrl}#breadcrumb`,
+              itemListElement: [
+                {
+                  "@type": "ListItem",
+                  position: 1,
+                  name: getContentLocale(locale) === "es" ? "Inicio" : "Home",
+                  item: new URL(`/${getContentLocale(locale)}`, siteUrl).href,
+                },
+                {
+                  "@type": "ListItem",
+                  position: 2,
+                  name: getContentLocale(locale) === "es" ? "Autores" : "Authors",
+                  item: new URL(`/${getContentLocale(locale)}/authors`, siteUrl).href,
+                },
+                {
+                  "@type": "ListItem",
+                  position: 3,
+                  name: author.name,
+                },
+              ],
+            },
+          ],
+        }
+      : null;
+
   return (
-    <main className="min-h-screen">
-      <section className="border-b">
-        <div className="mx-auto max-w-7xl px-6 py-14 md:py-20">
-          <p className="text-muted-foreground mb-3 text-xs tracking-[0.25em] uppercase">{t("eyebrow")}</p>
+    <>
+      {authorStructuredData && <JsonLd data={authorStructuredData} />}
 
-          <h1 className="max-w-4xl font-serif text-5xl tracking-tight md:text-6xl">{author.name}</h1>
+      <main className="min-h-screen">
+        <section className="border-b">
+          <div className="mx-auto max-w-7xl px-6 py-14 md:py-20">
+            <p className="text-muted-foreground mb-3 text-xs tracking-[0.25em] uppercase">{t("eyebrow")}</p>
 
-          {lifespan && <p className="text-muted-foreground mt-4 text-lg">{lifespan}</p>}
-        </div>
-      </section>
+            <h1 className="max-w-4xl font-serif text-5xl tracking-tight md:text-6xl">{author.name}</h1>
 
-      <section className="mx-auto max-w-7xl px-6 py-14">
-        <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-muted-foreground mb-2 text-xs tracking-[0.2em] uppercase">{t("booksEyebrow")}</p>
+            {lifespan && <p className="text-muted-foreground mt-4 text-lg">{lifespan}</p>}
+          </div>
+        </section>
 
-            <h2 className="font-serif text-3xl">{t("books")}</h2>
+        <section className="mx-auto max-w-7xl px-6 py-14">
+          <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-muted-foreground mb-2 text-xs tracking-[0.2em] uppercase">{t("booksEyebrow")}</p>
+
+              <h2 className="font-serif text-3xl">{t("books")}</h2>
+            </div>
+
+            <p className="text-muted-foreground text-sm">
+              {t("bookCount", {
+                count: author.books.length,
+              })}
+            </p>
           </div>
 
-          <p className="text-muted-foreground text-sm">
-            {t("bookCount", {
-              count: author.books.length,
-            })}
-          </p>
-        </div>
-
-        {author.books.length > 0 ? (
-          <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {author.books.map((book, index) => (
-              <BookCard key={book.id} book={book} eager={index < 4} />
-            ))}
-          </div>
-        ) : (
-          <div className="border-y py-16">
-            <p className="text-muted-foreground">{t("noBooks")}</p>
-          </div>
-        )}
-      </section>
-    </main>
+          {author.books.length > 0 ? (
+            <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {author.books.map((book, index) => (
+                <BookCard key={book.id} book={book} eager={index < 4} />
+              ))}
+            </div>
+          ) : (
+            <div className="border-y py-16">
+              <p className="text-muted-foreground">{t("noBooks")}</p>
+            </div>
+          )}
+        </section>
+      </main>
+    </>
   );
 }

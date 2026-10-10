@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { getBookBySlug, getSitemapContent, type ContentLocale } from "@/db/queries/books";
 import { LibraryButton } from "@/components/books/LibraryButton";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
+import { JsonLd } from "@/components/seo/JsonLd";
+import { getAbsolutePublicImageUrl, getConfiguredSiteUrl } from "@/lib/site-url";
 
 import { Link } from "@/i18n/navigation";
 
@@ -122,6 +124,95 @@ export default async function BookPage({ params }: BookPageProps) {
 
   const authors = book.authors.map((author) => author.name).join(", ");
 
+  const contentLanguage = getLanguageCode(book.edition.language);
+  const isContentLocaleMatch = contentLanguage === interfaceLocale;
+
+  const siteUrl = getConfiguredSiteUrl();
+
+  const bookUrl = siteUrl ? new URL(`/${interfaceLocale}/books/${encodeURIComponent(book.slug)}`, siteUrl).href : null;
+
+  const imageUrl = book.edition.coverUrl ? getAbsolutePublicImageUrl(book.edition.coverUrl) : null;
+
+  const authorEntities = siteUrl
+    ? book.authors.map((author) => {
+        const authorUrl = new URL(`/${interfaceLocale}/authors/${encodeURIComponent(author.slug)}`, siteUrl).href;
+
+        return {
+          "@type": "Person",
+          "@id": `${authorUrl}#person`,
+          name: author.name,
+          url: authorUrl,
+        };
+      })
+    : [];
+
+  const bookStructuredData =
+    siteUrl && bookUrl && isContentLocaleMatch
+      ? {
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "WebPage",
+              "@id": `${bookUrl}#webpage`,
+              url: bookUrl,
+              name: book.edition.title,
+              inLanguage: interfaceLocale,
+              mainEntity: {
+                "@id": `${bookUrl}#book`,
+              },
+              breadcrumb: {
+                "@id": `${bookUrl}#breadcrumb`,
+              },
+            },
+            {
+              "@type": "Book",
+              "@id": `${bookUrl}#book`,
+              name: book.edition.title,
+              url: bookUrl,
+              inLanguage: contentLanguage,
+              isAccessibleForFree: true,
+              author: authorEntities,
+              ...(book.edition.description?.trim() ? { description: book.edition.description.trim() } : {}),
+              ...(imageUrl ? { image: imageUrl } : {}),
+              ...(book.edition.publicationYear !== null ? { datePublished: String(book.edition.publicationYear) } : {}),
+              ...(book.categories.length > 0 ? { genre: book.categories.map((category) => category.name) } : {}),
+              ...(book.edition.translator?.trim()
+                ? {
+                    translator: {
+                      "@type": "Person",
+                      name: book.edition.translator.trim(),
+                    },
+                  }
+                : {}),
+              ...(book.edition.sourceUrl ? { sameAs: book.edition.sourceUrl } : {}),
+            },
+            {
+              "@type": "BreadcrumbList",
+              "@id": `${bookUrl}#breadcrumb`,
+              itemListElement: [
+                {
+                  "@type": "ListItem",
+                  position: 1,
+                  name: interfaceLocale === "es" ? "Inicio" : "Home",
+                  item: new URL(`/${interfaceLocale}`, siteUrl).href,
+                },
+                {
+                  "@type": "ListItem",
+                  position: 2,
+                  name: interfaceLocale === "es" ? "Libros" : "Books",
+                  item: new URL(`/${interfaceLocale}/books`, siteUrl).href,
+                },
+                {
+                  "@type": "ListItem",
+                  position: 3,
+                  name: book.edition.title,
+                },
+              ],
+            },
+          ],
+        }
+      : null;
+
   const firstChapter = book.chapters[0];
 
   const coverStyle = getCoverStyle(book.slug);
@@ -147,153 +238,157 @@ export default async function BookPage({ params }: BookPageProps) {
     ));
 
   return (
-    <main className="min-h-screen">
-      <section className="border-b">
-        <div className="mx-auto grid max-w-7xl gap-12 px-6 py-14 md:grid-cols-[280px_1fr] md:py-20">
-          <div>
-            <div
-              className={`relative mx-auto aspect-2/3 w-full max-w-70 overflow-hidden rounded-lg bg-linear-to-br ${coverStyle} shadow-2xl`}
-            >
-              {book.edition.coverUrl && (
-                <Image
-                  src={book.edition.coverUrl}
-                  alt=""
-                  fill
-                  loading="eager"
-                  fetchPriority="high"
-                  sizes="(max-width: 328px) calc(100vw - 48px), 280px"
-                  quality={50}
-                  className="object-cover"
-                />
-              )}
+    <>
+      {bookStructuredData && <JsonLd data={bookStructuredData} />}
 
-              {!book.edition.coverUrl && (
-                <>
-                  <div className="absolute inset-0 bg-black/10" />
+      <main className="min-h-screen">
+        <section className="border-b">
+          <div className="mx-auto grid max-w-7xl gap-12 px-6 py-14 md:grid-cols-[280px_1fr] md:py-20">
+            <div>
+              <div
+                className={`relative mx-auto aspect-2/3 w-full max-w-70 overflow-hidden rounded-lg bg-linear-to-br ${coverStyle} shadow-2xl`}
+              >
+                {book.edition.coverUrl && (
+                  <Image
+                    src={book.edition.coverUrl}
+                    alt=""
+                    fill
+                    loading="eager"
+                    fetchPriority="high"
+                    sizes="(max-width: 328px) calc(100vw - 48px), 280px"
+                    quality={50}
+                    className="object-cover"
+                  />
+                )}
 
-                  <div className="absolute inset-x-8 top-10 text-center">
-                    <p className="text-[10px] tracking-[0.3em] text-white/60 uppercase">{book.edition.language}</p>
-                  </div>
+                {!book.edition.coverUrl && (
+                  <>
+                    <div className="absolute inset-0 bg-black/10" />
 
-                  <div className="absolute inset-x-7 top-1/2 -translate-y-1/2 text-center">
-                    <p className="font-serif text-3xl leading-tight text-white">{book.edition.title}</p>
+                    <div className="absolute inset-x-8 top-10 text-center">
+                      <p className="text-[10px] tracking-[0.3em] text-white/60 uppercase">{book.edition.language}</p>
+                    </div>
 
-                    <div className="mx-auto my-5 h-px w-12 bg-white/40" />
+                    <div className="absolute inset-x-7 top-1/2 -translate-y-1/2 text-center">
+                      <p className="font-serif text-3xl leading-tight text-white">{book.edition.title}</p>
 
-                    <p className="text-sm text-white/70">{authors}</p>
-                  </div>
+                      <div className="mx-auto my-5 h-px w-12 bg-white/40" />
 
-                  {(book.edition.publicationYear ?? book.originalPublicationYear) && (
-                    <p className="absolute inset-x-0 bottom-8 text-center text-xs tracking-widest text-white/40">
-                      {book.edition.publicationYear ?? book.originalPublicationYear}
-                    </p>
-                  )}
-                </>
-              )}
+                      <p className="text-sm text-white/70">{authors}</p>
+                    </div>
+
+                    {(book.edition.publicationYear ?? book.originalPublicationYear) && (
+                      <p className="absolute inset-x-0 bottom-8 text-center text-xs tracking-widest text-white/40">
+                        {book.edition.publicationYear ?? book.originalPublicationYear}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
 
-          <div className="flex flex-col justify-center">
-            {book.categories.length > 0 && (
-              <div className="mb-5 flex flex-wrap items-center gap-2">
-                {book.categories.map((category) => (
-                  <Badge key={category.id} variant="secondary" asChild>
-                    <Link href={`/books?category=${category.slug}`}>{category.name}</Link>
-                  </Badge>
+            <div className="flex flex-col justify-center">
+              {book.categories.length > 0 && (
+                <div className="mb-5 flex flex-wrap items-center gap-2">
+                  {book.categories.map((category) => (
+                    <Badge key={category.id} variant="secondary" asChild>
+                      <Link href={`/books?category=${category.slug}`}>{category.name}</Link>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              <h1 className="max-w-3xl font-serif text-4xl leading-tight tracking-tight sm:text-5xl md:text-6xl">
+                {book.edition.title}
+              </h1>
+
+              <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-x-1 text-lg">
+                <span>{t("by")}</span>
+
+                {book.authors.map((author, index) => (
+                  <span key={author.id}>
+                    <Link href={`/authors/${author.slug}`} className="text-foreground transition hover:underline">
+                      {author.name}
+                    </Link>
+
+                    {index < book.authors.length - 1 && ","}
+                  </span>
                 ))}
               </div>
-            )}
 
-            <h1 className="max-w-3xl font-serif text-4xl leading-tight tracking-tight sm:text-5xl md:text-6xl">
-              {book.edition.title}
-            </h1>
-
-            <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-x-1 text-lg">
-              <span>{t("by")}</span>
-
-              {book.authors.map((author, index) => (
-                <span key={author.id}>
-                  <Link href={`/authors/${author.slug}`} className="text-foreground transition hover:underline">
-                    {author.name}
-                  </Link>
-
-                  {index < book.authors.length - 1 && ","}
-                </span>
-              ))}
-            </div>
-
-            {book.originalPublicationYear !== null && (
-              <p className="text-muted-foreground mt-2 text-sm">
-                {t("originalPublicationYear", { year: book.originalPublicationYear })}
-              </p>
-            )}
-
-            <EditionDetails edition={book.edition} chapterCount={book.chapters.length} />
-
-            {book.edition.description && (
-              <p className="text-muted-foreground mt-8 max-w-2xl text-base leading-8">{book.edition.description}</p>
-            )}
-
-            <div className="mt-9 flex flex-wrap gap-3">
-              {firstChapter && (
-                <BookReadingAction
-                  bookSlug={book.slug}
-                  chapterSlugs={book.chapters.map((chapter) => chapter.slug)}
-                  firstChapterSlug={firstChapter.slug}
-                  startLabel={t("startReading")}
-                  continueLabel={t("continueReading")}
-                  readAgainLabel={t("readAgain")}
-                  progressLabel={readerTranslations("progress", { progress: "{progress}" })}
-                />
+              {book.originalPublicationYear !== null && (
+                <p className="text-muted-foreground mt-2 text-sm">
+                  {t("originalPublicationYear", { year: book.originalPublicationYear })}
+                </p>
               )}
 
-              <LibraryButton
-                bookSlug={book.slug}
-                addLabel={t("addToLibrary")}
-                removeLabel={t("removeFromLibrary")}
-                errorLabel={t("libraryError")}
-              />
+              <EditionDetails edition={book.edition} chapterCount={book.chapters.length} />
 
-              <Button size="icon" variant="ghost" disabled>
-                <FiShare2 />
+              {book.edition.description && (
+                <p className="text-muted-foreground mt-8 max-w-2xl text-base leading-8">{book.edition.description}</p>
+              )}
 
-                <span className="sr-only">{t("share")}</span>
-              </Button>
+              <div className="mt-9 flex flex-wrap gap-3">
+                {firstChapter && (
+                  <BookReadingAction
+                    bookSlug={book.slug}
+                    chapterSlugs={book.chapters.map((chapter) => chapter.slug)}
+                    firstChapterSlug={firstChapter.slug}
+                    startLabel={t("startReading")}
+                    continueLabel={t("continueReading")}
+                    readAgainLabel={t("readAgain")}
+                    progressLabel={readerTranslations("progress", { progress: "{progress}" })}
+                  />
+                )}
+
+                <LibraryButton
+                  bookSlug={book.slug}
+                  addLabel={t("addToLibrary")}
+                  removeLabel={t("removeFromLibrary")}
+                  errorLabel={t("libraryError")}
+                />
+
+                <Button size="icon" variant="ghost" disabled>
+                  <FiShare2 />
+
+                  <span className="sr-only">{t("share")}</span>
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="mx-auto max-w-4xl px-6 py-14">
-        <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-muted-foreground mb-2 text-xs tracking-[0.2em] uppercase">{t("contents")}</p>
+        <section className="mx-auto max-w-4xl px-6 py-14">
+          <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-muted-foreground mb-2 text-xs tracking-[0.2em] uppercase">{t("contents")}</p>
 
-            <h2 className="font-serif text-3xl">{t("chapterList")}</h2>
+              <h2 className="font-serif text-3xl">{t("chapterList")}</h2>
+            </div>
+
+            <p className="text-muted-foreground text-sm">{t("chapters", { count: book.chapters.length })}</p>
           </div>
 
-          <p className="text-muted-foreground text-sm">{t("chapters", { count: book.chapters.length })}</p>
-        </div>
+          {book.chapters.length > 0 ? (
+            <div className="divide-y">
+              {book.chapters.length > 20 && (
+                <details className="group">
+                  <summary className="text-muted-foreground hover:text-foreground cursor-pointer py-4 text-sm transition">
+                    {t("showAllChapters", {
+                      count: book.chapters.length,
+                    })}
+                  </summary>
+                  <div className="grid gap-x-8 md:grid-cols-2">{renderChapters()}</div>
+                </details>
+              )}
 
-        {book.chapters.length > 0 ? (
-          <div className="divide-y">
-            {book.chapters.length > 20 && (
-              <details className="group">
-                <summary className="text-muted-foreground hover:text-foreground cursor-pointer py-4 text-sm transition">
-                  {t("showAllChapters", {
-                    count: book.chapters.length,
-                  })}
-                </summary>
-                <div className="grid gap-x-8 md:grid-cols-2">{renderChapters()}</div>
-              </details>
-            )}
-
-            {book.chapters.length <= 20 && <div className="grid gap-x-8 md:grid-cols-2">{renderChapters()}</div>}
-          </div>
-        ) : (
-          <p className="text-muted-foreground border-y py-8">{t("noChaptersAvailable")}</p>
-        )}
-      </section>
-    </main>
+              {book.chapters.length <= 20 && <div className="grid gap-x-8 md:grid-cols-2">{renderChapters()}</div>}
+            </div>
+          ) : (
+            <p className="text-muted-foreground border-y py-8">{t("noChaptersAvailable")}</p>
+          )}
+        </section>
+      </main>
+    </>
   );
 }
