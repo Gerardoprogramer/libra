@@ -21,4 +21,4 @@ export const authors = pgTable("authors", {
   })
     .defaultNow()
     .notNull(),
-});
+}).enableRLS();

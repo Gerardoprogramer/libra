@@ -26,7 +26,7 @@ export const books = pgTable("books", {
   })
     .defaultNow()
     .notNull(),
-});
+}).enableRLS();
 
 export const bookAuthors = pgTable(
   "book_authors",
@@ -50,4 +50,4 @@ export const bookAuthors = pgTable(
       columns: [table.bookId, table.authorId],
     }),
   ],
-);
+).enableRLS();

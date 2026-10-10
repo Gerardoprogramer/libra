@@ -42,4 +42,4 @@ export const chapters = pgTable(
 
     uniqueIndex("chapters_edition_number_idx").on(table.editionId, table.number),
   ],
-);
+).enableRLS();

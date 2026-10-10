@@ -18,7 +18,7 @@ export const categories = pgTable("categories", {
   })
     .defaultNow()
     .notNull(),
-});
+}).enableRLS();
 
 export const categoryTranslations = pgTable(
   "category_translations",
@@ -42,7 +42,7 @@ export const categoryTranslations = pgTable(
 
     index("category_translations_locale_idx").on(table.locale),
   ],
-);
+).enableRLS();
 
 export const bookCategories = pgTable(
   "book_categories",
@@ -70,4 +70,4 @@ export const bookCategories = pgTable(
 
     index("book_categories_category_idx").on(table.categoryId),
   ],
-);
+).enableRLS();

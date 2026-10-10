@@ -96,4 +96,4 @@ export const editions = pgTable(
       .on(table.bookId, sql`lower(split_part(${table.language}, '-', 1))`)
       .where(sql`${table.isPreferred}`),
   ],
-);
+).enableRLS();

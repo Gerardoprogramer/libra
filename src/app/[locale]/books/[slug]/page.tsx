@@ -104,11 +104,8 @@ export async function generateMetadata({ params }: BookPageProps): Promise<Metad
           index: false,
           follow: true,
         },
-    alternateLocales:
-      isContentLocaleMatch && contentLocales.length > 1 ? contentLocales : false,
-    images: book.edition.coverUrl
-      ? [{ url: book.edition.coverUrl, alt: book.edition.title }]
-      : undefined,
+    alternateLocales: isContentLocaleMatch && contentLocales.length > 1 ? contentLocales : false,
+    images: book.edition.coverUrl ? [{ url: book.edition.coverUrl, alt: book.edition.title }] : undefined,
   });
 }
 
