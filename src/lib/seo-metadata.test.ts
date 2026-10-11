@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 
 import { createLocalizedMetadata } from "./seo-metadata-core";
+import { getBookSocialImage } from "./social-metadata";
 
 const originalSiteUrl = process.env.SITE_URL;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -153,4 +154,58 @@ test("SITE_URL rejects credentials, paths, query strings, fragments, and insecur
     process.env.SITE_URL = siteUrl;
     assert.throws(() => createLocalizedMetadata({ locale: "en", pathname: "/", title: "Libra" }), /SITE_URL/);
   }
+});
+
+test("book previews reuse the same 1200x630 PNG for Open Graph and Twitter in each interface locale", () => {
+  process.env.SITE_URL = "https://www.alyvenor.com";
+
+  for (const locale of ["en", "es"] as const) {
+    const metadata = createLocalizedMetadata({
+      locale,
+      pathname: "/books/dracula",
+      title: "Dracula — Bram Stoker",
+      images: getBookSocialImage(locale, "dracula", "Dracula", "Bram Stoker"),
+      bookAuthors: [`https://www.alyvenor.com/${locale}/authors/bram-stoker`],
+    });
+    assert.equal(metadata.openGraph && "type" in metadata.openGraph ? metadata.openGraph.type : undefined, "book");
+    assert.deepEqual(metadata.openGraph?.images, [
+      {
+        url: `https://www.alyvenor.com/${locale}/books/dracula/opengraph-image`,
+        alt: "Dracula — Bram Stoker | Libra",
+        width: 1200,
+        height: 630,
+        type: "image/png",
+      },
+    ]);
+    assert.deepEqual(metadata.twitter?.images, metadata.openGraph?.images);
+  }
+});
+
+test("fallback editions can be shared with their own canonical without inventing a translation", () => {
+  process.env.SITE_URL = "https://www.alyvenor.com";
+  const metadata = createLocalizedMetadata({
+    locale: "es",
+    pathname: "/books/dracula",
+    title: "Dracula",
+    robots: { index: false, follow: true },
+    alternateLocales: false,
+    canonical: true,
+  });
+  assert.equal(String(metadata.alternates?.canonical), "https://www.alyvenor.com/es/books/dracula");
+  assert.equal(metadata.alternates?.languages, undefined);
+  assert.deepEqual(metadata.robots, { index: false, follow: true });
+});
+
+test("public indexes have localized branded previews without depending on a book cover", () => {
+  process.env.SITE_URL = "https://www.alyvenor.com";
+  const metadata = createLocalizedMetadata({ locale: "es", pathname: "/books", title: "Libros" });
+  assert.deepEqual(metadata.openGraph?.images, [
+    {
+      url: "https://www.alyvenor.com/es/opengraph-image",
+      alt: "Libra — Una biblioteca sin fronteras",
+      width: 1200,
+      height: 630,
+      type: "image/png",
+    },
+  ]);
 });

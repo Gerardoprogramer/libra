@@ -29,6 +29,10 @@
     "notFoundDescription": "La página que buscas no está disponible."
   },
   "book": {
+    "breadcrumbs": "Ruta de navegación",
+    "breadcrumbHome": "Inicio",
+    "breadcrumbBooks": "Libros",
+    "coverAlt": "Portada de {title}",
     "metadataDescription": "Lee {title} de {authors} gratis en línea en Libra. Explora esta edición digital y sus capítulos.",
     "metadataDescriptionWithoutAuthors": "Lee {title} gratis en línea en Libra. Explora esta edición digital y sus capítulos.",
     "by": "por",

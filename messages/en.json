@@ -29,6 +29,10 @@
     "notFoundDescription": "The page you are looking for is not available."
   },
   "book": {
+    "breadcrumbs": "Breadcrumbs",
+    "breadcrumbHome": "Home",
+    "breadcrumbBooks": "Books",
+    "coverAlt": "Cover of {title}",
     "metadataDescription": "Read {title} by {authors} online for free on Libra. Explore this digital edition and its chapters.",
     "metadataDescriptionWithoutAuthors": "Read {title} online for free on Libra. Explore this digital edition and its chapters.",
     "by": "by",

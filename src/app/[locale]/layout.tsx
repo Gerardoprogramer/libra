@@ -1,9 +1,12 @@
+import type { Metadata, Viewport } from "next";
 import { hasLocale, NextIntlClientProvider } from "next-intl";
-import { getMessages, setRequestLocale } from "next-intl/server";
+import { getMessages, getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 
 import { Header } from "@/components/layout/Header";
 import { routing } from "@/i18n/routing";
+import { getConfiguredSiteUrl } from "@/lib/site-url";
+import { getDefaultSocialImage } from "@/lib/social-metadata";
 
 import "../globals.css";
 
@@ -15,6 +18,40 @@ interface LocaleLayoutProps {
   params: Promise<{
     locale: string;
   }>;
+}
+
+export const viewport: Viewport = { themeColor: "#ffffff" };
+
+export async function generateMetadata({ params }: LocaleLayoutProps): Promise<Metadata> {
+  const { locale } = await params;
+  if (!hasLocale(routing.locales, locale)) notFound();
+
+  const t = await getTranslations({ locale, namespace: "home" });
+  const title = t("metadataTitle");
+  const description = t("metadataDescription");
+  const images = getDefaultSocialImage(locale);
+
+  // Canonical and language alternates belong to each page, never to the layout.
+  return {
+    metadataBase: getConfiguredSiteUrl(),
+    title,
+    description,
+    applicationName: "Libra",
+    authors: [{ name: "Libra" }],
+    creator: "Libra",
+    publisher: "Libra",
+    generator: "Next.js",
+    robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large" } },
+    openGraph: {
+      type: "website",
+      title,
+      description,
+      siteName: "Libra",
+      locale: locale === "es" ? "es_ES" : "en_US",
+      images,
+    },
+    twitter: { card: "summary_large_image", title, description, images },
+  };
 }
 
 export function generateStaticParams() {

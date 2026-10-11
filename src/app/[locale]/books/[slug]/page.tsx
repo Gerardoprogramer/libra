@@ -16,6 +16,7 @@ import { LibraryButton } from "@/components/books/LibraryButton";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getAbsolutePublicImageUrl, getConfiguredSiteUrl } from "@/lib/site-url";
+import { getBookSocialImage } from "@/lib/social-metadata";
 
 import { Link } from "@/i18n/navigation";
 
@@ -70,16 +71,8 @@ export async function generateMetadata({ params }: BookPageProps): Promise<Metad
   ]);
 
   if (!book) {
-    return createLocalizedMetadata({
-      locale: interfaceLocale,
-      pathname: `/books/${encodeURIComponent(slug)}`,
-      title: t("notFoundTitle"),
-      robots: {
-        index: false,
-        follow: true,
-      },
-      alternateLocales: false,
-    });
+    // Do not advertise book metadata for a missing or unpublished edition.
+    notFound();
   }
 
   const authors = book.authors.map((author) => author.name).join(", ");
@@ -87,8 +80,9 @@ export async function generateMetadata({ params }: BookPageProps): Promise<Metad
   const contentLanguage = getLanguageCode(book.edition.language);
 
   const isContentLocaleMatch = contentLanguage === interfaceLocale;
+  const siteUrl = getConfiguredSiteUrl();
 
-  return createLocalizedMetadata({
+  const metadata = createLocalizedMetadata({
     locale: interfaceLocale,
     pathname: `/books/${encodeURIComponent(slug)}`,
     title: authors ? `${book.edition.title} — ${authors}` : book.edition.title,
@@ -105,8 +99,16 @@ export async function generateMetadata({ params }: BookPageProps): Promise<Metad
           follow: true,
         },
     alternateLocales: isContentLocaleMatch && contentLocales.length > 1 ? contentLocales : false,
-    images: book.edition.coverUrl ? [{ url: book.edition.coverUrl, alt: book.edition.title }] : undefined,
+    canonical: true,
+    bookAuthors: siteUrl
+      ? book.authors.map(
+          (author) => new URL(`/${interfaceLocale}/authors/${encodeURIComponent(author.slug)}`, siteUrl).href,
+        )
+      : [],
+    images: getBookSocialImage(interfaceLocale, book.slug, book.edition.title, authors),
   });
+
+  return { ...metadata, authors: book.authors.map((author) => ({ name: author.name })) };
 }
 
 export default async function BookPage({ params }: BookPageProps) {
@@ -124,9 +126,6 @@ export default async function BookPage({ params }: BookPageProps) {
   }
 
   const authors = book.authors.map((author) => author.name).join(", ");
-
-  const contentLanguage = getLanguageCode(book.edition.language);
-  const isContentLocaleMatch = contentLanguage === interfaceLocale;
 
   const siteUrl = getConfiguredSiteUrl();
 
@@ -148,7 +147,7 @@ export default async function BookPage({ params }: BookPageProps) {
     : [];
 
   const bookStructuredData =
-    siteUrl && bookUrl && isContentLocaleMatch
+    siteUrl && bookUrl
       ? {
           "@context": "https://schema.org",
           "@graph": [
@@ -170,7 +169,7 @@ export default async function BookPage({ params }: BookPageProps) {
               "@id": `${bookUrl}#book`,
               name: book.edition.title,
               url: bookUrl,
-              inLanguage: contentLanguage,
+              inLanguage: book.edition.language,
               isAccessibleForFree: true,
               author: authorEntities,
               ...(book.edition.description?.trim() ? { description: book.edition.description.trim() } : {}),
@@ -207,6 +206,7 @@ export default async function BookPage({ params }: BookPageProps) {
                   "@type": "ListItem",
                   position: 3,
                   name: book.edition.title,
+                  item: bookUrl,
                 },
               ],
             },
@@ -243,6 +243,25 @@ export default async function BookPage({ params }: BookPageProps) {
       {bookStructuredData && <JsonLd data={bookStructuredData} />}
 
       <main className="min-h-screen">
+        <nav aria-label={t("breadcrumbs")} className="mx-auto max-w-7xl px-6 pt-6 text-sm">
+          <ol className="text-muted-foreground flex flex-wrap items-center gap-2">
+            <li>
+              <Link href="/" className="hover:underline">
+                {t("breadcrumbHome")}
+              </Link>
+            </li>
+            <li aria-hidden="true">/</li>
+            <li>
+              <Link href="/books" className="hover:underline">
+                {t("breadcrumbBooks")}
+              </Link>
+            </li>
+            <li aria-hidden="true">/</li>
+            <li aria-current="page" className="text-foreground">
+              {book.edition.title}
+            </li>
+          </ol>
+        </nav>
         <section className="border-b">
           <div className="mx-auto grid max-w-7xl gap-12 px-6 py-14 md:grid-cols-[280px_1fr] md:py-20">
             <div>
@@ -252,7 +271,7 @@ export default async function BookPage({ params }: BookPageProps) {
                 {book.edition.coverUrl && (
                   <Image
                     src={book.edition.coverUrl}
-                    alt=""
+                    alt={t("coverAlt", { title: book.edition.title })}
                     fill
                     loading="eager"
                     fetchPriority="high"

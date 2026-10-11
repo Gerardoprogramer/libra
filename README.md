@@ -38,6 +38,7 @@ pnpm exec prettier --check .
 pnpm build
 pnpm start
 pnpm smoke:production
+pnpm smoke:seo
 ```
 
 The smoke test defaults to `http://localhost:3000`, follows the localized home/catalog/author/category routes,
@@ -47,6 +48,11 @@ sitemap. To target a different HTTPS origin intentionally, pass it as the first 
 ```bash
 pnpm run smoke:production -- https://your-configured-domain.example
 ```
+
+`pnpm smoke:seo` checks initial HTML metadata, canonical/hreflang, book JSON-LD, real 1200×630 social images,
+social crawler user agents, icons and the manifest against the running server. It accepts the same origin argument
+and needs at least one published book per language. See [the SEO implementation and deployment guide](docs/seo.md)
+for the file inventory, local commands, caching behavior and Vercel checks.
 
 ## Production operations
 

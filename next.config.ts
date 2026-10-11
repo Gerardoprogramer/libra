@@ -28,6 +28,15 @@ function getR2RemotePatterns() {
 }
 
 const nextConfig: NextConfig = {
+  // Keep metadata in the initial head for every preview consumer, including
+  // Telegram and clients not covered by Next.js's built-in bot list.
+  htmlLimitedBots: /.*/,
+  experimental: {
+    // The PostgreSQL client has one connection per worker. Keep prerendered
+    // pages from queuing enough concurrent editorial queries to time out.
+    cpus: 2,
+    staticGenerationMaxConcurrency: 2,
+  },
   cacheComponents: true,
   cacheLife: {
     // Short fallback lifetime if post-commit invalidation is unavailable.
