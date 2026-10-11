@@ -56,7 +56,11 @@
     "editionYear": "Edición de {year}",
     "source": "Fuente",
     "viewSource": "Ver fuente",
-    "sourceIdentifier": "Identificador: {identifier}"
+    "sourceIdentifier": "Identificador: {identifier}",
+    "shareText": "Lee {title} de {authors} gratis en línea en Libra.",
+    "shareTextWithoutAuthor": "Lee {title} gratis en línea en Libra.",
+    "shareCopied": "Enlace copiado",
+    "shareError": "No se pudo compartir el enlace"
   },
   "reader": {
     "previous": "Anterior",

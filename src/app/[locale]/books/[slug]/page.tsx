@@ -4,12 +4,11 @@ import Image from "next/image";
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
-import { FiBookOpen, FiShare2 } from "react-icons/fi";
+import { FiBookOpen } from "react-icons/fi";
 
 import { Badge } from "@/components/ui/badge";
 import { BookReadingAction } from "@/components/books/BookReadingAction";
 import { EditionDetails } from "@/components/books/EditionDetails";
-import { Button } from "@/components/ui/button";
 
 import { getBookBySlug, getBookContentLocales, getSitemapContent, type ContentLocale } from "@/db/queries/books";
 import { LibraryButton } from "@/components/books/LibraryButton";
@@ -19,6 +18,7 @@ import { getAbsolutePublicImageUrl, getConfiguredSiteUrl } from "@/lib/site-url"
 import { getBookSocialImage } from "@/lib/social-metadata";
 
 import { Link } from "@/i18n/navigation";
+import { BookShareButton } from "@/components/books/BookShareButton";
 
 interface BookPageProps {
   params: Promise<{
@@ -368,11 +368,23 @@ export default async function BookPage({ params }: BookPageProps) {
                   errorLabel={t("libraryError")}
                 />
 
-                <Button size="icon" variant="ghost" disabled>
-                  <FiShare2 />
-
-                  <span className="sr-only">{t("share")}</span>
-                </Button>
+                <BookShareButton
+                  title={authors ? `${book.edition.title} — ${authors}` : book.edition.title}
+                  text={
+                    authors
+                      ? t("shareText", {
+                          title: book.edition.title,
+                          authors,
+                        })
+                      : t("shareTextWithoutAuthor", {
+                          title: book.edition.title,
+                        })
+                  }
+                  url={bookUrl ?? undefined}
+                  label={t("share")}
+                  copiedLabel={t("shareCopied")}
+                  errorLabel={t("shareError")}
+                />
               </div>
             </div>
           </div>
