@@ -10,7 +10,8 @@ assert.ok(
 );
 assert.ok(!base.username && !base.password && base.pathname === "/" && !base.search && !base.hash);
 
-async function request(path: string, agent = "LibraSeoSmoke/1.0") {
+// Head-only assertions model a crawler that cannot process streamed metadata.
+async function request(path: string, agent = "Twitterbot/1.0") {
   const target = new URL(path, base);
   // Canonical URLs refer to production; keep local tests on the selected server.
   const response = await fetch(new URL(`${target.pathname}${target.search}`, base), {
@@ -169,12 +170,25 @@ async function main() {
     console.log(`PASS ${alternate}: fallback edition, own canonical, noindex and no invented hreflang`);
   }
 
+  // Browsers may receive metadata after the initial head. Check the completed
+  // document here; the crawler checks below still require it in the head.
+  for (const path of ["/es/books", "/en/books", ...samples]) {
+    const html = load(await (await request(path, "Mozilla/5.0")).text());
+    assert.equal(html("html").attr("lang"), path.split("/")[1]);
+    assert.ok(html("main h1").text(), `${path}: missing browser page content`);
+    assert.ok(html("title").text(), `${path}: missing browser title`);
+    assert.equal(html('link[rel="canonical"]').attr("href"), `${canonicalOrigin}${path}`);
+    assert.equal(html('meta[property="og:image"]').length, 1, `${path}: browser OG image count`);
+    console.log(`PASS browser ${path}: content and completed metadata`);
+  }
+
   const path = samples[0];
   for (const agent of [
     "Googlebot",
     "WhatsApp/2.0",
     "facebookexternalhit/1.1",
     "Discordbot/2.0",
+    "TelegramBot",
     "TelegramBot (like TwitterBot)",
     "Twitterbot/1.0",
     "LinkedInBot/1.0",
@@ -205,12 +219,13 @@ async function main() {
   const missingPath = "/en/books/libra-seo-missing-book-0f7b16";
   const missingPage = await fetch(new URL(missingPath, base), { signal: AbortSignal.timeout(30_000) });
   // Cache Components may stream the shell as 200 before notFound resolves.
-  // Next.js marks this documented soft 404 with noindex; it must have no book
-  // entity or canonical. Image Route Handlers must still return a real 404.
+  // Next.js marks this documented soft 404 with noindex, which may stream for
+  // this non-bot request. It must have no book entity or canonical. Image
+  // Route Handlers must still return a real 404.
   assert.ok([200, 404].includes(missingPage.status), "Unexpected missing-page status");
   const missingHtml = load(await missingPage.text());
   assert.ok(
-    missingHtml('head meta[name="robots"]')
+    missingHtml('meta[name="robots"]')
       .toArray()
       .some((element) =>
         missingHtml(element)

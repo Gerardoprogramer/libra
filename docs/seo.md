@@ -28,7 +28,7 @@ No se modificaron la base de datos, autenticación, selección de ediciones, lec
 | `src/app/[locale]/opengraph-image.tsx`                                 | Tarjeta general traducida de Libra para inicio, catálogo y demás páginas públicas. Lee los mensajes existentes sin usar APIs de página dentro del Route Handler.                        |
 | `src/components/seo/SocialCard.tsx`                                    | Composición 1200×630 con portada, título, autores y marca; contempla títulos largos y ausencia de portada.                                                                              |
 | `src/lib/social-image.tsx`                                             | Render con `ImageResponse`, fuente local, descarga limitada de portadas R2, caché editorial, timeout y alternativa ante imágenes dañadas.                                               |
-| `next.config.ts`                                                       | Metadata en el `<head>` inicial para todos los clientes y concurrencia de prerender limitada para la conexión PostgreSQL existente.                                                     |
+| `next.config.ts`                                                       | Metadata en el `<head>` inicial para rastreadores y vistas previas; streaming para navegadores y concurrencia de prerender limitada para PostgreSQL.                                    |
 | `src/proxy.ts`                                                         | Excluye las rutas de PNG OG de la negociación de idioma/cookies; las rutas de página conservan su comportamiento.                                                                       |
 | `src/app/icon.svg`, `src/app/favicon.ico`, `src/app/apple-icon.png`    | Símbolo de libro abierto de Libra, favicon de 16/32/48 px y Apple touch icon de 180 px mediante convenciones App Router.                                                                |
 | `public/icons/libra-192.png`, `public/icons/libra-512.png`             | Iconos instalables; el de 512 px tiene margen para uso maskable.                                                                                                                        |
@@ -93,7 +93,8 @@ pnpm smoke:seo http://localhost:3000
 Los canonical conservan el dominio de producción, pero el script pide las imágenes al servidor local.
 Valida los bytes PNG, dimensiones, tamaño menor de 5 MB e imágenes diferentes, además del HTML inicial con
 User Agents de Google, WhatsApp, Facebook, Discord, Telegram, Twitter y LinkedIn. Estas peticiones simulan sus
-agentes; no son una validación efectuada por las plataformas externas.
+agentes; no son una validación efectuada por las plataformas externas. Las comprobaciones del `<head>` usan
+un User-Agent de rastreador; las de navegador verifican el documento completo, incluida la metadata en streaming.
 
 Abrir `/en/books/dracula/opengraph-image` y otra ficha publicada para revisar visualmente las tarjetas.
 Regenerar los iconos con `node scripts/generate-icons.mjs` si cambia `src/app/icon.svg`.
@@ -141,8 +142,10 @@ Estas comprobaciones no sustituyen las del dominio desplegado ni las cachés de 
 - La caché editorial mantiene su revalidación de 60 segundos y expiración de 300 segundos. Los PNG permiten
   caché CDN de 60 segundos y hasta 300 segundos adicionales mientras se revalidan. Las apps sociales tienen
   cachés independientes, por lo que una edición o retirada puede no reflejarse inmediatamente en ellas.
-- Bloquear el streaming de metadata asegura el `<head>` para cualquier cliente; en una ruta dinámica puede
-  aumentar el tiempo hasta el primer byte mientras se resuelve la metadata. Las consultas mantienen su caché.
+- La metadata bloquea únicamente para los rastreadores de HTML de Next.js 16.4 y para Googlebot/TelegramBot.
+  Los navegadores reciben metadata en streaming. No usar `htmlLimitedBots: /.*/`: con metadata dinámica provoca
+  un fallo de Instant Validation en Next.js 16.4. Véanse las pruebas en [el diagnóstico](./instant-validation.md).
+  Revisar la lista de agentes al actualizar Next.js, porque una expresión personalizada reemplaza la predeterminada.
 - El prerender se limita a dos trabajadores y dos páginas simultáneas por trabajador mediante las opciones
   experimentales de Next.js `cpus` y `staticGenerationMaxConcurrency`. El cliente PostgreSQL existente usa una
   conexión por proceso; este límite evita acumular muchas consultas durante el build en máquinas con muchos núcleos.

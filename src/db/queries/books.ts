@@ -707,6 +707,48 @@ export async function getChapterBySlug(bookSlug: string, chapterSlug: string, lo
   };
 }
 
+export async function getLocalizedChapterPath(
+  bookSlug: string,
+  chapterSlug: string,
+  fromLocale: ContentLocale,
+  toLocale: ContentLocale,
+): Promise<string | null> {
+  "use cache";
+
+  cacheLife("editorial");
+  cacheTag(`book:${bookSlug}`, "library:editorial");
+
+  const [sourceBook, targetBook] = await Promise.all([
+    getBookBySlug(bookSlug, fromLocale),
+    getBookBySlug(bookSlug, toLocale),
+  ]);
+
+  if (!sourceBook || !targetBook) {
+    return null;
+  }
+
+  const sourceChapter = sourceBook.chapters.find((chapter) => chapter.slug === chapterSlug);
+
+  if (!sourceChapter) {
+    return null;
+  }
+
+  // If both locales resolve to the same edition,
+  // the chapter slug is already valid.
+  if (sourceBook.edition.id === targetBook.edition.id) {
+    return `/books/${encodeURIComponent(bookSlug)}/${encodeURIComponent(sourceChapter.slug)}`;
+  }
+
+  // Different editions: map the chapter by its position/number.
+  const targetChapter = targetBook.chapters.find((chapter) => chapter.number === sourceChapter.number);
+
+  if (!targetChapter) {
+    return null;
+  }
+
+  return `/books/${encodeURIComponent(bookSlug)}/${encodeURIComponent(targetChapter.slug)}`;
+}
+
 export async function getAuthors(): Promise<AuthorListItem[]> {
   "use cache";
 

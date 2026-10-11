@@ -30,7 +30,7 @@
     "drizzle-orm": "^0.45.3",
     "fast-xml-parser": "^5.11.2",
     "jszip": "^3.10.2",
-    "next": "16.3.7",
+    "next": "16.4.0",
     "next-intl": "^4.14.8",
     "postgres": "^3.4.9",
     "radix-ui": "^1.6.7",

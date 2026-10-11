@@ -105,7 +105,7 @@ function isBookTitle(value: string, bookTitle: string) {
 function isByline(title: string) {
   const normalized = cleanText(title);
 
-  return normalized.length <= 100 && /^by\s+[\p{L}\p{M}.'’\-\s]+$/iu.test(normalized);
+  return normalized.length <= 100 && /^(?:by|illustrated by)\s+[\p{L}\p{M}.'’\-\s]+$/iu.test(normalized);
 }
 
 function normalizeStructuralTitle(value: string) {
@@ -144,6 +144,12 @@ function isUppercaseRomanMarker(value: string) {
   return letters.length > 0 && letters === letters.toUpperCase();
 }
 
+function isChapterMarker(value: string) {
+  const normalized = normalizeStructuralTitle(value);
+
+  return /^(?:chapter|cap[ií]tulo)\s+[ivxlcdm]+$/iu.test(normalized);
+}
+
 function isContents(title: string) {
   return /^(?:contents|table of contents|list of chapters|index|índice(?:\s+general)?|tabla de contenidos?|tabla de capítulos|tabla de capitulos|capítulos|capitulos|sumario)[\s.:]*$/iu.test(
     normalizeStructuralTitle(title),
@@ -154,8 +160,8 @@ function isPartSection(title: string) {
   const normalized = normalizeStructuralTitle(title).replace(/\s+/g, " ");
 
   return (
-    /^(?:parte|part)\s+(?:[ivxlcdm]+|\d+|[\p{L}]+)$/iu.test(normalized) ||
-    /^(?:[ivxlcdm]+|\d+|[\p{L}]+)\s+(?:parte|part)$/iu.test(normalized)
+    /^(?:parte|part)\s+(?:[ivxlcdm]+|\d+|[\p{L}]+)(?:(?:\s+|[-–—:])\S.*)?$/iu.test(normalized) ||
+    /^(?:[ivxlcdm]+|\d+|[\p{L}]+)\s+(?:parte|part)(?:(?:\s+|[-–—:])\S.*)?$/iu.test(normalized)
   );
 }
 
@@ -164,12 +170,13 @@ function isNonReading(title: string) {
     isContents(title) ||
     isByline(title) ||
     isPartSection(title) ||
+    isNonChapterSection(title) ||
     isLowercaseRomanMarker(title) ||
     /^fin de (?:la\s+)?(?:parte|novela)\b/iu.test(normalizeStructuralTitle(title)) ||
     /^(?:(?:list of )?illustrations|copyright(?: page)?|title page|colophon|credits)[\s.:]*$/iu.test(title) ||
     /^(?:the (?:full )?)?project gutenberg\b.*(?:license|ebook)/i.test(title) ||
     /\bproject gutenberg collection\b/i.test(title) ||
-    /^transcriber[’']?s?\s+notes?\b/i.test(title)
+    /^transcriber[â€™']?s?\s+notes?\b/i.test(title)
   );
 }
 
@@ -179,7 +186,7 @@ function isNonChapterSection(title: string) {
     .trim()
     .toLowerCase();
 
-  return /^(?:the\s+)?(?:introduction|preface|foreword|prologue|epilogue|afterword|etymology|extracts?|note)(?:\s*\([^)]*\))?$/.test(
+  return /^(?:the\s+)?(?:introduction|preface|foreword|prologue|epilogue|afterword|etymology|extracts?|notes?|notas?|introducción|prefacio|prólogo|epílogo)(?:\b.*)?$/iu.test(
     normalized,
   );
 }
@@ -355,7 +362,7 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
     // Chapter title
     //
     // Combine both headings into one chapter boundary.
-    if (isUppercaseRomanMarker(headingTitle)) {
+    if (isUppercaseRomanMarker(headingTitle) || isChapterMarker(headingTitle)) {
       const nextHeading = headingElements[headingIndex + 1];
 
       if (!nextHeading) {
@@ -387,6 +394,32 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
         heading: nextHeading,
         title: `${headingTitle} ${nextTitle}`,
       };
+    }
+
+    // Case 2:
+    // Chapter marker
+    // Chapter title
+    //
+    // Some EPUBs keep the chapter number and title in separate headings,
+    // while navigation points directly to the title heading.
+    if (headingIndex > 0) {
+      const previousHeading = headingElements[headingIndex - 1];
+
+      const previousTitle = headingText(document.$, previousHeading);
+      const previousPosition = positions.get(previousHeading)!;
+
+      if (
+        isChapterMarker(previousTitle) &&
+        !isNonReading(headingTitle) &&
+        !isRomanMarker(headingTitle) &&
+        !textBetween(previousPosition, position, undefined, true)
+      ) {
+        return {
+          position,
+          heading,
+          title: `${previousTitle} ${headingTitle}`,
+        };
+      }
     }
 
     // Case 2:
@@ -470,7 +503,7 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
       title = cleanHeading;
     const titlePage =
       heading &&
-      ((heading.name === "h1" && isBookTitle(cleanHeading, bookTitle)) ||
+      (isBookTitle(cleanHeading, bookTitle) ||
         $(heading).closest(".title,.title2,[epub\\:type~='titlepage']").length > 0);
     const hidden = $(target)
       .parents()
@@ -613,7 +646,7 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
       }
 
       const titlePage =
-        (effectiveHeading.name === "h1" && isBookTitle(title, bookTitle)) ||
+        isBookTitle(title, bookTitle) ||
         document.$(effectiveHeading).closest(".title,.title2,[epub\\:type~='titlepage']").length > 0;
 
       boundaries.set(position, {

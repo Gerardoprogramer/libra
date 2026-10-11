@@ -28,9 +28,11 @@ function getR2RemotePatterns() {
 }
 
 const nextConfig: NextConfig = {
-  // Keep metadata in the initial head for every preview consumer, including
-  // Telegram and clients not covered by Next.js's built-in bot list.
-  htmlLimitedBots: /.*/,
+  // Preserve Next.js 16.4's HTML-limited bots, plus Googlebot and TelegramBot.
+  // Browsers need streaming metadata: a catch-all blocks instant validation
+  // when metadata depends on searchParams or unprefetched chapter params.
+  htmlLimitedBots:
+    /[\w-]+-Google|Google-[\w-]+|Googlebot|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti|googleweblight|TelegramBot/i,
   experimental: {
     // The PostgreSQL client has one connection per worker. Keep prerendered
     // pages from queuing enough concurrent editorial queries to time out.

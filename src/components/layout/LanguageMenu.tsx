@@ -22,9 +22,47 @@ export function LanguageMenu({ locale, open, onOpenChange, trigger }: LanguageMe
   const pathname = usePathname();
   const router = useRouter();
 
-  function changeLocale(nextLocale: Locale) {
+  async function changeLocale(nextLocale: Locale) {
     if (locale === nextLocale) return;
-    router.replace(`${pathname}${window.location.search}${window.location.hash}`, { locale: nextLocale });
+
+    const segments = pathname.split("/").filter(Boolean);
+
+    const isReaderRoute = segments.length === 3 && segments[0] === "books";
+
+    if (!isReaderRoute) {
+      router.replace(`${pathname}${window.location.search}${window.location.hash}`, { locale: nextLocale });
+
+      return;
+    }
+
+    const [, bookSlug, chapterSlug] = segments;
+
+    try {
+      const params = new URLSearchParams({
+        book: bookSlug,
+        chapter: chapterSlug,
+        from: locale,
+        to: nextLocale,
+      });
+
+      const response = await fetch(`/api/reader/locale-path?${params.toString()}`, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const data: { pathname?: string } = await response.json();
+
+      if (!data.pathname) {
+        return;
+      }
+
+      router.replace(`${data.pathname}${window.location.search}${window.location.hash}`, { locale: nextLocale });
+    } catch {
+      // Keep the current page if the localized route cannot be resolved.
+    }
   }
 
   return (
