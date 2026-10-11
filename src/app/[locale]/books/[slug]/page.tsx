@@ -348,7 +348,7 @@ export default async function BookPage({ params }: BookPageProps) {
                 <p className="text-muted-foreground mt-8 max-w-2xl text-base leading-8">{book.edition.description}</p>
               )}
 
-              <div className="mt-9 flex flex-wrap gap-3">
+              <div className="mt-9 flex flex-wrap items-start gap-3">
                 {firstChapter && (
                   <BookReadingAction
                     bookSlug={book.slug}
