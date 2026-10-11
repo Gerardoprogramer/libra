@@ -95,9 +95,9 @@ export function RecentlyRead({ books, title, continueLabel, limit = 4 }: Recentl
             <Link
               key={book.slug}
               href={`/books/${book.slug}/${progress.chapterSlug}`}
-              className="group hover:border-foreground/20 flex gap-5 rounded-xl border p-4 transition hover:shadow-sm"
+              className="group hover:border-foreground/20 flex min-w-0 gap-4 rounded-xl border p-3 transition hover:shadow-sm sm:gap-5 sm:p-4"
             >
-              <div className="bg-muted relative aspect-2/3 w-20 shrink-0 overflow-hidden rounded-md">
+              <div className="bg-muted relative aspect-2/3 w-16 shrink-0 overflow-hidden rounded-md sm:w-20">
                 {book.coverUrl ? (
                   <Image src={book.coverUrl} alt="" fill sizes="80px" className="object-cover" />
                 ) : (
@@ -125,10 +125,10 @@ export function RecentlyRead({ books, title, continueLabel, limit = 4 }: Recentl
                   <div className="text-muted-foreground mt-2 flex items-center justify-between text-xs">
                     <span>{percentage}%</span>
 
-                    <span className="text-foreground flex items-center gap-1.5">
+                    <span className="text-foreground flex shrink-0 items-center gap-1.5 whitespace-nowrap">
                       {continueLabel}
 
-                      <FiArrowRight className="transition-transform group-hover:translate-x-1" />
+                      <FiArrowRight className="shrink-0 transition-transform group-hover:translate-x-1" />
                     </span>
                   </div>
                 </div>
