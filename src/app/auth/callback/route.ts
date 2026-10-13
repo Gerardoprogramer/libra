@@ -2,38 +2,27 @@ import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 
-function getSafeNext(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return "/es";
-  }
-
-  if (!/^\/(?:es|en)(?:\/|$)/.test(value)) {
-    return "/es";
-  }
-
-  return value;
-}
-
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
 
   const code = requestUrl.searchParams.get("code");
-  const next = getSafeNext(requestUrl.searchParams.get("next"));
+  const next = requestUrl.searchParams.get("next") ?? "/";
 
-  if (code) {
-    const supabase = await createClient();
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/";
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+  const locale = safeNext.match(/^\/(es|en)(?:\/|$)/)?.[1] ?? "es";
 
-    if (!error) {
-      return NextResponse.redirect(new URL(next, requestUrl.origin));
-    }
+  if (!code) {
+    return NextResponse.redirect(new URL(`/${locale}/login`, requestUrl.origin));
   }
 
-  const locale = next.startsWith("/en") ? "en" : "es";
+  const supabase = await createClient();
 
-  const errorUrl = new URL(`/${locale}/login`, requestUrl.origin);
-  errorUrl.searchParams.set("error", "auth");
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
 
-  return NextResponse.redirect(errorUrl);
+  if (error) {
+    return NextResponse.redirect(new URL(`/${locale}/login?error=auth_callback`, requestUrl.origin));
+  }
+
+  return NextResponse.redirect(new URL(safeNext, requestUrl.origin));
 }
