@@ -2,15 +2,21 @@
 
 import Image from "next/image";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { FiArrowRight, FiBookOpen } from "react-icons/fi";
 
 import { Link } from "@/i18n/navigation";
 
-import { calculateBookProgress, readAllReadingProgress, READING_PROGRESS_CHANGE_EVENT } from "@/lib/reading-progress";
+import {
+  calculateBookProgress,
+  readAllScopedReadingProgress,
+  READING_PROGRESS_CHANGE_EVENT,
+  type ReadingProgress,
+  type ReadingProgressScope,
+} from "@/lib/reading-progress";
+import { useReadingProgressScope } from "@/lib/use-reading-progress-scope";
 import { getRecentlyReadProgress } from "@/lib/reading-history";
-import type { ReadingProgress } from "@/lib/reading-progress";
 import { getCloudReadingProgressHistory, toReadingProgress } from "@/lib/reading-progress-cloud";
 
 interface BookSummary {
@@ -37,8 +43,12 @@ function subscribe(callback: () => void) {
   };
 }
 
-function getSnapshot() {
-  const entries = readAllReadingProgress() ?? [];
+function getSnapshot(scope: ReadingProgressScope | null) {
+  if (!scope) {
+    return "[]";
+  }
+
+  const entries = readAllScopedReadingProgress(scope) ?? [];
 
   // Así el snapshot siempre tiene un orden estable.
   return JSON.stringify(entries.sort());
@@ -49,12 +59,26 @@ function getServerSnapshot() {
 }
 
 export function RecentlyRead({ books, title, continueLabel, limit = 4 }: RecentlyReadProps) {
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const scope = useReadingProgressScope();
 
-  const [cloudProgress, setCloudProgress] = useState<ReadingProgress[] | null>(null);
+  const userId = scope?.type === "user" ? scope.userId : null;
+  const readProgress = useCallback(() => getSnapshot(scope), [scope]);
+
+  const snapshot = useSyncExternalStore(subscribe, readProgress, getServerSnapshot);
+
+  const [cloudProgress, setCloudProgress] = useState<{
+    userId: string;
+    items: ReadingProgress[];
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+
+    if (!userId) {
+      return () => {
+        cancelled = true;
+      };
+    }
 
     void getCloudReadingProgressHistory()
       .then((items) => {
@@ -62,7 +86,10 @@ export function RecentlyRead({ books, title, continueLabel, limit = 4 }: Recentl
           return;
         }
 
-        setCloudProgress(items?.map(toReadingProgress) ?? null);
+        setCloudProgress({
+          userId,
+          items: items?.map(toReadingProgress) ?? [],
+        });
       })
       .catch(() => {
         if (!cancelled) {
@@ -73,7 +100,7 @@ export function RecentlyRead({ books, title, continueLabel, limit = 4 }: Recentl
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [userId]);
 
   const localRecentProgress = useMemo(() => {
     let values: string[];
@@ -87,17 +114,22 @@ export function RecentlyRead({ books, title, continueLabel, limit = 4 }: Recentl
     return getRecentlyReadProgress(values, new Set(books.map((book) => book.slug)), limit);
   }, [books, limit, snapshot]);
 
-  const cloudEntries = useMemo(() => cloudProgress?.map((item) => JSON.stringify(item)) ?? [], [cloudProgress]);
+  const activeCloudProgress = cloudProgress?.userId === userId ? cloudProgress.items : null;
+
+  const cloudEntries = useMemo(
+    () => activeCloudProgress?.map((item) => JSON.stringify(item)) ?? [],
+    [activeCloudProgress],
+  );
 
   const recentProgress = useMemo(() => {
     const availableBookSlugs = new Set(books.map((book) => book.slug));
 
-    if (cloudProgress && cloudProgress.length > 0) {
+    if (activeCloudProgress && activeCloudProgress.length > 0) {
       return getRecentlyReadProgress(cloudEntries, availableBookSlugs, limit);
     }
 
     return localRecentProgress;
-  }, [books, cloudEntries, cloudProgress, limit, localRecentProgress]);
+  }, [activeCloudProgress, books, cloudEntries, limit, localRecentProgress]);
 
   const recentItems = recentProgress.flatMap((progress) => {
     const book = books.find((item) => item.slug === progress.bookSlug);

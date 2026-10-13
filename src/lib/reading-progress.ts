@@ -1,6 +1,17 @@
 export const READING_PROGRESS_PREFIX = "libra:progress:";
 export const READING_PROGRESS_CHANGE_EVENT = "libra:reading-progress-change";
 
+const SCOPED_READING_PROGRESS_PREFIX = "libra:reading-progress:v2:";
+
+export type ReadingProgressScope =
+  | {
+      type: "guest";
+    }
+  | {
+      type: "user";
+      userId: string;
+    };
+
 export interface ReadingProgress {
   bookSlug: string;
 
@@ -35,17 +46,40 @@ export interface ReadingProgress {
 
   /**
    * Total amount of chapters in the book.
-   * Optional temporarily for compatibility with old localStorage data.
    */
   totalChapters?: number;
 
   updatedAt: string;
 }
 
+/**
+ * Legacy key kept for compatibility with existing LocalStorage entries.
+ */
 export function getReadingProgressKey(bookSlug: string) {
   return `${READING_PROGRESS_PREFIX}${bookSlug}`;
 }
 
+/**
+ * Returns the prefix used by scoped LocalStorage entries.
+ */
+function getScopedReadingProgressPrefix(scope: ReadingProgressScope) {
+  if (scope.type === "guest") {
+    return `${SCOPED_READING_PROGRESS_PREFIX}guest:`;
+  }
+
+  return `${SCOPED_READING_PROGRESS_PREFIX}user:${encodeURIComponent(scope.userId)}:`;
+}
+
+/**
+ * Returns the LocalStorage key for a guest or authenticated user.
+ */
+export function getScopedReadingProgressKey(bookSlug: string, scope: ReadingProgressScope) {
+  return `${getScopedReadingProgressPrefix(scope)}${encodeURIComponent(bookSlug)}`;
+}
+
+/**
+ * Legacy LocalStorage read.
+ */
 export function readReadingProgress(bookSlug: string): string | null {
   try {
     return window.localStorage.getItem(getReadingProgressKey(bookSlug)) ?? "";
@@ -54,6 +88,20 @@ export function readReadingProgress(bookSlug: string): string | null {
   }
 }
 
+/**
+ * Scoped LocalStorage read.
+ */
+export function readScopedReadingProgress(bookSlug: string, scope: ReadingProgressScope): string | null {
+  try {
+    return window.localStorage.getItem(getScopedReadingProgressKey(bookSlug, scope)) ?? "";
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reads all legacy LocalStorage progress entries.
+ */
 export function readAllReadingProgress(): string[] | null {
   try {
     const entries: string[] = [];
@@ -79,9 +127,56 @@ export function readAllReadingProgress(): string[] | null {
   }
 }
 
+/**
+ * Reads all progress entries belonging to one guest or authenticated user.
+ */
+export function readAllScopedReadingProgress(scope: ReadingProgressScope): string[] | null {
+  try {
+    const entries: string[] = [];
+    const prefix = getScopedReadingProgressPrefix(scope);
+
+    for (let index = 0; index < window.localStorage.length; index++) {
+      const key = window.localStorage.key(index);
+
+      if (!key?.startsWith(prefix)) {
+        continue;
+      }
+
+      const value = window.localStorage.getItem(key);
+      const progress = parseReadingProgress(value);
+
+      if (value && progress && key === getScopedReadingProgressKey(progress.bookSlug, scope)) {
+        entries.push(value);
+      }
+    }
+
+    return entries;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Legacy LocalStorage write.
+ */
 export function saveReadingProgress(progress: ReadingProgress): boolean {
   try {
     window.localStorage.setItem(getReadingProgressKey(progress.bookSlug), JSON.stringify(progress));
+  } catch {
+    return false;
+  }
+
+  window.dispatchEvent(new Event(READING_PROGRESS_CHANGE_EVENT));
+
+  return true;
+}
+
+/**
+ * Scoped LocalStorage write.
+ */
+export function saveScopedReadingProgress(progress: ReadingProgress, scope: ReadingProgressScope): boolean {
+  try {
+    window.localStorage.setItem(getScopedReadingProgressKey(progress.bookSlug, scope), JSON.stringify(progress));
   } catch {
     return false;
   }

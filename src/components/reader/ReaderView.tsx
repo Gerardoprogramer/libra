@@ -12,9 +12,10 @@ import { cn } from "@/lib/utils";
 import { useReaderPreferences } from "@/hooks/useReaderPreferences";
 import {
   parseReadingProgress,
-  readReadingProgress,
-  saveReadingProgress,
+  readScopedReadingProgress,
+  saveScopedReadingProgress,
   type ReadingProgress,
+  type ReadingProgressScope,
 } from "@/lib/reading-progress";
 import {
   getAuthenticatedUserId,
@@ -189,37 +190,17 @@ export function ReaderView({
     hasRestoredProgress.current = false;
     progressStorageAvailable.current = true;
 
-    const savedSnapshot = readReadingProgress(bookSlug);
-
-    const parsedProgress = parseReadingProgress(savedSnapshot);
-
-    const localProgress = parsedProgress?.bookSlug === bookSlug ? parsedProgress : null;
-
-    const localCurrentProgress = localProgress?.chapterSlug === chapterSlug ? localProgress : null;
-
-    effectiveProgress = localCurrentProgress;
-
-    const progressStorageBlocked = savedSnapshot === null;
-
-    if (progressStorageBlocked) {
-      progressStorageAvailable.current = false;
-    }
-
-    setProgress(localCurrentProgress?.percentage ?? 0);
-
-    lastSavedProgress.current = localCurrentProgress
-      ? {
-          percentage: localCurrentProgress.percentage,
-          paragraphIndex: localCurrentProgress.paragraphIndex ?? 0,
-        }
-      : null;
+    let localProgress: ReadingProgress | null = null;
+    let localCurrentProgress: ReadingProgress | null = null;
+    let progressStorageBlocked = false;
+    let readingProgressScope: ReadingProgressScope | null = null;
 
     const persistLocalProgress = (readingProgress: ReadingProgress) => {
-      if (!progressStorageAvailable.current) {
+      if (!progressStorageAvailable.current || !readingProgressScope) {
         return false;
       }
 
-      if (!saveReadingProgress(readingProgress)) {
+      if (!saveScopedReadingProgress(readingProgress, readingProgressScope)) {
         progressStorageAvailable.current = false;
         setStorageError(true);
 
@@ -482,6 +463,43 @@ export function ReaderView({
       try {
         const userId = await getAuthenticatedUserId();
 
+        const scope: ReadingProgressScope = userId
+          ? {
+              type: "user",
+              userId,
+            }
+          : {
+              type: "guest",
+            };
+
+        readingProgressScope = scope;
+
+        const savedSnapshot = readScopedReadingProgress(bookSlug, scope);
+
+        const parsedProgress = parseReadingProgress(savedSnapshot);
+
+        localProgress = parsedProgress?.bookSlug === bookSlug ? parsedProgress : null;
+
+        localCurrentProgress = localProgress?.chapterSlug === chapterSlug ? localProgress : null;
+
+        effectiveProgress = localCurrentProgress;
+
+        progressStorageBlocked = savedSnapshot === null;
+
+        if (progressStorageBlocked) {
+          progressStorageAvailable.current = false;
+        }
+
+        setProgress(localCurrentProgress?.percentage ?? 0);
+
+        lastSavedProgress.current = localCurrentProgress
+          ? {
+              percentage: localCurrentProgress.percentage,
+              paragraphIndex: localCurrentProgress.paragraphIndex ?? 0,
+            }
+          : null;
+
+        // Anonymous users use only their guest LocalStorage space.
         if (!userId) {
           restoreProgress();
           return;
@@ -491,27 +509,15 @@ export function ReaderView({
 
         const cloudProgress = await getCloudReadingProgress(editionId, userId);
 
+        /*
+         * Cloud is authoritative for authenticated users.
+         *
+         * If there is no cloud progress, do not automatically upload
+         * local progress. This prevents old/foreign local data from
+         * being attributed to a newly authenticated account.
+         */
         if (!cloudProgress) {
-          if (localProgress) {
-            const cloudInput = buildCloudInput(localProgress);
-
-            if (cloudInput) {
-              const savedCloud = await saveCloudReadingProgress(cloudInput);
-
-              if (localCurrentProgress && !disposed) {
-                effectiveProgress = {
-                  ...localCurrentProgress,
-                  editionId,
-                  chapterId: cloudInput.chapterId,
-                  paragraphIndex: cloudInput.paragraphIndex,
-                  percentage: cloudInput.percentage,
-                  updatedAt: savedCloud.updated_at,
-                };
-
-                persistLocalProgress(effectiveProgress);
-              }
-            }
-          }
+          effectiveProgress = null;
         } else {
           const localIsUsable =
             localProgress !== null && (!localProgress.editionId || localProgress.editionId === editionId);
@@ -521,6 +527,7 @@ export function ReaderView({
           const cloudUpdatedAt = Date.parse(cloudProgress.updated_at);
 
           if (
+            localProgress &&
             localIsUsable &&
             Number.isFinite(localUpdatedAt) &&
             Number.isFinite(cloudUpdatedAt) &&
@@ -543,16 +550,21 @@ export function ReaderView({
 
                 persistLocalProgress(effectiveProgress);
               }
-            } else if (cloudProgress.chapter_id === chapterId) {
-              effectiveProgress = createLocalProgressFromCloud(cloudProgress);
-
-              persistLocalProgress(effectiveProgress);
             }
           } else if (cloudProgress.chapter_id === chapterId) {
+            /*
+             * Cloud progress belongs to the chapter currently open.
+             * Restore it into the scoped local cache.
+             */
             effectiveProgress = createLocalProgressFromCloud(cloudProgress);
 
             persistLocalProgress(effectiveProgress);
           } else {
+            /*
+             * Cloud progress belongs to another chapter.
+             * Navigate to that chapter instead of interpreting its
+             * percentage inside the current chapter.
+             */
             const resumeChapter = chapterRoutes.find((chapter) => chapter.id === cloudProgress.chapter_id);
 
             if (resumeChapter && resumeChapter.slug !== chapterSlug && !disposed) {

@@ -7,11 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import {
   calculateBookProgress,
-  getReadingProgressKey,
+  getScopedReadingProgressKey,
   parseReadingProgress,
-  readReadingProgress,
+  readScopedReadingProgress,
   READING_PROGRESS_CHANGE_EVENT,
+  type ReadingProgressScope,
 } from "@/lib/reading-progress";
+
+import { useReadingProgressScope } from "@/lib/use-reading-progress-scope";
 
 interface BookReadingActionProps {
   bookSlug: string;
@@ -23,9 +26,13 @@ interface BookReadingActionProps {
   progressLabel: string;
 }
 
-function subscribe(bookSlug: string, callback: () => void) {
+function subscribe(bookSlug: string, scope: ReadingProgressScope | null, callback: () => void) {
+  if (!scope) {
+    return () => {};
+  }
+
   const handleStorage = (event: StorageEvent) => {
-    if (event.key === getReadingProgressKey(bookSlug) || event.key === null) {
+    if (event.key === getScopedReadingProgressKey(bookSlug, scope) || event.key === null) {
       callback();
     }
   };
@@ -39,8 +46,12 @@ function subscribe(bookSlug: string, callback: () => void) {
   };
 }
 
-function getProgressSnapshot(bookSlug: string) {
-  return readReadingProgress(bookSlug) ?? "";
+function getProgressSnapshot(bookSlug: string, scope: ReadingProgressScope | null) {
+  if (!scope) {
+    return "";
+  }
+
+  return readScopedReadingProgress(bookSlug, scope) ?? "";
 }
 
 function getServerSnapshot() {
@@ -56,9 +67,13 @@ export function BookReadingAction({
   readAgainLabel,
   progressLabel,
 }: BookReadingActionProps) {
-  const subscribeToProgress = useCallback((callback: () => void) => subscribe(bookSlug, callback), [bookSlug]);
+  const scope = useReadingProgressScope();
+  const subscribeToProgress = useCallback(
+    (callback: () => void) => subscribe(bookSlug, scope, callback),
+    [bookSlug, scope],
+  );
 
-  const readProgress = useCallback(() => getProgressSnapshot(bookSlug), [bookSlug]);
+  const readProgress = useCallback(() => getProgressSnapshot(bookSlug, scope), [bookSlug, scope]);
 
   const snapshot = useSyncExternalStore(subscribeToProgress, readProgress, getServerSnapshot);
 

@@ -11,10 +11,12 @@ import { Link } from "@/i18n/navigation";
 import {
   calculateBookProgress,
   parseReadingProgress,
-  readAllReadingProgress,
+  readAllScopedReadingProgress,
   READING_PROGRESS_CHANGE_EVENT,
   type ReadingProgress,
+  type ReadingProgressScope,
 } from "@/lib/reading-progress";
+import { useReadingProgressScope } from "@/lib/use-reading-progress-scope";
 import { getLatestReadingProgress } from "@/lib/reading-history";
 import { getCloudReadingProgressHistory, toReadingProgress } from "@/lib/reading-progress-cloud";
 
@@ -43,14 +45,19 @@ function subscribe(callback: () => void) {
   };
 }
 
-function getProgressSnapshot(bookSlugs: ReadonlySet<string>): string | null {
-  const entries = readAllReadingProgress();
+function getProgressSnapshot(bookSlugs: ReadonlySet<string>, scope: ReadingProgressScope | null): string | null {
+  if (!scope) {
+    return "";
+  }
+
+  const entries = readAllScopedReadingProgress(scope);
 
   if (!entries) {
     return null;
   }
 
   const progress = getLatestReadingProgress(entries, bookSlugs);
+
   return progress ? JSON.stringify(progress) : "";
 }
 
@@ -66,14 +73,26 @@ export function ContinueReading({
   storageUnavailableLabel,
 }: ContinueReadingProps) {
   const bookSlugs = useMemo(() => new Set(books.map((book) => book.slug)), [books]);
+  const scope = useReadingProgressScope();
+
+  const userId = scope?.type === "user" ? scope.userId : null;
   const subscribeToProgress = useCallback((callback: () => void) => subscribe(callback), []);
-  const readProgress = useCallback(() => getProgressSnapshot(bookSlugs), [bookSlugs]);
+  const readProgress = useCallback(() => getProgressSnapshot(bookSlugs, scope), [bookSlugs, scope]);
   const snapshot = useSyncExternalStore(subscribeToProgress, readProgress, getServerSnapshot);
 
-  const [cloudProgress, setCloudProgress] = useState<ReadingProgress[] | null>(null);
+  const [cloudProgress, setCloudProgress] = useState<{
+    userId: string;
+    items: ReadingProgress[];
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+
+    if (!userId) {
+      return () => {
+        cancelled = true;
+      };
+    }
 
     void getCloudReadingProgressHistory()
       .then((items) => {
@@ -81,7 +100,10 @@ export function ContinueReading({
           return;
         }
 
-        setCloudProgress(items?.map(toReadingProgress) ?? null);
+        setCloudProgress({
+          userId,
+          items: items?.map(toReadingProgress) ?? [],
+        });
       })
       .catch(() => {
         if (!cancelled) {
@@ -92,19 +114,24 @@ export function ContinueReading({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [userId]);
 
   const localProgress = useMemo<ReadingProgress | null>(() => parseReadingProgress(snapshot), [snapshot]);
 
-  const cloudEntries = useMemo(() => cloudProgress?.map((item) => JSON.stringify(item)) ?? [], [cloudProgress]);
+  const activeCloudProgress = cloudProgress?.userId === userId ? cloudProgress.items : null;
+
+  const cloudEntries = useMemo(
+    () => activeCloudProgress?.map((item) => JSON.stringify(item)) ?? [],
+    [activeCloudProgress],
+  );
 
   const cloudLatestProgress = useMemo(() => {
-    if (!cloudProgress || cloudProgress.length === 0) {
+    if (!activeCloudProgress || activeCloudProgress.length === 0) {
       return null;
     }
 
     return getLatestReadingProgress(cloudEntries, bookSlugs);
-  }, [bookSlugs, cloudEntries, cloudProgress]);
+  }, [activeCloudProgress, bookSlugs, cloudEntries]);
 
   const progress = cloudLatestProgress ?? localProgress;
 
