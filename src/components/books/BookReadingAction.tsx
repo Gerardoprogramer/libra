@@ -1,23 +1,15 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
 import { FiBookOpen } from "react-icons/fi";
 
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
-import {
-  calculateBookProgress,
-  getScopedReadingProgressKey,
-  parseReadingProgress,
-  readScopedReadingProgress,
-  READING_PROGRESS_CHANGE_EVENT,
-  type ReadingProgressScope,
-} from "@/lib/reading-progress";
-
-import { useReadingProgressScope } from "@/lib/use-reading-progress-scope";
+import { calculateBookProgress, readingProgressHref } from "@/lib/reading-progress";
+import { useReadingHistory } from "@/lib/use-reading-history";
 
 interface BookReadingActionProps {
   bookSlug: string;
+  editionId: string;
   chapterSlugs: string[];
   firstChapterSlug: string;
   startLabel: string;
@@ -26,40 +18,9 @@ interface BookReadingActionProps {
   progressLabel: string;
 }
 
-function subscribe(bookSlug: string, scope: ReadingProgressScope | null, callback: () => void) {
-  if (!scope) {
-    return () => {};
-  }
-
-  const handleStorage = (event: StorageEvent) => {
-    if (event.key === getScopedReadingProgressKey(bookSlug, scope) || event.key === null) {
-      callback();
-    }
-  };
-
-  window.addEventListener("storage", handleStorage);
-  window.addEventListener(READING_PROGRESS_CHANGE_EVENT, callback);
-
-  return () => {
-    window.removeEventListener("storage", handleStorage);
-    window.removeEventListener(READING_PROGRESS_CHANGE_EVENT, callback);
-  };
-}
-
-function getProgressSnapshot(bookSlug: string, scope: ReadingProgressScope | null) {
-  if (!scope) {
-    return "";
-  }
-
-  return readScopedReadingProgress(bookSlug, scope) ?? "";
-}
-
-function getServerSnapshot() {
-  return "";
-}
-
 export function BookReadingAction({
   bookSlug,
+  editionId,
   chapterSlugs,
   firstChapterSlug,
   startLabel,
@@ -67,18 +28,8 @@ export function BookReadingAction({
   readAgainLabel,
   progressLabel,
 }: BookReadingActionProps) {
-  const scope = useReadingProgressScope();
-  const subscribeToProgress = useCallback(
-    (callback: () => void) => subscribe(bookSlug, scope, callback),
-    [bookSlug, scope],
-  );
-
-  const readProgress = useCallback(() => getProgressSnapshot(bookSlug, scope), [bookSlug, scope]);
-
-  const snapshot = useSyncExternalStore(subscribeToProgress, readProgress, getServerSnapshot);
-
-  const parsedProgress = parseReadingProgress(snapshot);
-  const progress = parsedProgress?.bookSlug === bookSlug ? parsedProgress : null;
+  const { entries } = useReadingHistory(editionId);
+  const progress = entries.find((item) => item.bookSlug === bookSlug && item.editionId === editionId) ?? null;
 
   const hasValidProgress = progress !== null && chapterSlugs.includes(progress.chapterSlug);
 
@@ -97,7 +48,7 @@ export function BookReadingAction({
   return (
     <div className="min-h-20 min-w-0">
       <Button size="lg" asChild>
-        <Link href={`/books/${bookSlug}/${chapterSlug}`}>
+        <Link href={readingProgressHref({ bookSlug, editionId, chapterSlug })}>
           <FiBookOpen aria-hidden="true" />
           <span className="grid">
             <span className="col-start-1 row-start-1">{label}</span>

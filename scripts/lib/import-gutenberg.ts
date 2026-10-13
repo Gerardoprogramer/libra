@@ -1,11 +1,13 @@
 import fs from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
-import { authors, bookAuthors, books, chapters, editions } from "../../src/db/schema";
+import { authors, bookAuthors, books, chapters, editions, readingProgress } from "../../src/db/schema";
 
+import { planChapterReimport, remapParagraphIndex } from "./reimport-chapters";
 import { parseEpub } from "./parse-epub";
 import { uploadCover } from "./r2";
 import { revalidateEditorialCache } from "./revalidate-cache";
@@ -146,6 +148,7 @@ export async function importGutenbergBook({
      * DATABASE
      */
     await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`Project Gutenberg:${gutenbergId}`}, 0))`);
       /*
        * BOOK
        */
@@ -225,25 +228,16 @@ export async function importGutenbergBook({
         }
       }
 
-      /*
-       * DELETE DEVELOPMENT SEED
-       *
-       * If Frankenstein/another book was
-       * previously created by our seed,
-       * remove that fake edition.
-       *
-       * Chapters disappear automatically
-       * because of ON DELETE CASCADE.
-       */
-      const developmentEditions = await tx
-        .select({
-          id: editions.id,
-        })
+      // Other editions are never deleted as a side effect of an import.
+      const [sourceEdition] = await tx
+        .select({ bookId: editions.bookId })
         .from(editions)
-        .where(and(eq(editions.bookId, book.id), eq(editions.sourceName, "Development seed")));
-
-      for (const developmentEdition of developmentEditions) {
-        await tx.delete(editions).where(eq(editions.id, developmentEdition.id));
+        .where(and(eq(editions.sourceName, "Project Gutenberg"), eq(editions.sourceIdentifier, gutenbergId)))
+        .limit(1);
+      if (sourceEdition && sourceEdition.bookId !== book.id) {
+        throw new Error(
+          "This Gutenberg source already belongs to another book; reparenting requires an explicit migration.",
+        );
       }
 
       /*
@@ -323,38 +317,48 @@ export async function importGutenbergBook({
         throw new Error("Could not create or update edition");
       }
 
-      /*
-       * CHAPTERS
-       *
-       * Re-importing replaces the chapter
-       * contents completely.
-       */
-      await tx.delete(chapters).where(eq(chapters.editionId, edition.id));
+      // Lock chapter/progress rows while reconciling identities. RESTRICT also
+      // protects references created concurrently with an import.
+      const existingChapters = await tx.select().from(chapters).where(eq(chapters.editionId, edition.id)).for("update");
+      const savedPositions = await tx
+        .select()
+        .from(readingProgress)
+        .where(eq(readingProgress.editionId, edition.id))
+        .for("update");
+      const plan = planChapterReimport(
+        existingChapters,
+        epub.chapters,
+        new Set(savedPositions.map((position) => position.chapterId)),
+      );
 
-      const chapterRows = epub.chapters.map((chapter) => ({
-        editionId: edition.id,
-
-        number: chapter.number,
-
-        slug: chapter.slug,
-
-        title: chapter.title,
-
-        content: chapter.content,
-
-        wordCount: chapter.wordCount,
-      }));
-
-      /*
-       * Insert in batches in case we later
-       * import very large books.
-       */
-      const batchSize = 50;
-
-      for (let index = 0; index < chapterRows.length; index += batchSize) {
-        const batch = chapterRows.slice(index, index + batchSize);
-
-        await tx.insert(chapters).values(batch);
+      // Vacate unique slugs/numbers without deleting UUIDs or their FK targets.
+      const temporaryPrefix = randomUUID();
+      for (const [index, chapter] of existingChapters.entries()) {
+        await tx
+          .update(chapters)
+          .set({ slug: "__import_" + temporaryPrefix + "_" + index, number: -(index + 1) })
+          .where(eq(chapters.id, chapter.id));
+      }
+      if (plan.removedIds.length) await tx.delete(chapters).where(inArray(chapters.id, plan.removedIds));
+      for (const { existing, ...chapter } of plan.chapters) {
+        if (existing) {
+          await tx
+            .update(chapters)
+            .set({ ...chapter, updatedAt: new Date() })
+            .where(eq(chapters.id, existing.id));
+          if (existing.content !== chapter.content) {
+            for (const saved of savedPositions.filter((position) => position.chapterId === existing.id)) {
+              await tx
+                .update(readingProgress)
+                .set({
+                  paragraphIndex: remapParagraphIndex(existing.content, chapter.content, saved.paragraphIndex),
+                })
+                .where(eq(readingProgress.id, saved.id));
+            }
+          }
+        } else {
+          await tx.insert(chapters).values({ ...chapter, editionId: edition.id });
+        }
       }
 
       console.log("");
@@ -364,7 +368,7 @@ export async function importGutenbergBook({
 
       console.log(`Edition ID: ${edition.id}`);
 
-      console.log(`Chapters imported: ${chapterRows.length}`);
+      console.log(`Chapters imported: ${plan.chapters.length}`);
 
       console.log(`Cover URL: ${edition.coverUrl ?? "None"}`);
 

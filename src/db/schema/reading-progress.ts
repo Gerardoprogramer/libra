@@ -63,7 +63,9 @@ export const readingProgress = pgTable(
       columns: [table.editionId, table.chapterId],
       foreignColumns: [chapters.editionId, chapters.id],
       name: "reading_progress_edition_chapter_fk",
-    }).onDelete("cascade"),
+    }).onDelete("restrict"),
+
+    index("reading_progress_edition_chapter_idx").on(table.editionId, table.chapterId),
 
     /**
      * One current reading position per user and edition.

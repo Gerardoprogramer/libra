@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
+import { safeAuthRedirect } from "@/lib/auth-redirect";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
 
   const code = requestUrl.searchParams.get("code");
-  const next = requestUrl.searchParams.get("next") ?? "/";
-
-  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/";
-
-  const locale = safeNext.match(/^\/(es|en)(?:\/|$)/)?.[1] ?? "es";
+  const destination = safeAuthRedirect(requestUrl.searchParams.get("next"), requestUrl.origin);
+  const locale = destination.pathname.split("/")[1];
 
   if (!code) {
     return NextResponse.redirect(new URL(`/${locale}/login`, requestUrl.origin));
@@ -24,5 +22,5 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL(`/${locale}/login?error=auth_callback`, requestUrl.origin));
   }
 
-  return NextResponse.redirect(new URL(safeNext, requestUrl.origin));
+  return NextResponse.redirect(destination);
 }

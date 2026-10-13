@@ -4,8 +4,14 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { books, chapters, editions, readingProgress } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
+import { getPublicEditionVisibilityCondition } from "@/db/queries/editorial-visibility";
+import { parseReadingProgressInput } from "@/lib/reading-progress-input";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const editionId = new URL(request.url).searchParams.get("edition");
+  if (editionId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(editionId)) {
+    return NextResponse.json({ error: "Invalid edition." }, { status: 400, headers: { "Cache-Control": "no-store" } });
+  }
   const supabase = await createClient();
 
   const { data, error: claimsError } = await supabase.auth.getClaims();
@@ -64,7 +70,13 @@ export async function GET() {
         chapters,
         and(eq(readingProgress.chapterId, chapters.id), eq(readingProgress.editionId, chapters.editionId)),
       )
-      .where(eq(readingProgress.userId, userId))
+      .where(
+        and(
+          eq(readingProgress.userId, userId),
+          editionId ? eq(readingProgress.editionId, editionId) : undefined,
+          getPublicEditionVisibilityCondition(),
+        ),
+      )
       .orderBy(desc(readingProgress.updatedAt))
       .limit(50);
 
@@ -81,5 +93,67 @@ export async function GET() {
     response.headers.set("Cache-Control", "no-store");
 
     return response;
+  }
+}
+
+export async function POST(request: Request) {
+  const reply = (body: object, status = 200) =>
+    NextResponse.json(body, {
+      status,
+      headers: { "Cache-Control": "no-store" },
+    });
+  if (request.headers.get("origin") !== new URL(request.url).origin) {
+    return reply({ error: "Invalid origin." }, 403);
+  }
+  if (!request.headers.get("content-type")?.startsWith("application/json")) {
+    return reply({ error: "Invalid content type." }, 415);
+  }
+  let input;
+  try {
+    const body = await request.text();
+    if (body.length > 4096) return reply({ error: "Payload too large." }, 413);
+    input = parseReadingProgressInput(JSON.parse(body));
+  } catch {
+    return reply({ error: "Invalid progress." }, 400);
+  }
+  if (!input) return reply({ error: "Invalid progress." }, 400);
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getClaims();
+  if (error || typeof data?.claims?.sub !== "string") return reply({ error: "Unauthorized." }, 401);
+  if (data.claims.sub !== input.userId) return reply({ error: "Session changed." }, 403);
+
+  try {
+    const [chapter] = await db
+      .select({ id: chapters.id })
+      .from(chapters)
+      .innerJoin(editions, eq(editions.id, chapters.editionId))
+      .where(
+        and(
+          eq(chapters.id, input.chapterId),
+          eq(chapters.editionId, input.editionId),
+          getPublicEditionVisibilityCondition(),
+        ),
+      )
+      .limit(1);
+    if (!chapter) return reply({ error: "Chapter unavailable." }, 404);
+    const updatedAt = new Date(input.updatedAt);
+    const rows = await db
+      .insert(readingProgress)
+      .values({ ...input, updatedAt })
+      .onConflictDoUpdate({
+        target: [readingProgress.userId, readingProgress.editionId],
+        set: {
+          chapterId: input.chapterId,
+          paragraphIndex: input.paragraphIndex,
+          percentage: input.percentage,
+          updatedAt,
+        },
+        // Atomic even when network responses arrive in reverse order.
+        setWhere: sql`${readingProgress.updatedAt} <= ${updatedAt.toISOString()}::timestamptz`,
+      })
+      .returning({ id: readingProgress.id });
+    return reply({ accepted: rows.length > 0 });
+  } catch {
+    return reply({ error: "Failed to save reading progress." }, 500);
   }
 }

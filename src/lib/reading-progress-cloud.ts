@@ -48,6 +48,7 @@ export function toReadingProgress(item: CloudReadingProgressHistoryItem): Readin
   return {
     bookSlug: item.bookSlug,
     editionId: item.editionId,
+    contentLanguage: item.contentLanguage,
     chapterSlug: item.chapterSlug,
     chapterId: item.chapterId,
     chapterTitle: item.chapterTitle,
@@ -61,21 +62,6 @@ export function toReadingProgress(item: CloudReadingProgressHistoryItem): Readin
 }
 
 const READING_PROGRESS_COLUMNS = "id,user_id,edition_id,chapter_id,paragraph_index,percentage,created_at,updated_at";
-
-export async function getAuthenticatedUserId(): Promise<string | null> {
-  const supabase = createClient();
-
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) {
-    throw error;
-  }
-
-  return session?.user.id ?? null;
-}
 
 export async function getCloudReadingProgress(editionId: string, userId: string): Promise<CloudReadingProgress | null> {
   const supabase = createClient();
@@ -94,42 +80,27 @@ export async function getCloudReadingProgress(editionId: string, userId: string)
   return data as CloudReadingProgress | null;
 }
 
-export async function saveCloudReadingProgress(input: SaveCloudReadingProgressInput): Promise<CloudReadingProgress> {
-  const supabase = createClient();
-
-  const userId = await getAuthenticatedUserId();
-
-  if (!userId) {
-    throw new Error("No authenticated user.");
-  }
-
-  const { data, error } = await supabase
-    .from("reading_progress")
-    .upsert(
-      {
-        user_id: userId,
-        edition_id: input.editionId,
-        chapter_id: input.chapterId,
-        paragraph_index: input.paragraphIndex,
-        percentage: input.percentage,
-        updated_at: input.updatedAt,
-      },
-      {
-        onConflict: "user_id,edition_id",
-      },
-    )
-    .select(READING_PROGRESS_COLUMNS)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  return data as CloudReadingProgress;
+export async function saveCloudReadingProgress(input: SaveCloudReadingProgressInput, userId: string): Promise<boolean> {
+  // Capture the owner when reading, never substitute whichever account happens
+  // to be logged in when an asynchronous save finishes.
+  const response = await fetch("/api/reading-progress", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...input, userId }),
+    keepalive: true,
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error("Failed to save reading progress.");
+  const payload: { accepted: boolean } = await response.json();
+  return payload.accepted;
 }
 
-export async function getCloudReadingProgressHistory(): Promise<CloudReadingProgressHistoryItem[] | null> {
-  const response = await fetch("/api/reading-progress", {
+export async function getCloudReadingProgressHistory(
+  userId: string,
+  editionId?: string,
+): Promise<CloudReadingProgressHistoryItem[] | null> {
+  const url = editionId ? `/api/reading-progress?edition=${encodeURIComponent(editionId)}` : "/api/reading-progress";
+  const response = await fetch(url, {
     method: "GET",
     cache: "no-store",
   });
@@ -156,5 +127,6 @@ export async function getCloudReadingProgressHistory(): Promise<CloudReadingProg
     throw new Error(payload.error ?? "Failed to retrieve reading progress.");
   }
 
-  return Array.isArray(payload.progress) ? payload.progress : [];
+  // A cookie may have changed while the request was starting.
+  return Array.isArray(payload.progress) ? payload.progress.filter((item) => item.userId === userId) : [];
 }

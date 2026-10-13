@@ -186,7 +186,7 @@ function isNonChapterSection(title: string) {
     .trim()
     .toLowerCase();
 
-  return /^(?:the\s+)?(?:introduction|preface|foreword|prologue|epilogue|afterword|etymology|extracts?|notes?|notas?|introducción|prefacio|prólogo|epílogo)(?:\b.*)?$/iu.test(
+  return /^(?:the\s+)?(?:introduction|preface|foreword|afterword|etymology|extracts?|notes?|notas?|introducción|prefacio)(?:\b.*)?$/iu.test(
     normalized,
   );
 }

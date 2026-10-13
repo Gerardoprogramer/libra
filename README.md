@@ -121,4 +121,28 @@ production catalog.
 - `/[locale]/categories`: category index
 - `/[locale]/library`: browser-local saved books
 
-Favorites, reading progress and reader preferences are stored in the user's browser; they are not account data.
+Favorites and reader preferences remain browser-local. Reading progress is local for guests and persistent in
+`reading_progress` for authenticated users, with a separate local cache/outbox per account and edition. Unscoped
+legacy keys are never automatically assigned or uploaded to an account. Resume links include `?edition=<uuid>`;
+the chapter URL is an explicit navigation choice and background synchronization cannot redirect it.
+
+Apply `0007_preserve_reading_progress` on a tested database copy before deploying the updated importer. It changes
+the chapter reference to `ON DELETE RESTRICT`, adds the FK lookup index, makes authenticated grants explicit and
+rejects updates older than the stored position. User deletion still cascades through the user FK. This migration
+does not create another progress table or discard existing rows.
+
+Reimports reconcile existing chapter UUIDs by unique content, then unique unchanged titles/slugs; chapter numbers
+are not identities. Removing or ambiguously matching a chapter with saved progress aborts the transaction and
+requires an explicit editorial mapping. Unchanged paragraphs retain their position; rewritten paragraphs use a
+bounded relative position inside the same matched chapter. Importing one source does not remove other editions.
+Narrative prologues and epilogues are retained.
+
+The outbox flushes on unmount, page hide and visibility changes, using keepalive requests, and replays only for its
+owner on a later visit or reconnect. An offline browser still needs a future successful connection to persist to
+cloud; deleting its local storage before that connection removes unsent changes.
+
+`node scripts/test-reader-browser.mjs` mounts the real React reader/history components in a temporary headless
+browser with controlled router and Supabase adapters. Set `LIBRA_TEST_BROWSER` to a Chromium executable when Edge
+is unavailable. It checks one-click Next/Previous, guest reading, stale responses and account changes without a
+refresh. `--baseline` loads `ReaderView` from Git HEAD to reproduce the original redirect regression while these
+fixes remain uncommitted. These tests do not exercise production OAuth or write to PostgreSQL/R2.

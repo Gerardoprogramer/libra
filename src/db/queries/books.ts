@@ -458,7 +458,11 @@ export async function getCategories(locale: ContentLocale): Promise<CategoryList
     .sort((first, second) => first.name.localeCompare(second.name));
 }
 
-export async function getBookBySlug(slug: string, locale: ContentLocale): Promise<BookDetails | null> {
+export async function getBookBySlug(
+  slug: string,
+  locale: ContentLocale,
+  editionId?: string,
+): Promise<BookDetails | null> {
   "use cache";
 
   cacheLife("editorial");
@@ -547,7 +551,7 @@ export async function getBookBySlug(slug: string, locale: ContentLocale): Promis
       ),
     );
 
-  const edition = chooseEdition(editionRows, locale);
+  const edition = editionId ? editionRows.find((item) => item.id === editionId) : chooseEdition(editionRows, locale);
 
   if (!edition) {
     return null;
@@ -652,14 +656,19 @@ export async function getBookBySlug(slug: string, locale: ContentLocale): Promis
   };
 }
 
-export async function getChapterBySlug(bookSlug: string, chapterSlug: string, locale: ContentLocale) {
+export async function getChapterBySlug(
+  bookSlug: string,
+  chapterSlug: string,
+  locale: ContentLocale,
+  editionId?: string,
+) {
   "use cache";
 
   cacheLife("editorial");
 
   cacheTag(`book:${bookSlug}`, `chapter:${bookSlug}:${chapterSlug}`, "library:editorial");
 
-  const book = await getBookBySlug(bookSlug, locale);
+  const book = await getBookBySlug(bookSlug, locale, editionId);
 
   if (!book) {
     return null;
@@ -712,6 +721,7 @@ export async function getLocalizedChapterPath(
   chapterSlug: string,
   fromLocale: ContentLocale,
   toLocale: ContentLocale,
+  fromEditionId?: string,
 ): Promise<string | null> {
   "use cache";
 
@@ -719,7 +729,7 @@ export async function getLocalizedChapterPath(
   cacheTag(`book:${bookSlug}`, "library:editorial");
 
   const [sourceBook, targetBook] = await Promise.all([
-    getBookBySlug(bookSlug, fromLocale),
+    getBookBySlug(bookSlug, fromLocale, fromEditionId),
     getBookBySlug(bookSlug, toLocale),
   ]);
 

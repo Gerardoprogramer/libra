@@ -352,6 +352,7 @@ export default async function BookPage({ params }: BookPageProps) {
                 {firstChapter && (
                   <BookReadingAction
                     bookSlug={book.slug}
+                    editionId={book.edition.id}
                     chapterSlugs={book.chapters.map((chapter) => chapter.slug)}
                     firstChapterSlug={firstChapter.slug}
                     startLabel={t("startReading")}

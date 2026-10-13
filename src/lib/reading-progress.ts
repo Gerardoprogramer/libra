@@ -20,6 +20,9 @@ export interface ReadingProgress {
    * Optional for compatibility with existing LocalStorage entries.
    */
   editionId?: string;
+  contentLanguage?: string;
+  /** Only new, explicitly scoped reader writes can enter the outbox. */
+  pendingSync?: boolean;
   chapterSlug: string;
   chapterId?: string;
 
@@ -73,8 +76,9 @@ function getScopedReadingProgressPrefix(scope: ReadingProgressScope) {
 /**
  * Returns the LocalStorage key for a guest or authenticated user.
  */
-export function getScopedReadingProgressKey(bookSlug: string, scope: ReadingProgressScope) {
-  return `${getScopedReadingProgressPrefix(scope)}${encodeURIComponent(bookSlug)}`;
+export function getScopedReadingProgressKey(bookSlug: string, scope: ReadingProgressScope, editionId?: string) {
+  const bookKey = `${getScopedReadingProgressPrefix(scope)}${encodeURIComponent(bookSlug)}`;
+  return editionId ? `${bookKey}:edition:${encodeURIComponent(editionId)}` : bookKey;
 }
 
 /**
@@ -91,9 +95,17 @@ export function readReadingProgress(bookSlug: string): string | null {
 /**
  * Scoped LocalStorage read.
  */
-export function readScopedReadingProgress(bookSlug: string, scope: ReadingProgressScope): string | null {
+export function readScopedReadingProgress(
+  bookSlug: string,
+  scope: ReadingProgressScope,
+  editionId?: string,
+): string | null {
   try {
-    return window.localStorage.getItem(getScopedReadingProgressKey(bookSlug, scope)) ?? "";
+    const current = window.localStorage.getItem(getScopedReadingProgressKey(bookSlug, scope, editionId));
+    if (current || !editionId) return current ?? "";
+    // The previous scoped format is a cache, never an upload candidate.
+    const previous = parseReadingProgress(window.localStorage.getItem(getScopedReadingProgressKey(bookSlug, scope)));
+    return previous?.editionId === editionId ? JSON.stringify({ ...previous, pendingSync: false }) : "";
   } catch {
     return null;
   }
@@ -145,8 +157,15 @@ export function readAllScopedReadingProgress(scope: ReadingProgressScope): strin
       const value = window.localStorage.getItem(key);
       const progress = parseReadingProgress(value);
 
-      if (value && progress && key === getScopedReadingProgressKey(progress.bookSlug, scope)) {
-        entries.push(value);
+      if (value && progress) {
+        if (key === getScopedReadingProgressKey(progress.bookSlug, scope, progress.editionId)) {
+          entries.push(value);
+        } else if (key === getScopedReadingProgressKey(progress.bookSlug, scope)) {
+          const editionKey = getScopedReadingProgressKey(progress.bookSlug, scope, progress.editionId);
+          if (!progress.editionId || !window.localStorage.getItem(editionKey)) {
+            entries.push(JSON.stringify({ ...progress, pendingSync: false }));
+          }
+        }
       }
     }
 
@@ -176,7 +195,10 @@ export function saveReadingProgress(progress: ReadingProgress): boolean {
  */
 export function saveScopedReadingProgress(progress: ReadingProgress, scope: ReadingProgressScope): boolean {
   try {
-    window.localStorage.setItem(getScopedReadingProgressKey(progress.bookSlug, scope), JSON.stringify(progress));
+    window.localStorage.setItem(
+      getScopedReadingProgressKey(progress.bookSlug, scope, progress.editionId),
+      JSON.stringify(progress),
+    );
   } catch {
     return false;
   }
@@ -231,6 +253,8 @@ export function parseReadingProgress(value: string | null): ReadingProgress | nu
     return {
       bookSlug: parsed.bookSlug,
       editionId: typeof parsed.editionId === "string" ? parsed.editionId : undefined,
+      contentLanguage: typeof parsed.contentLanguage === "string" ? parsed.contentLanguage : undefined,
+      pendingSync: parsed.pendingSync === true,
       chapterSlug: parsed.chapterSlug,
       chapterId: typeof parsed.chapterId === "string" ? parsed.chapterId : undefined,
       chapterTitle: parsed.chapterTitle,
@@ -244,6 +268,11 @@ export function parseReadingProgress(value: string | null): ReadingProgress | nu
   } catch {
     return null;
   }
+}
+
+export function readingProgressHref(progress: Pick<ReadingProgress, "bookSlug" | "chapterSlug" | "editionId">) {
+  const pathname = `/books/${encodeURIComponent(progress.bookSlug)}/${encodeURIComponent(progress.chapterSlug)}`;
+  return progress.editionId ? `${pathname}?edition=${encodeURIComponent(progress.editionId)}` : pathname;
 }
 
 export function calculateBookProgress(progress: ReadingProgress) {

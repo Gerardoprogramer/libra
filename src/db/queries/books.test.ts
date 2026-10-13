@@ -143,6 +143,22 @@ const english = edition("english", "en");
 const spanish = edition("spanish", "es");
 const preferred = edition("spanish-preferred", "es", { isPreferred: true });
 const draft = edition("spanish-draft", "es", { publicationStatus: "DRAFT", isPreferred: true });
+
+test("an explicit edition resumes that edition irrespective of interface locale and editorial preference", async () => {
+  const h = queriesWithRows([book], [author], [english, spanish, preferred], [], []);
+  const selected = await h.queries.getBookBySlug(book.slug, "es", english.id);
+  assert.equal(selected?.edition.id, english.id);
+  assertPublicFilter(h.statements[2]);
+  assert.ok(h.statements.at(-1)?.params.includes(english.id));
+  h.assertConsumed();
+});
+
+test("an unavailable edition ID never falls back to another edition's chapters", async () => {
+  const h = queriesWithRows([book], [author], [english]);
+  assert.equal(await h.queries.getBookBySlug(book.slug, "en", "private-or-other-book"), null);
+  assertPublicFilter(h.statements[2]);
+  h.assertConsumed();
+});
 const cases = [
   { name: "A: a public Spanish edition", editions: [english, spanish], expected: "spanish" },
   { name: "B: English fallback", editions: [english], expected: "english" },

@@ -2,22 +2,13 @@
 
 import Image from "next/image";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-
 import { FiArrowRight, FiBookOpen } from "react-icons/fi";
 
 import { Link } from "@/i18n/navigation";
 
-import {
-  calculateBookProgress,
-  readAllScopedReadingProgress,
-  READING_PROGRESS_CHANGE_EVENT,
-  type ReadingProgress,
-  type ReadingProgressScope,
-} from "@/lib/reading-progress";
-import { useReadingProgressScope } from "@/lib/use-reading-progress-scope";
+import { calculateBookProgress, readingProgressHref } from "@/lib/reading-progress";
+import { useReadingHistory } from "@/lib/use-reading-history";
 import { getRecentlyReadProgress } from "@/lib/reading-history";
-import { getCloudReadingProgressHistory, toReadingProgress } from "@/lib/reading-progress-cloud";
 
 interface BookSummary {
   slug: string;
@@ -33,103 +24,13 @@ interface RecentlyReadProps {
   limit?: number;
 }
 
-function subscribe(callback: () => void) {
-  window.addEventListener("storage", callback);
-  window.addEventListener(READING_PROGRESS_CHANGE_EVENT, callback);
-
-  return () => {
-    window.removeEventListener("storage", callback);
-    window.removeEventListener(READING_PROGRESS_CHANGE_EVENT, callback);
-  };
-}
-
-function getSnapshot(scope: ReadingProgressScope | null) {
-  if (!scope) {
-    return "[]";
-  }
-
-  const entries = readAllScopedReadingProgress(scope) ?? [];
-
-  // Así el snapshot siempre tiene un orden estable.
-  return JSON.stringify(entries.sort());
-}
-
-function getServerSnapshot() {
-  return "[]";
-}
-
 export function RecentlyRead({ books, title, continueLabel, limit = 4 }: RecentlyReadProps) {
-  const scope = useReadingProgressScope();
-
-  const userId = scope?.type === "user" ? scope.userId : null;
-  const readProgress = useCallback(() => getSnapshot(scope), [scope]);
-
-  const snapshot = useSyncExternalStore(subscribe, readProgress, getServerSnapshot);
-
-  const [cloudProgress, setCloudProgress] = useState<{
-    userId: string;
-    items: ReadingProgress[];
-  } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!userId) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    void getCloudReadingProgressHistory()
-      .then((items) => {
-        if (cancelled) {
-          return;
-        }
-
-        setCloudProgress({
-          userId,
-          items: items?.map(toReadingProgress) ?? [],
-        });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setCloudProgress(null);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  const localRecentProgress = useMemo(() => {
-    let values: string[];
-
-    try {
-      values = JSON.parse(snapshot) as string[];
-    } catch {
-      return [];
-    }
-
-    return getRecentlyReadProgress(values, new Set(books.map((book) => book.slug)), limit);
-  }, [books, limit, snapshot]);
-
-  const activeCloudProgress = cloudProgress?.userId === userId ? cloudProgress.items : null;
-
-  const cloudEntries = useMemo(
-    () => activeCloudProgress?.map((item) => JSON.stringify(item)) ?? [],
-    [activeCloudProgress],
+  const { entries } = useReadingHistory();
+  const recentProgress = getRecentlyReadProgress(
+    entries.map((item) => JSON.stringify(item)),
+    new Set(books.map((book) => book.slug)),
+    limit,
   );
-
-  const recentProgress = useMemo(() => {
-    const availableBookSlugs = new Set(books.map((book) => book.slug));
-
-    if (activeCloudProgress && activeCloudProgress.length > 0) {
-      return getRecentlyReadProgress(cloudEntries, availableBookSlugs, limit);
-    }
-
-    return localRecentProgress;
-  }, [activeCloudProgress, books, cloudEntries, limit, localRecentProgress]);
 
   const recentItems = recentProgress.flatMap((progress) => {
     const book = books.find((item) => item.slug === progress.bookSlug);
@@ -164,7 +65,7 @@ export function RecentlyRead({ books, title, continueLabel, limit = 4 }: Recentl
           {recentItems.map(({ book, progress, percentage }) => (
             <Link
               key={book.slug}
-              href={`/books/${book.slug}/${progress.chapterSlug}`}
+              href={readingProgressHref(progress)}
               className="group hover:border-foreground/20 flex min-w-0 gap-4 rounded-xl border p-3 transition hover:shadow-sm sm:gap-5 sm:p-4"
             >
               <div className="bg-muted relative aspect-2/3 w-16 shrink-0 overflow-hidden rounded-md sm:w-20">

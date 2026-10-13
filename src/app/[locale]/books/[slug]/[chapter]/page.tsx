@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { notFound } from "next/navigation";
 import { NextIntlClientProvider } from "next-intl";
@@ -10,8 +11,10 @@ import { getChapterBySlug, type ContentLocale } from "@/db/queries/books";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getAbsolutePublicImageUrl, getConfiguredSiteUrl } from "@/lib/site-url";
+import { readingProgressHref } from "@/lib/reading-progress";
 
 interface ReaderPageProps {
+  searchParams: Promise<{ edition?: string | string[] }>;
   params: Promise<{
     locale: string;
     slug: string;
@@ -27,12 +30,14 @@ function getLanguageCode(language: string) {
   return language.toLowerCase().split("-")[0];
 }
 
-export async function generateMetadata({ params }: ReaderPageProps): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: ReaderPageProps): Promise<Metadata> {
   const { locale, slug, chapter } = await params;
+  const requestedEdition = (await searchParams).edition;
+  const editionId = typeof requestedEdition === "string" ? requestedEdition : undefined;
   const interfaceLocale = getInterfaceLocale(locale);
 
   const [result, t] = await Promise.all([
-    getChapterBySlug(slug, chapter, interfaceLocale),
+    getChapterBySlug(slug, chapter, interfaceLocale, editionId),
     getTranslations({
       locale: interfaceLocale,
       namespace: "reader",
@@ -80,11 +85,24 @@ export async function generateMetadata({ params }: ReaderPageProps): Promise<Met
   });
 }
 
-export default async function ReaderPage({ params }: ReaderPageProps) {
+export default function ReaderPage(props: ReaderPageProps) {
+  return (
+    <Suspense fallback={<main className="mx-auto min-h-screen max-w-3xl px-6 py-12" aria-busy="true" />}>
+      <ReaderContent {...props} />
+    </Suspense>
+  );
+}
+
+async function ReaderContent({ params, searchParams }: ReaderPageProps) {
   const { locale, slug, chapter } = await params;
+  const requestedEdition = (await searchParams).edition;
+  if (Array.isArray(requestedEdition)) notFound();
   const interfaceLocale = getInterfaceLocale(locale);
 
-  const [result, messages] = await Promise.all([getChapterBySlug(slug, chapter, interfaceLocale), getMessages()]);
+  const [result, messages] = await Promise.all([
+    getChapterBySlug(slug, chapter, interfaceLocale, requestedEdition),
+    getMessages(),
+  ]);
 
   if (!result) {
     notFound();
@@ -208,15 +226,19 @@ export default async function ReaderPage({ params }: ReaderPageProps) {
           chapterSlug={currentChapter.slug}
           chapterId={currentChapter.id}
           chapterTitle={currentChapter.title}
-          chapterRoutes={book.chapters.map((chapter) => ({
-            id: chapter.id,
-            slug: chapter.slug,
-          }))}
           chapterNumber={currentChapter.number}
           chapterIndex={chapterIndex}
           totalChapters={book.chapters.length}
-          previousHref={previous ? `/books/${book.slug}/${previous.slug}` : undefined}
-          nextHref={next ? `/books/${book.slug}/${next.slug}` : undefined}
+          previousHref={
+            previous
+              ? readingProgressHref({ bookSlug: book.slug, chapterSlug: previous.slug, editionId: book.edition.id })
+              : undefined
+          }
+          nextHref={
+            next
+              ? readingProgressHref({ bookSlug: book.slug, chapterSlug: next.slug, editionId: book.edition.id })
+              : undefined
+          }
         >
           {paragraphs.map((paragraph, index) => (
             <p key={index} className="mb-7 font-serif leading-[1.95] opacity-90">

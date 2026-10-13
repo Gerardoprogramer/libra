@@ -2,23 +2,13 @@
 
 import Image from "next/image";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-
 import { FiArrowRight, FiBookOpen } from "react-icons/fi";
 
 import { Link } from "@/i18n/navigation";
 
-import {
-  calculateBookProgress,
-  parseReadingProgress,
-  readAllScopedReadingProgress,
-  READING_PROGRESS_CHANGE_EVENT,
-  type ReadingProgress,
-  type ReadingProgressScope,
-} from "@/lib/reading-progress";
-import { useReadingProgressScope } from "@/lib/use-reading-progress-scope";
+import { calculateBookProgress, readingProgressHref } from "@/lib/reading-progress";
+import { useReadingHistory } from "@/lib/use-reading-history";
 import { getLatestReadingProgress } from "@/lib/reading-history";
-import { getCloudReadingProgressHistory, toReadingProgress } from "@/lib/reading-progress-cloud";
 
 interface BookSummary {
   slug: string;
@@ -35,36 +25,6 @@ interface ContinueReadingProps {
   storageUnavailableLabel: string;
 }
 
-function subscribe(callback: () => void) {
-  window.addEventListener("storage", callback);
-  window.addEventListener(READING_PROGRESS_CHANGE_EVENT, callback);
-
-  return () => {
-    window.removeEventListener("storage", callback);
-    window.removeEventListener(READING_PROGRESS_CHANGE_EVENT, callback);
-  };
-}
-
-function getProgressSnapshot(bookSlugs: ReadonlySet<string>, scope: ReadingProgressScope | null): string | null {
-  if (!scope) {
-    return "";
-  }
-
-  const entries = readAllScopedReadingProgress(scope);
-
-  if (!entries) {
-    return null;
-  }
-
-  const progress = getLatestReadingProgress(entries, bookSlugs);
-
-  return progress ? JSON.stringify(progress) : "";
-}
-
-function getServerSnapshot() {
-  return "";
-}
-
 export function ContinueReading({
   books,
   title,
@@ -72,70 +32,13 @@ export function ContinueReading({
   continueLabel,
   storageUnavailableLabel,
 }: ContinueReadingProps) {
-  const bookSlugs = useMemo(() => new Set(books.map((book) => book.slug)), [books]);
-  const scope = useReadingProgressScope();
-
-  const userId = scope?.type === "user" ? scope.userId : null;
-  const subscribeToProgress = useCallback((callback: () => void) => subscribe(callback), []);
-  const readProgress = useCallback(() => getProgressSnapshot(bookSlugs, scope), [bookSlugs, scope]);
-  const snapshot = useSyncExternalStore(subscribeToProgress, readProgress, getServerSnapshot);
-
-  const [cloudProgress, setCloudProgress] = useState<{
-    userId: string;
-    items: ReadingProgress[];
-  } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!userId) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    void getCloudReadingProgressHistory()
-      .then((items) => {
-        if (cancelled) {
-          return;
-        }
-
-        setCloudProgress({
-          userId,
-          items: items?.map(toReadingProgress) ?? [],
-        });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setCloudProgress(null);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  const localProgress = useMemo<ReadingProgress | null>(() => parseReadingProgress(snapshot), [snapshot]);
-
-  const activeCloudProgress = cloudProgress?.userId === userId ? cloudProgress.items : null;
-
-  const cloudEntries = useMemo(
-    () => activeCloudProgress?.map((item) => JSON.stringify(item)) ?? [],
-    [activeCloudProgress],
+  const { entries, storageAvailable } = useReadingHistory();
+  const progress = getLatestReadingProgress(
+    entries.map((item) => JSON.stringify(item)),
+    new Set(books.map((book) => book.slug)),
   );
 
-  const cloudLatestProgress = useMemo(() => {
-    if (!activeCloudProgress || activeCloudProgress.length === 0) {
-      return null;
-    }
-
-    return getLatestReadingProgress(cloudEntries, bookSlugs);
-  }, [activeCloudProgress, bookSlugs, cloudEntries]);
-
-  const progress = cloudLatestProgress ?? localProgress;
-
-  if (snapshot === null) {
+  if (!storageAvailable && !progress) {
     return (
       <section className="border-b px-6 py-8">
         <p role="alert" className="text-muted-foreground mx-auto max-w-7xl text-sm">
@@ -167,7 +70,7 @@ export function ContinueReading({
         </div>
 
         <Link
-          href={`/books/${book.slug}/${progress.chapterSlug}`}
+          href={readingProgressHref(progress)}
           className="group bg-card hover:border-foreground/20 grid overflow-hidden rounded-xl border transition hover:shadow-sm sm:grid-cols-[120px_1fr]"
         >
           <div className="bg-muted relative hidden aspect-2/3 overflow-hidden sm:block">

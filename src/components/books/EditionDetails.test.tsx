@@ -119,6 +119,7 @@ test("only the preferred edition for each locale is presented and reading retain
         <NextIntlClientProvider locale={locale} messages={{}}>
           <BookReadingAction
             bookSlug="dracula"
+            editionId="edition-1"
             chapterSlugs={["chapter-1"]}
             firstChapterSlug="chapter-1"
             startLabel="Read"
@@ -129,7 +130,7 @@ test("only the preferred edition for each locale is presented and reading retain
         </NextIntlClientProvider>,
       ),
     );
-    assert.equal(action("a").attr("href"), `/${locale}/books/dracula/chapter-1`);
+    assert.equal(action("a").attr("href"), `/${locale}/books/dracula/chapter-1?edition=edition-1`);
   }
 });
 

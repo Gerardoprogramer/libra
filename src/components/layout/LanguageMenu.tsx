@@ -44,6 +44,9 @@ export function LanguageMenu({ locale, open, onOpenChange, trigger }: LanguageMe
         from: locale,
         to: nextLocale,
       });
+      const query = new URLSearchParams(window.location.search);
+      const edition = query.get("edition");
+      if (edition) params.set("edition", edition);
 
       const response = await fetch(`/api/reader/locale-path?${params.toString()}`, {
         cache: "no-store",
@@ -59,7 +62,10 @@ export function LanguageMenu({ locale, open, onOpenChange, trigger }: LanguageMe
         return;
       }
 
-      router.replace(`${data.pathname}${window.location.search}${window.location.hash}`, { locale: nextLocale });
+      // The translated route resolves the target edition, not the original one.
+      query.delete("edition");
+      const search = query.size ? `?${query.toString()}` : "";
+      router.replace(`${data.pathname}${search}${window.location.hash}`, { locale: nextLocale });
     } catch {
       // Keep the current page if the localized route cannot be resolved.
     }

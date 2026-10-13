@@ -1,72 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-import type { ReadingProgressScope } from "@/lib/reading-progress";
+import { useMemo, useSyncExternalStore } from "react";
+import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import type { ReadingProgressScope } from "@/lib/reading-progress";
+
+// A UI partition, not an authorization check. RLS / Route Handlers authorize data.
+// INITIAL_SESSION reads local cookies, so guests do not wait on getClaims().
+function createScopeStore() {
+  let scope: ReadingProgressScope | null = null;
+  return {
+    getSnapshot: () => scope,
+    subscribe(notify: () => void) {
+      const {
+        data: { subscription },
+      } = createClient().auth.onAuthStateChange((_event, session) => {
+        const userId = session?.user.id;
+        if (userId ? scope?.type === "user" && scope.userId === userId : scope?.type === "guest") return;
+        scope = userId ? { type: "user", userId } : { type: "guest" };
+        notify();
+      });
+      return () => subscription.unsubscribe();
+    },
+  };
+}
+
+const getServerSnapshot = () => null;
 
 export function useReadingProgressScope(): ReadingProgressScope | null {
-  const [scope, setScope] = useState<ReadingProgressScope | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    let authVersion = 0;
-
-    const supabase = createClient();
-
-    async function resolveScope() {
-      const version = ++authVersion;
-
-      const { data, error } = await supabase.auth.getClaims();
-
-      if (!mounted || version !== authVersion) {
-        return;
-      }
-
-      const userId = !error && typeof data?.claims?.sub === "string" ? data.claims.sub : null;
-
-      setScope(
-        userId
-          ? {
-              type: "user",
-              userId,
-            }
-          : {
-              type: "guest",
-            },
-      );
-    }
-
-    void resolveScope();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      authVersion += 1;
-
-      if (!mounted) {
-        return;
-      }
-
-      const userId = session?.user?.id ?? null;
-
-      setScope(
-        userId
-          ? {
-              type: "user",
-              userId,
-            }
-          : {
-              type: "guest",
-            },
-      );
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  return scope;
+  const pathname = usePathname();
+  // Server logout updates cookies without emitting a browser auth event. A new
+  // route must resolve them again, hiding the previous identity in the meantime.
+  const store = useMemo(() => ({ pathname, ...createScopeStore() }), [pathname]);
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, getServerSnapshot);
 }

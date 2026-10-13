@@ -13,6 +13,7 @@ export async function GET(request: Request) {
   const chapter = url.searchParams.get("chapter");
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
+  const edition = url.searchParams.get("edition") ?? undefined;
 
   if (!book || !chapter || !isContentLocale(from) || !isContentLocale(to)) {
     return NextResponse.json(
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const pathname = await getLocalizedChapterPath(book, chapter, from, to);
+  const pathname = await getLocalizedChapterPath(book, chapter, from, to, edition);
 
   if (!pathname) {
     return NextResponse.json(

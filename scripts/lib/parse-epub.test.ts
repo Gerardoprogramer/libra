@@ -26,6 +26,35 @@ async function epub(metadata: string) {
 
 const work = "<dc:title>Obra de prueba</dc:title><dc:language>es</dc:language>";
 
+test("narrative prologues and epilogues are preserved in both languages", async () => {
+  for (const titles of [
+    ["Prologue", "Chapter One", "Epilogue"],
+    ["Prólogo", "Capítulo primero", "Epílogo"],
+  ]) {
+    const zip = await JSZip.loadAsync(await epub(work));
+    zip.file(
+      "chapter.xhtml",
+      `<html><body>${titles.map((title) => `<h1>${title}</h1><p>${`${title} is part of the narrative. `.repeat(30)}</p>`).join("")}</body></html>`,
+    );
+    const parsed = await parseEpub(await zip.generateAsync({ type: "nodebuffer" }));
+    assert.deepEqual(
+      parsed.chapters.map((chapter) => chapter.title),
+      titles,
+    );
+  }
+});
+
+test("generated duplicate suffixes cannot collide with literal chapter titles", async () => {
+  const zip = await JSZip.loadAsync(await epub(work));
+  zip.file(
+    "chapter.xhtml",
+    `<html><body>${["Arrival", "Arrival", "Arrival 2"].map((title, index) => `<h1>${title}</h1><p>${`Narrative ${index}. `.repeat(40)}</p>`).join("")}</body></html>`,
+  );
+  const parsed = await parseEpub(await zip.generateAsync({ type: "nodebuffer" }));
+  assert.equal(parsed.chapters.length, 3);
+  assert.equal(new Set(parsed.chapters.map((chapter) => chapter.slug)).size, 3);
+});
+
 test("EPUB authors are not attributed as translators when no translation role exists", async () => {
   const parsed = await parseEpub(await epub(`${work}<dc:creator>Autora de prueba</dc:creator>`));
   assert.deepEqual(parsed.creators, ["Autora de prueba"]);

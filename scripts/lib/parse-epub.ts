@@ -386,16 +386,15 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
    * Repeated legitimate titles receive deterministic slug suffixes.
    */
 
-  const slugUsage = new Map<string, number>();
+  const usedSlugs = new Set<string>();
 
   const chapters = rawSections.map((section, index) => {
     const baseSlug = slugify(section.title) || `chapter-${index + 1}`;
 
-    const usage = slugUsage.get(baseSlug) ?? 0;
-
-    slugUsage.set(baseSlug, usage + 1);
-
-    const slug = usage === 0 ? baseSlug : `${baseSlug}-${usage + 1}`;
+    let slug = baseSlug;
+    let suffix = 2;
+    while (usedSlugs.has(slug)) slug = `${baseSlug}-${suffix++}`;
+    usedSlugs.add(slug);
 
     return {
       number: index + 1,
