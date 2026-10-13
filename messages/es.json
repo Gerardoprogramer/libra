@@ -139,5 +139,32 @@
     "emptyDescription": "Explora el catálogo y guarda los libros que quieras tener a mano.",
     "browseBooks": "Explorar libros",
     "unavailableTitle": "Tu biblioteca no está disponible"
+  },
+  "auth": {
+    "loginTitle": "Inicia sesión en Libra",
+    "loginDescription": "Continúa tu lectura en todos tus dispositivos.",
+    "registerTitle": "Crea tu cuenta de Libra",
+    "registerDescription": "Guarda tu biblioteca y tu progreso de lectura en todos tus dispositivos.",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "signIn": "Iniciar sesión",
+    "register": "Crear cuenta",
+    "continueWithGoogle": "Continuar con Google",
+    "or": "o",
+    "noAccount": "¿No tienes una cuenta?",
+    "alreadyHaveAccount": "¿Ya tienes una cuenta?",
+    "createAccount": "Crear una",
+    "genericError": "Algo salió mal. Inténtalo de nuevo.",
+    "invalidCredentials": "El correo o la contraseña son incorrectos.",
+    "checkEmailTitle": "Revisa tu correo",
+    "checkEmailDescription": "Te enviamos un enlace de confirmación. Confirma tu correo electrónico para terminar de crear tu cuenta.",
+    "account": "Mi cuenta"
+  },
+  "account": {
+    "title": "Mi cuenta",
+    "email": "Correo electrónico",
+    "syncTitle": "Progreso sincronizado",
+    "syncDescription": "Tu progreso de lectura se guarda automáticamente y está disponible en todos tus dispositivos.",
+    "signOut": "Cerrar sesión"
   }
 }

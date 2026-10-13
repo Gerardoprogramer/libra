@@ -1,6 +1,7 @@
 import { getLocale, getTranslations } from "next-intl/server";
+import { createClient } from "@/lib/supabase/server";
 
-import { FiMenu, FiSearch } from "react-icons/fi";
+import { FiMenu, FiSearch, FiUser } from "react-icons/fi";
 import { HiOutlineBookOpen } from "react-icons/hi2";
 
 import { LanguageSwitcher } from "@/components/layout/LanguageSwitcher";
@@ -9,7 +10,16 @@ import { Link } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 
 export async function Header() {
-  const [t, locale] = await Promise.all([getTranslations("nav"), getLocale()]);
+  const [t, authT, locale, supabase] = await Promise.all([
+    getTranslations("nav"),
+    getTranslations("auth"),
+    getLocale(),
+    createClient(),
+  ]);
+
+  const { data, error } = await supabase.auth.getClaims();
+
+  const isAuthenticated = !error && Boolean(data?.claims?.sub);
 
   return (
     <header className="bg-background/90 sticky top-0 z-50 border-b backdrop-blur">
@@ -58,6 +68,21 @@ export async function Header() {
               <Link href="/library" className="hover:bg-muted rounded-lg px-3 py-2 text-sm">
                 {t("library")}
               </Link>
+              {isAuthenticated ? (
+                <Link href="/account" className="hover:bg-muted rounded-lg px-3 py-2 text-sm">
+                  {authT("account")}
+                </Link>
+              ) : (
+                <>
+                  <Link href="/login" className="hover:bg-muted rounded-lg px-3 py-2 text-sm">
+                    {authT("signIn")}
+                  </Link>
+
+                  <Link href="/register" className="hover:bg-muted rounded-lg px-3 py-2 text-sm">
+                    {authT("register")}
+                  </Link>
+                </>
+              )}
             </nav>
           </details>
 
@@ -66,6 +91,24 @@ export async function Header() {
             label={t("language", { locale })}
             errorLabel={t("languageLoadError")}
           />
+
+          {isAuthenticated ? (
+            <Button variant="ghost" size="icon" asChild>
+              <Link href="/account" aria-label={authT("account")}>
+                <FiUser aria-hidden="true" className="size-5" />
+              </Link>
+            </Button>
+          ) : (
+            <>
+              <Button variant="ghost" className="hidden sm:inline-flex" asChild>
+                <Link href="/login">{authT("signIn")}</Link>
+              </Button>
+
+              <Button className="hidden sm:inline-flex" asChild>
+                <Link href="/register">{authT("register")}</Link>
+              </Button>
+            </>
+          )}
 
           <Button variant="ghost" size="icon" asChild>
             <Link href="/books" aria-label={t("search")}>

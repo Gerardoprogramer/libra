@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { FiArrowRight, FiBookOpen } from "react-icons/fi";
 
@@ -16,6 +16,7 @@ import {
   type ReadingProgress,
 } from "@/lib/reading-progress";
 import { getLatestReadingProgress } from "@/lib/reading-history";
+import { getCloudReadingProgressHistory, toReadingProgress } from "@/lib/reading-progress-cloud";
 
 interface BookSummary {
   slug: string;
@@ -69,7 +70,43 @@ export function ContinueReading({
   const readProgress = useCallback(() => getProgressSnapshot(bookSlugs), [bookSlugs]);
   const snapshot = useSyncExternalStore(subscribeToProgress, readProgress, getServerSnapshot);
 
-  const progress = useMemo<ReadingProgress | null>(() => parseReadingProgress(snapshot), [snapshot]);
+  const [cloudProgress, setCloudProgress] = useState<ReadingProgress[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void getCloudReadingProgressHistory()
+      .then((items) => {
+        if (cancelled) {
+          return;
+        }
+
+        setCloudProgress(items?.map(toReadingProgress) ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCloudProgress(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const localProgress = useMemo<ReadingProgress | null>(() => parseReadingProgress(snapshot), [snapshot]);
+
+  const cloudEntries = useMemo(() => cloudProgress?.map((item) => JSON.stringify(item)) ?? [], [cloudProgress]);
+
+  const cloudLatestProgress = useMemo(() => {
+    if (!cloudProgress || cloudProgress.length === 0) {
+      return null;
+    }
+
+    return getLatestReadingProgress(cloudEntries, bookSlugs);
+  }, [bookSlugs, cloudEntries, cloudProgress]);
+
+  const progress = cloudLatestProgress ?? localProgress;
 
   if (snapshot === null) {
     return (

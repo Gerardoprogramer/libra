@@ -1,6 +1,6 @@
 "use client";
 
-import { Link } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
@@ -16,9 +16,19 @@ import {
   saveReadingProgress,
   type ReadingProgress,
 } from "@/lib/reading-progress";
+import {
+  getAuthenticatedUserId,
+  getCloudReadingProgress,
+  saveCloudReadingProgress,
+} from "@/lib/reading-progress-cloud";
 
 type ReaderTheme = "light" | "sepia" | "dark";
 type ReaderWidth = "narrow" | "medium" | "wide";
+
+interface ReaderChapterRoute {
+  id: string;
+  slug: string;
+}
 
 interface ReaderViewProps {
   bookSlug: string;
@@ -26,8 +36,11 @@ interface ReaderViewProps {
   author: string;
   contentLanguage: string;
 
+  editionId: string;
   chapterSlug: string;
+  chapterId: string;
   chapterTitle: string;
+  chapterRoutes: ReaderChapterRoute[];
   chapterNumber: number;
   chapterIndex: number;
 
@@ -65,13 +78,62 @@ const optionThemeStyles: Record<ReaderTheme, CSSProperties> = {
   },
 } satisfies Record<ReaderTheme, React.CSSProperties>;
 
+function getCurrentParagraphIndex(article: HTMLElement): number {
+  const paragraphs = Array.from(article.querySelectorAll<HTMLElement>("p"));
+
+  if (paragraphs.length === 0) {
+    return 0;
+  }
+
+  // Consideramos como "párrafo actual" el último que ya alcanzó
+  // aproximadamente el primer tercio de la pantalla.
+  const readingAnchor = window.scrollY + window.innerHeight * 0.35;
+
+  let currentIndex = 0;
+
+  for (let index = 0; index < paragraphs.length; index++) {
+    const paragraphTop = paragraphs[index].getBoundingClientRect().top + window.scrollY;
+
+    if (paragraphTop <= readingAnchor) {
+      currentIndex = index;
+    } else {
+      break;
+    }
+  }
+
+  return currentIndex;
+}
+
+function getParagraphScrollTop(article: HTMLElement, paragraphIndex: number): number | null {
+  const paragraphs = Array.from(article.querySelectorAll<HTMLElement>("p"));
+
+  if (paragraphs.length === 0) {
+    return null;
+  }
+
+  const safeIndex = Math.min(Math.max(Math.floor(paragraphIndex), 0), paragraphs.length - 1);
+
+  const paragraph = paragraphs[safeIndex];
+
+  if (!paragraph) {
+    return null;
+  }
+
+  const paragraphTop = paragraph.getBoundingClientRect().top + window.scrollY;
+
+  return Math.max(0, paragraphTop - window.innerHeight * 0.35);
+}
+
 export function ReaderView({
   bookSlug,
   bookTitle,
   author,
   contentLanguage,
+  editionId,
   chapterSlug,
+  chapterId,
   chapterTitle,
+  chapterRoutes,
   chapterNumber,
   chapterIndex,
   totalChapters,
@@ -82,7 +144,10 @@ export function ReaderView({
   const articleRef = useRef<HTMLElement>(null);
   const hasRestoredProgress = useRef(false);
   const progressStorageAvailable = useRef(true);
-  const lastSavedPercentage = useRef<number | null>(null);
+  const lastSavedProgress = useRef<{
+    percentage: number;
+    paragraphIndex: number;
+  } | null>(null);
   const {
     theme,
     width,
@@ -93,6 +158,7 @@ export function ReaderView({
     setFontSize,
   } = useReaderPreferences();
   const t = useTranslations("reader");
+  const router = useRouter();
 
   const [progress, setProgress] = useState(0);
   const [storageError, setStorageError] = useState(false);
@@ -104,18 +170,34 @@ export function ReaderView({
       return;
     }
 
+    let disposed = false;
+
+    let cloudSyncEnabled = false;
+
+    let cloudSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+    let pendingCloudProgress: ReadingProgress | null = null;
+
+    let cloudSaveInFlight = false;
+
+    let progressFrame = 0;
+
+    let restoreScrollFrame = 0;
+
+    let effectiveProgress: ReadingProgress | null = null;
+
     hasRestoredProgress.current = false;
     progressStorageAvailable.current = true;
 
     const savedSnapshot = readReadingProgress(bookSlug);
+
     const parsedProgress = parseReadingProgress(savedSnapshot);
-    const savedProgress = parsedProgress?.bookSlug === bookSlug ? parsedProgress : null;
 
-    const savedPercentage =
-      savedProgress?.chapterSlug === chapterSlug ? Math.min(100, Math.max(0, savedProgress.percentage)) : 0;
+    const localProgress = parsedProgress?.bookSlug === bookSlug ? parsedProgress : null;
 
-    setProgress(savedPercentage);
-    lastSavedPercentage.current = savedProgress?.chapterSlug === chapterSlug ? savedPercentage : null;
+    const localCurrentProgress = localProgress?.chapterSlug === chapterSlug ? localProgress : null;
+
+    effectiveProgress = localCurrentProgress;
 
     const progressStorageBlocked = savedSnapshot === null;
 
@@ -123,32 +205,161 @@ export function ReaderView({
       progressStorageAvailable.current = false;
     }
 
-    const saveProgress = (percentage: number) => {
+    setProgress(localCurrentProgress?.percentage ?? 0);
+
+    lastSavedProgress.current = localCurrentProgress
+      ? {
+          percentage: localCurrentProgress.percentage,
+          paragraphIndex: localCurrentProgress.paragraphIndex ?? 0,
+        }
+      : null;
+
+    const persistLocalProgress = (readingProgress: ReadingProgress) => {
       if (!progressStorageAvailable.current) {
-        return;
+        return false;
       }
-
-      if (lastSavedPercentage.current === percentage) {
-        return;
-      }
-
-      const readingProgress: ReadingProgress = {
-        bookSlug,
-        chapterSlug,
-        chapterTitle,
-        chapterNumber,
-        chapterIndex,
-        totalChapters,
-        percentage,
-        updatedAt: new Date().toISOString(),
-      };
 
       if (!saveReadingProgress(readingProgress)) {
         progressStorageAvailable.current = false;
         setStorageError(true);
-      } else {
-        lastSavedPercentage.current = percentage;
+
+        return false;
       }
+
+      lastSavedProgress.current = {
+        percentage: readingProgress.percentage,
+        paragraphIndex: readingProgress.paragraphIndex ?? 0,
+      };
+
+      return true;
+    };
+
+    const buildCloudInput = (readingProgress: ReadingProgress) => {
+      if (readingProgress.editionId && readingProgress.editionId !== editionId) {
+        return null;
+      }
+
+      const targetChapterId =
+        readingProgress.chapterId ?? (readingProgress.chapterSlug === chapterSlug ? chapterId : null);
+
+      if (!targetChapterId) {
+        return null;
+      }
+
+      return {
+        editionId,
+        chapterId: targetChapterId,
+        paragraphIndex: Math.max(0, Math.floor(readingProgress.paragraphIndex ?? 0)),
+        percentage: Math.min(100, Math.max(0, Math.round(readingProgress.percentage))),
+        updatedAt: readingProgress.updatedAt,
+      };
+    };
+
+    const createLocalProgressFromCloud = (cloudProgress: {
+      paragraph_index: number;
+      percentage: number;
+      updated_at: string;
+    }): ReadingProgress => {
+      return {
+        bookSlug,
+        editionId,
+        chapterSlug,
+        chapterId,
+        chapterTitle,
+        chapterNumber,
+        chapterIndex,
+        totalChapters,
+        paragraphIndex: Math.max(0, Math.floor(cloudProgress.paragraph_index)),
+        percentage: Math.min(100, Math.max(0, Math.round(cloudProgress.percentage))),
+        updatedAt: cloudProgress.updated_at,
+      };
+    };
+
+    const flushCloudSave = async () => {
+      if (disposed || !cloudSyncEnabled || cloudSaveInFlight || !pendingCloudProgress) {
+        return;
+      }
+
+      const progressToSave = pendingCloudProgress;
+
+      pendingCloudProgress = null;
+
+      const cloudInput = buildCloudInput(progressToSave);
+
+      if (!cloudInput) {
+        return;
+      }
+
+      cloudSaveInFlight = true;
+
+      try {
+        const cloudProgress = await saveCloudReadingProgress(cloudInput);
+
+        if (disposed) {
+          return;
+        }
+
+        const syncedLocalProgress: ReadingProgress = {
+          ...progressToSave,
+          editionId: cloudInput.editionId,
+          chapterId: cloudInput.chapterId,
+          paragraphIndex: cloudInput.paragraphIndex,
+          percentage: cloudInput.percentage,
+          updatedAt: cloudProgress.updated_at,
+        };
+
+        persistLocalProgress(syncedLocalProgress);
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("Libra: failed to synchronize reading progress.", error);
+        }
+      } finally {
+        cloudSaveInFlight = false;
+
+        if (!disposed && pendingCloudProgress) {
+          cloudSaveTimer = setTimeout(() => {
+            cloudSaveTimer = null;
+            void flushCloudSave();
+          }, 250);
+        }
+      }
+    };
+
+    const queueCloudSave = (readingProgress: ReadingProgress) => {
+      if (!cloudSyncEnabled) {
+        return;
+      }
+
+      pendingCloudProgress = readingProgress;
+
+      if (cloudSaveTimer !== null) {
+        clearTimeout(cloudSaveTimer);
+      }
+
+      cloudSaveTimer = setTimeout(() => {
+        cloudSaveTimer = null;
+        void flushCloudSave();
+      }, 1200);
+    };
+
+    const saveProgress = (percentage: number, paragraphIndex: number) => {
+      const readingProgress: ReadingProgress = {
+        bookSlug,
+        editionId,
+        chapterSlug,
+        chapterId,
+        chapterTitle,
+        chapterNumber,
+        chapterIndex,
+        totalChapters,
+        paragraphIndex,
+        percentage,
+        updatedAt: new Date().toISOString(),
+      };
+
+      persistLocalProgress(readingProgress);
+
+      queueCloudSave(readingProgress);
     };
 
     const calculateProgress = () => {
@@ -169,8 +380,6 @@ export function ReaderView({
       return Math.round(percentage);
     };
 
-    let progressFrame = 0;
-
     const updateProgress = () => {
       if (progressFrame) {
         return;
@@ -183,35 +392,77 @@ export function ReaderView({
           return;
         }
 
+        const currentArticle = articleRef.current;
+
+        if (!currentArticle) {
+          return;
+        }
+
         const percentage = calculateProgress();
+
+        const paragraphIndex = getCurrentParagraphIndex(currentArticle);
 
         setProgress((current) => (current === percentage ? current : percentage));
 
-        saveProgress(percentage);
+        const previous = lastSavedProgress.current;
+
+        if (previous?.percentage === percentage && previous?.paragraphIndex === paragraphIndex) {
+          return;
+        }
+
+        saveProgress(percentage, paragraphIndex);
       });
     };
 
-    let restoreScrollFrame = 0;
-    const restoreFrame = requestAnimationFrame(() => {
+    const restoreProgress = () => {
+      if (disposed) {
+        return;
+      }
+
       if (progressStorageBlocked) {
         setStorageError(true);
       }
 
       restoreScrollFrame = requestAnimationFrame(() => {
+        if (disposed) {
+          return;
+        }
+
         const currentArticle = articleRef.current;
 
         if (!currentArticle) {
           hasRestoredProgress.current = true;
-
           return;
         }
 
-        if (savedPercentage > 0) {
+        if (!effectiveProgress) {
+          hasRestoredProgress.current = true;
+          return;
+        }
+
+        const savedParagraphIndex = effectiveProgress.paragraphIndex;
+
+        if (typeof savedParagraphIndex === "number") {
+          const paragraphScrollTop = getParagraphScrollTop(currentArticle, savedParagraphIndex);
+
+          if (paragraphScrollTop !== null) {
+            hasRestoredProgress.current = true;
+
+            window.scrollTo({
+              top: paragraphScrollTop,
+              behavior: "auto",
+            });
+
+            return;
+          }
+        }
+
+        if (effectiveProgress.percentage > 0) {
           const articleTop = currentArticle.getBoundingClientRect().top + window.scrollY;
 
           const readableHeight = Math.max(currentArticle.offsetHeight - window.innerHeight, 1);
 
-          const targetScroll = articleTop + readableHeight * (savedPercentage / 100);
+          const targetScroll = articleTop + readableHeight * (effectiveProgress.percentage / 100);
 
           hasRestoredProgress.current = true;
 
@@ -219,26 +470,152 @@ export function ReaderView({
             top: targetScroll,
             behavior: "auto",
           });
-        } else {
-          hasRestoredProgress.current = true;
 
-          saveProgress(0);
+          return;
         }
+
+        hasRestoredProgress.current = true;
       });
-    });
+    };
+
+    const syncCloudProgress = async () => {
+      try {
+        const userId = await getAuthenticatedUserId();
+
+        if (!userId) {
+          restoreProgress();
+          return;
+        }
+
+        cloudSyncEnabled = true;
+
+        const cloudProgress = await getCloudReadingProgress(editionId, userId);
+
+        if (!cloudProgress) {
+          if (localProgress) {
+            const cloudInput = buildCloudInput(localProgress);
+
+            if (cloudInput) {
+              const savedCloud = await saveCloudReadingProgress(cloudInput);
+
+              if (localCurrentProgress && !disposed) {
+                effectiveProgress = {
+                  ...localCurrentProgress,
+                  editionId,
+                  chapterId: cloudInput.chapterId,
+                  paragraphIndex: cloudInput.paragraphIndex,
+                  percentage: cloudInput.percentage,
+                  updatedAt: savedCloud.updated_at,
+                };
+
+                persistLocalProgress(effectiveProgress);
+              }
+            }
+          }
+        } else {
+          const localIsUsable =
+            localProgress !== null && (!localProgress.editionId || localProgress.editionId === editionId);
+
+          const localUpdatedAt = localProgress ? Date.parse(localProgress.updatedAt) : -Infinity;
+
+          const cloudUpdatedAt = Date.parse(cloudProgress.updated_at);
+
+          if (
+            localIsUsable &&
+            Number.isFinite(localUpdatedAt) &&
+            Number.isFinite(cloudUpdatedAt) &&
+            localUpdatedAt > cloudUpdatedAt
+          ) {
+            const cloudInput = buildCloudInput(localProgress);
+
+            if (cloudInput) {
+              const savedCloud = await saveCloudReadingProgress(cloudInput);
+
+              if (localCurrentProgress && !disposed) {
+                effectiveProgress = {
+                  ...localCurrentProgress,
+                  editionId,
+                  chapterId: cloudInput.chapterId,
+                  paragraphIndex: cloudInput.paragraphIndex,
+                  percentage: cloudInput.percentage,
+                  updatedAt: savedCloud.updated_at,
+                };
+
+                persistLocalProgress(effectiveProgress);
+              }
+            } else if (cloudProgress.chapter_id === chapterId) {
+              effectiveProgress = createLocalProgressFromCloud(cloudProgress);
+
+              persistLocalProgress(effectiveProgress);
+            }
+          } else if (cloudProgress.chapter_id === chapterId) {
+            effectiveProgress = createLocalProgressFromCloud(cloudProgress);
+
+            persistLocalProgress(effectiveProgress);
+          } else {
+            const resumeChapter = chapterRoutes.find((chapter) => chapter.id === cloudProgress.chapter_id);
+
+            if (resumeChapter && resumeChapter.slug !== chapterSlug && !disposed) {
+              router.replace(`/books/${bookSlug}/${resumeChapter.slug}`);
+
+              return;
+            }
+
+            effectiveProgress = null;
+          }
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("Libra: cloud reading progress synchronization failed.", error);
+        }
+      }
+
+      if (disposed) {
+        return;
+      }
+
+      setProgress(effectiveProgress?.percentage ?? 0);
+
+      lastSavedProgress.current = effectiveProgress
+        ? {
+            percentage: effectiveProgress.percentage,
+            paragraphIndex: effectiveProgress.paragraphIndex ?? 0,
+          }
+        : null;
+
+      restoreProgress();
+    };
+
+    void syncCloudProgress();
 
     window.addEventListener("scroll", updateProgress, {
       passive: true,
     });
 
     return () => {
-      cancelAnimationFrame(restoreFrame);
+      disposed = true;
+
+      if (cloudSaveTimer !== null) {
+        clearTimeout(cloudSaveTimer);
+      }
+
       cancelAnimationFrame(restoreScrollFrame);
       cancelAnimationFrame(progressFrame);
 
       window.removeEventListener("scroll", updateProgress);
     };
-  }, [bookSlug, chapterSlug, chapterTitle, chapterNumber, chapterIndex, totalChapters]);
+  }, [
+    bookSlug,
+    editionId,
+    chapterSlug,
+    chapterId,
+    chapterTitle,
+    chapterNumber,
+    chapterIndex,
+    totalChapters,
+    chapterRoutes,
+    router,
+  ]);
 
   function decreaseFontSize() {
     if (!setFontSize(fontSize - 2)) {

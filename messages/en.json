@@ -139,5 +139,32 @@
     "emptyDescription": "Explore the catalog and save the books you want to keep close at hand.",
     "browseBooks": "Browse books",
     "unavailableTitle": "Your library is unavailable"
+  },
+  "auth": {
+    "loginTitle": "Sign in to Libra",
+    "loginDescription": "Continue your reading across your devices.",
+    "registerTitle": "Create your Libra account",
+    "registerDescription": "Save your library and reading progress across devices.",
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Sign in",
+    "register": "Create account",
+    "continueWithGoogle": "Continue with Google",
+    "or": "or",
+    "noAccount": "Don't have an account?",
+    "alreadyHaveAccount": "Already have an account?",
+    "createAccount": "Create one",
+    "genericError": "Something went wrong. Please try again.",
+    "invalidCredentials": "The email or password is incorrect.",
+    "checkEmailTitle": "Check your email",
+    "checkEmailDescription": "We sent you a confirmation link. Confirm your email address to finish creating your account.",
+    "account": "My account"
+  },
+  "account": {
+    "title": "My account",
+    "email": "Email",
+    "syncTitle": "Synced reading progress",
+    "syncDescription": "Your reading progress is saved automatically and available across all your devices.",
+    "signOut": "Sign out"
   }
 }

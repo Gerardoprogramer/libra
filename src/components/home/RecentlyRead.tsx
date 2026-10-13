@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { FiArrowRight, FiBookOpen } from "react-icons/fi";
 
@@ -10,6 +10,8 @@ import { Link } from "@/i18n/navigation";
 
 import { calculateBookProgress, readAllReadingProgress, READING_PROGRESS_CHANGE_EVENT } from "@/lib/reading-progress";
 import { getRecentlyReadProgress } from "@/lib/reading-history";
+import type { ReadingProgress } from "@/lib/reading-progress";
+import { getCloudReadingProgressHistory, toReadingProgress } from "@/lib/reading-progress-cloud";
 
 interface BookSummary {
   slug: string;
@@ -49,7 +51,31 @@ function getServerSnapshot() {
 export function RecentlyRead({ books, title, continueLabel, limit = 4 }: RecentlyReadProps) {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  const recentProgress = useMemo(() => {
+  const [cloudProgress, setCloudProgress] = useState<ReadingProgress[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void getCloudReadingProgressHistory()
+      .then((items) => {
+        if (cancelled) {
+          return;
+        }
+
+        setCloudProgress(items?.map(toReadingProgress) ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCloudProgress(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const localRecentProgress = useMemo(() => {
     let values: string[];
 
     try {
@@ -60,6 +86,18 @@ export function RecentlyRead({ books, title, continueLabel, limit = 4 }: Recentl
 
     return getRecentlyReadProgress(values, new Set(books.map((book) => book.slug)), limit);
   }, [books, limit, snapshot]);
+
+  const cloudEntries = useMemo(() => cloudProgress?.map((item) => JSON.stringify(item)) ?? [], [cloudProgress]);
+
+  const recentProgress = useMemo(() => {
+    const availableBookSlugs = new Set(books.map((book) => book.slug));
+
+    if (cloudProgress && cloudProgress.length > 0) {
+      return getRecentlyReadProgress(cloudEntries, availableBookSlugs, limit);
+    }
+
+    return localRecentProgress;
+  }, [books, cloudEntries, cloudProgress, limit, localRecentProgress]);
 
   const recentItems = recentProgress.flatMap((progress) => {
     const book = books.find((item) => item.slug === progress.bookSlug);

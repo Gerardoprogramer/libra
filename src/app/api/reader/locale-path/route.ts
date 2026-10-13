@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 
 import { getLocalizedChapterPath, type ContentLocale } from "@/db/queries/books";
 
-const locales: ContentLocale[] = ["es", "en"];
-
 function isContentLocale(value: string | null): value is ContentLocale {
   return value === "es" || value === "en";
 }

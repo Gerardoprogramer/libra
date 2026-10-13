@@ -41,5 +41,9 @@ export const chapters = pgTable(
     uniqueIndex("chapters_edition_slug_idx").on(table.editionId, table.slug),
 
     uniqueIndex("chapters_edition_number_idx").on(table.editionId, table.number),
+
+    // Allows reading_progress to reference an exact
+    // chapter within an exact edition.
+    uniqueIndex("chapters_edition_id_idx").on(table.editionId, table.id),
   ],
 ).enableRLS();

@@ -3,9 +3,23 @@ export const READING_PROGRESS_CHANGE_EVENT = "libra:reading-progress-change";
 
 export interface ReadingProgress {
   bookSlug: string;
+
+  /**
+   * Edition and chapter identifiers used for cloud synchronization.
+   * Optional for compatibility with existing LocalStorage entries.
+   */
+  editionId?: string;
   chapterSlug: string;
+  chapterId?: string;
+
   chapterTitle: string;
   chapterNumber: number;
+
+  /**
+   * Zero-based paragraph currently being read.
+   * Optional for compatibility with existing LocalStorage entries.
+   */
+  paragraphIndex?: number;
 
   /**
    * Percentage read inside the current chapter.
@@ -106,6 +120,8 @@ export function parseReadingProgress(value: string | null): ReadingProgress | nu
     if (
       (parsed.chapterIndex !== undefined && (!Number.isInteger(parsed.chapterIndex) || parsed.chapterIndex < 0)) ||
       (parsed.totalChapters !== undefined && (!Number.isInteger(parsed.totalChapters) || parsed.totalChapters < 1)) ||
+      (parsed.paragraphIndex !== undefined &&
+        (!Number.isInteger(parsed.paragraphIndex) || parsed.paragraphIndex < 0)) ||
       (typeof parsed.chapterIndex === "number" &&
         typeof parsed.totalChapters === "number" &&
         parsed.chapterIndex >= parsed.totalChapters)
@@ -119,9 +135,12 @@ export function parseReadingProgress(value: string | null): ReadingProgress | nu
 
     return {
       bookSlug: parsed.bookSlug,
+      editionId: typeof parsed.editionId === "string" ? parsed.editionId : undefined,
       chapterSlug: parsed.chapterSlug,
+      chapterId: typeof parsed.chapterId === "string" ? parsed.chapterId : undefined,
       chapterTitle: parsed.chapterTitle,
       chapterNumber: parsed.chapterNumber,
+      paragraphIndex: typeof parsed.paragraphIndex === "number" ? parsed.paragraphIndex : undefined,
       percentage: parsed.percentage,
       chapterIndex: typeof parsed.chapterIndex === "number" ? parsed.chapterIndex : undefined,
       totalChapters: typeof parsed.totalChapters === "number" ? parsed.totalChapters : undefined,

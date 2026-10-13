@@ -204,8 +204,14 @@ export default async function ReaderPage({ params }: ReaderPageProps) {
           bookTitle={book.edition.title}
           author={book.authors.map((author) => author.name).join(", ")}
           contentLanguage={contentLanguage}
+          editionId={book.edition.id}
           chapterSlug={currentChapter.slug}
+          chapterId={currentChapter.id}
           chapterTitle={currentChapter.title}
+          chapterRoutes={book.chapters.map((chapter) => ({
+            id: chapter.id,
+            slug: chapter.slug,
+          }))}
           chapterNumber={currentChapter.number}
           chapterIndex={chapterIndex}
           totalChapters={book.chapters.length}

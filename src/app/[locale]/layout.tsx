@@ -74,7 +74,7 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
     <html lang={locale}>
       <body>
         {/* Navigation needs the locale; only the error boundary needs global messages. */}
-        <NextIntlClientProvider messages={{ errors: messages.errors }}>
+        <NextIntlClientProvider messages={{ errors: messages.errors, auth: messages.auth }}>
           <Header />
           {children}
         </NextIntlClientProvider>
