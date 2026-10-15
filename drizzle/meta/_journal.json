@@ -57,6 +57,13 @@
       "when": 1791928981110,
       "tag": "0007_preserve_reading_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792024081119,
+      "tag": "0008_edition_reviews",
+      "breakpoints": true
     }
   ]
 }
