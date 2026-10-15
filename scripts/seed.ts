@@ -4,6 +4,7 @@ import postgres from "postgres";
 
 import { authors, bookAuthors, books, chapters, editions } from "../src/db/schema";
 import { formatImportError } from "./lib/import-errors";
+import { assertWriteAllowed, sslFor } from "./lib/write-guard";
 
 config({
   path: ".env.local",
@@ -13,10 +14,18 @@ if (!process.env.DIRECT_DATABASE_URL) {
   throw new Error("DIRECT_DATABASE_URL is not defined");
 }
 
+// Fails before any connection is opened if the target is remote and not explicitly confirmed.
+assertWriteAllowed({
+  connectionString: process.env.DIRECT_DATABASE_URL,
+  args: process.argv.slice(2),
+  script: "db:seed",
+  allowRemote: false,
+});
+
 const client = postgres(process.env.DIRECT_DATABASE_URL, {
   max: 1,
   prepare: false,
-  ssl: "require",
+  ssl: sslFor(process.env.DIRECT_DATABASE_URL),
 });
 
 const db = drizzle(client);
