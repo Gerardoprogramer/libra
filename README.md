@@ -22,8 +22,9 @@ are served from Cloudflare R2.
    `--confirm-database <id>` for a remote one; `pnpm db:seed` refuses remote databases entirely.
    Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` for authentication (both are public by
    design; never put a service-role key in a `NEXT_PUBLIC_` variable).
-5. In production, set `SITE_URL` to the real canonical HTTPS origin (for example, `SITE_URL=https://dominio-real.com`).
-   Do not use a placeholder domain. It is also used for the sitemap and robots directive. In development it may be
+5. In production, set `SITE_URL` to the real canonical HTTPS origin of your deployment. The value in `.env.example`
+   (`https://www.example.com`) is a domain reserved for documentation: never use it, or any other placeholder, as the
+   production domain. It is also used for the sitemap and robots directive. In development it may be
    omitted; titles and descriptions still work, while canonical, language-alternate and sitemap URLs are omitted.
 6. Set `R2_PUBLIC_URL` to the HTTPS public base URL for the existing covers so Next.js can render them. Set the
    remaining `R2_*` values when applying imports that upload covers. `CACHE_REVALIDATION_URL` and
