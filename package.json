@@ -9,6 +9,8 @@
     "smoke:production": "tsx scripts/smoke-production.ts",
     "smoke:seo": "tsx scripts/smoke-seo.ts",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test \"scripts/**/*.test.ts\" \"src/**/*.test.ts\" \"src/**/*.test.tsx\"",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "db:generate": "drizzle-kit generate",
@@ -18,7 +20,8 @@
     "import:gutenberg": "tsx scripts/import-gutenberg.ts",
     "import:collection": "tsx scripts/import-collection.ts",
     "db:review": "tsx scripts/review-edition.ts",
-    "db:seed:categories": "tsx scripts/seed-categories.ts"
+    "db:seed:categories": "tsx scripts/seed-categories.ts",
+    "check": "pnpm lint && pnpm typecheck && pnpm format:check && pnpm test"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1143.0",
