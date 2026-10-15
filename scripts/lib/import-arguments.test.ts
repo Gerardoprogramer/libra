@@ -117,15 +117,21 @@ test("L10: invalid slugs, ids, languages, years and contradictory flags are reje
 });
 
 test("the database target is described without revealing the password, the project or the full host", () => {
+  // Fictitious on purpose: a host under the reserved .invalid TLD and an obviously fake password, assembled from
+  // parts so that no complete connection string sits in the source. "%2F" keeps the percent-decoding covered.
   const target = describeDatabaseTarget(
-    "postgresql://postgres.abcdefghijklmnop:s3cr3t%2Fpass@aws-0-us-east-1.pooler.supabase.com:5432/postgres",
+    [
+      "postgresql://postgres.exampleprojectref",
+      ":not-a-real%2Fpassword",
+      "@db-pool-1.example.invalid:5432/postgres",
+    ].join(""),
   );
 
   assert.equal(target.role, "postgres");
   assert.equal(target.isLocal, false);
-  assert.equal(target.token, "abc..op");
-  assert.equal(target.host, "aws..-1.pooler.supabase.com");
-  for (const secret of ["s3cr3t", "abcdefghijklmnop", "aws-0-us-east-1"]) {
+  assert.equal(target.token, "exa..ef");
+  assert.equal(target.host, "db-..-1.example.invalid");
+  for (const secret of ["not-a-real", "exampleprojectref", "db-pool-1"]) {
     assert.ok(!JSON.stringify(target).includes(secret), `${secret} must not appear`);
   }
 });

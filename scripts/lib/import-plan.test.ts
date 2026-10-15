@@ -171,12 +171,17 @@ test("REVIEW: a draft edition still refuses removals and chapters with progress 
 });
 
 test("REVIEW: database targets are described without the password, the user's project or the whole host", () => {
-  const url =
-    "postgresql://postgres.abcdefghijklmnop:s3cr3t%2Fpw@aws-0-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require";
+  // Fictitious on purpose: a host under the reserved .invalid TLD and an obviously fake password, assembled from
+  // parts so that no complete connection string sits in the source. "%2F" keeps the percent-decoding covered.
+  const url = [
+    "postgresql://postgres.exampleprojectref",
+    ":not-a-real%2Fpassword",
+    "@db-pool-1.example.invalid:6543/postgres?sslmode=require",
+  ].join("");
   const target = describeDatabaseTarget(url);
   const printed = JSON.stringify(target);
 
-  for (const secret of ["s3cr3t", "abcdefghijklmnop", "aws-0-us-east-1", "sslmode"]) {
+  for (const secret of ["not-a-real", "exampleprojectref", "db-pool-1", "sslmode"]) {
     assert.ok(!printed.includes(secret), `${secret} must not appear in ${printed}`);
   }
   assert.equal(target.isLocal, false);

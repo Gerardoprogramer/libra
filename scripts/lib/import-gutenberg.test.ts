@@ -108,8 +108,13 @@ function fakeDatabase(initial: EditionState, { failRead = false } = {}) {
   let state = initial;
   const committed: ApplyArgs[] = [];
   const database: ImportDatabase = {
+    // Fictitious on purpose: reserved .invalid host and an obviously fake password, assembled from parts.
     target: describeDatabaseTarget(
-      "postgres://postgres.abcdefghijklmnop:secret@aws-0-us-east-1.pooler.supabase.com:5432/postgres",
+      [
+        "postgres://postgres.exampleprojectref",
+        ":not-a-real-password",
+        "@db-pool-1.example.invalid:5432/postgres",
+      ].join(""),
     ),
     async readState() {
       if (failRead) throw Object.assign(new Error("connect ECONNREFUSED 10.0.0.1:5432"), { code: "ECONNREFUSED" });
@@ -192,7 +197,11 @@ test("a dry run of a new edition compares with the database, plans everything as
   assert(printed.some((line) => line.includes("Plan against the current database")));
   assert(printed.some((line) => line.includes("Target database:") && line.includes("role postgres")));
   assert(printed.some((line) => line.includes("Dry run only")));
-  assert(!printed.some((line) => line.includes("abcdefghijklmnop") || line.includes("secret")));
+  assert(
+    !printed.some(
+      (line) => line.includes("exampleprojectref") || line.includes("not-a-real") || line.includes("db-pool-1"),
+    ),
+  );
 });
 
 test("L02: a database that cannot be read fails the dry run instead of reporting a plan with no removals", async (t) => {
