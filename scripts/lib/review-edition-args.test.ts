@@ -91,3 +91,45 @@ test("edition review arguments refuse multiple state-changing actions", () => {
     assert.throws(() => parseEditionReviewArguments(args), /only one action/i);
   }
 });
+
+test("--confirm-database is parsed with its value, in any position, and omitted when absent", () => {
+  // The id is only carried here; whether it matches the target database is decided by the write guard.
+  assert.deepEqual(
+    parseEditionReviewArguments(["--gutenberg-id", "345", "--archive", "--confirm-database", "exa..ef"]),
+    {
+      sourceName: "Project Gutenberg",
+      sourceIdentifier: "345",
+      notes: undefined,
+      action: "archive",
+      copyrightStatus: undefined,
+      confirmDatabase: "exa..ef",
+    },
+  );
+  assert.equal(
+    parseEditionReviewArguments(["--confirm-database", "exa..ef", "--gutenberg-id", "345", "--reject"]).confirmDatabase,
+    "exa..ef",
+  );
+  assert.ok(!("confirmDatabase" in parseEditionReviewArguments(["--gutenberg-id", "345", "--archive"])));
+});
+
+test("the separator that pnpm forwards is accepted only as the first argument", () => {
+  const args = ["--gutenberg-id", "345", "--archive", "--confirm-database", "exa..ef"];
+
+  assert.deepEqual(parseEditionReviewArguments(["--", ...args]), parseEditionReviewArguments(args));
+  assert.equal(parseEditionReviewArguments(["--", "--gutenberg-id", "345"]).action, "show");
+  // Anywhere else it is an unknown argument, and on its own it leaves nothing to review.
+  assert.throws(() => parseEditionReviewArguments(["--gutenberg-id", "345", "--", "--archive"]), /Unknown/);
+  assert.throws(() => parseEditionReviewArguments(["--"]), /Specify --gutenberg-id/);
+});
+
+test("--confirm-database refuses a missing, empty, flag-like or repeated value", () => {
+  for (const args of [
+    ["--gutenberg-id", "345", "--archive", "--confirm-database"],
+    ["--gutenberg-id", "345", "--archive", "--confirm-database", ""],
+    ["--gutenberg-id", "345", "--archive", "--confirm-database", "--archive"],
+    ["--confirm-database", "--gutenberg-id", "345", "--archive"],
+    ["--gutenberg-id", "345", "--archive", "--confirm-database", "exa..ef", "--confirm-database", "exa..ef"],
+  ]) {
+    assert.throws(() => parseEditionReviewArguments(args), /Expected one --confirm-database value/, args.join(" "));
+  }
+});

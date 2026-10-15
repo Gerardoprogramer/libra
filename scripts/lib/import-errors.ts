@@ -1,3 +1,16 @@
+/** True when PostgreSQL reports (undefined_table, 42P01) that `relation` does not exist, however deeply wrapped. */
+export function isMissingRelation(error: unknown, relation: string): boolean {
+  const seen = new Set<unknown>();
+
+  for (let cause = error; cause instanceof Error && !seen.has(cause); cause = cause.cause) {
+    seen.add(cause);
+
+    if ("code" in cause && cause.code === "42P01" && cause.message.includes(`"${relation}"`)) return true;
+  }
+
+  return false;
+}
+
 // Log useful causes without dumping query parameters, driver objects or credentials.
 export function formatImportError(error: unknown): string {
   let cause = error;

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { findPublicationProblems } from "./review-edition-checks";
+import { isMissingRelation } from "./import-errors";
 import { assertWriteAllowed, readConfirmedDatabase, sslFor } from "./write-guard";
 
 // Fictitious on purpose: a host under the reserved .invalid TLD and an obviously fake password, assembled from
@@ -83,4 +85,41 @@ test("REVIEW: TLS is required for remote databases only, so the local seed can a
   assert.equal(sslFor(remote), "require");
   assert.equal(sslFor("postgres://dev:pw@localhost:5432/libra"), false);
   assert.equal(sslFor("postgres://dev:pw@127.0.0.1:5432/libra"), false);
+});
+
+test("REVIEW: a missing edition_reviews table is recognized through wrapped driver errors", () => {
+  const driver = Object.assign(new Error('relation "edition_reviews" does not exist'), { code: "42P01" });
+  const wrapped = new Error("Failed query: insert into ...", { cause: driver });
+
+  assert.equal(isMissingRelation(wrapped, "edition_reviews"), true);
+  assert.equal(isMissingRelation(wrapped, "editions"), false);
+  assert.equal(isMissingRelation(new Error('relation "edition_reviews" does not exist'), "edition_reviews"), false);
+  assert.equal(isMissingRelation("boom", "edition_reviews"), false);
+});
+
+const ready = {
+  title: "Dracula",
+  language: "en",
+  chapterCount: 27,
+  emptyChapterCount: 0,
+  wordCount: 160_000,
+  authorCount: 1,
+  notes: "Bram Stoker died in 1912; public domain in Costa Rica (life + 70).",
+};
+
+test("L09: a complete edition with recorded grounds can be published", () => {
+  assert.deepEqual(findPublicationProblems(ready), []);
+});
+
+test("L09: publishing is refused for empty, textless or authorless editions and for missing grounds", () => {
+  assert.match(findPublicationProblems({ ...ready, chapterCount: 0, wordCount: 0 }).join("\n"), /no chapters/);
+  assert.match(findPublicationProblems({ ...ready, emptyChapterCount: 2 }).join("\n"), /2 chapter\(s\) have no text/);
+  assert.match(findPublicationProblems({ ...ready, wordCount: 0 }).join("\n"), /no readable text/);
+  assert.match(findPublicationProblems({ ...ready, authorCount: 0 }).join("\n"), /no author/);
+  assert.match(findPublicationProblems({ ...ready, notes: undefined }).join("\n"), /--notes must record the grounds/);
+  assert.match(findPublicationProblems({ ...ready, notes: "ok" }).join("\n"), /--notes must record the grounds/);
+  assert.match(
+    findPublicationProblems({ ...ready, title: " ", language: "" }).join("\n"),
+    /no title[\s\S]*no language/,
+  );
 });

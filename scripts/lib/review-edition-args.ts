@@ -8,6 +8,8 @@ export interface EditionReviewArguments {
   notes?: string;
   action: EditionReviewAction;
   copyrightStatus?: PublicCopyrightStatus;
+  /** Target id that authorizes a write to a remote database; see scripts/lib/write-guard.ts. */
+  confirmDatabase?: string;
 }
 
 const actionFlags = new Map<string, Exclude<EditionReviewAction, "show">>([
@@ -17,13 +19,17 @@ const actionFlags = new Map<string, Exclude<EditionReviewAction, "show">>([
   ["--prefer", "prefer"],
 ]);
 
-export function parseEditionReviewArguments(args: readonly string[]): EditionReviewArguments {
+export function parseEditionReviewArguments(rawArgs: readonly string[]): EditionReviewArguments {
+  // pnpm forwards the separator in `pnpm db:review -- --gutenberg-id 345`.
+  const args = rawArgs[0] === "--" ? rawArgs.slice(1) : rawArgs;
+
   let gutenbergId: string | undefined;
   let sourceName: string | undefined;
   let sourceIdentifier: string | undefined;
   let copyrightStatus: PublicCopyrightStatus | undefined;
   let notes: string | undefined;
   let hasNotes = false;
+  let confirmDatabase: string | undefined;
   const actions: EditionReviewAction[] = [];
 
   for (let index = 0; index < args.length; index++) {
@@ -65,6 +71,15 @@ export function parseEditionReviewArguments(args: readonly string[]): EditionRev
         throw new Error("Publishable copyright status must be PUBLIC_DOMAIN_VERIFIED, LICENSED or ORIGINAL.");
       }
       copyrightStatus = value;
+      continue;
+    }
+
+    if (argument === "--confirm-database") {
+      const value = args[++index];
+      if (confirmDatabase !== undefined || !value || value.startsWith("--")) {
+        throw new Error("Expected one --confirm-database value.");
+      }
+      confirmDatabase = value;
       continue;
     }
 
@@ -122,5 +137,6 @@ export function parseEditionReviewArguments(args: readonly string[]): EditionRev
     notes,
     action,
     copyrightStatus,
+    ...(confirmDatabase !== undefined ? { confirmDatabase } : {}),
   };
 }
