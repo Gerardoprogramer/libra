@@ -8,13 +8,18 @@ import { FcGoogle } from "react-icons/fc";
 
 import { Button } from "@/components/ui/button";
 import { Link, useRouter } from "@/i18n/navigation";
+import { signInMessageKey, signUpMessageKey } from "@/lib/auth-errors";
 import { createClient } from "@/lib/supabase/client";
 
 interface AuthFormProps {
   mode: "login" | "register";
+  /** A validated, locale-prefixed path to return to after signing in (see safeNextPath), if any. */
+  next?: string | null;
+  /** The email link or OAuth callback failed before reaching this page. */
+  callbackError?: boolean;
 }
 
-export function AuthForm({ mode }: AuthFormProps) {
+export function AuthForm({ mode, next = null, callbackError = false }: AuthFormProps) {
   const t = useTranslations("auth");
   const locale = useLocale();
   const router = useRouter();
@@ -22,11 +27,25 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(callbackError ? t("callbackError") : null);
   const [success, setSuccess] = useState(false);
   const [pending, setPending] = useState(false);
 
   const isRegister = mode === "register";
+
+  // Where the callback, and the user after signing in, should land.
+  const destination = next ?? `/${locale}/library`;
+
+  function finishSignIn() {
+    if (next) {
+      // `next` already carries its locale prefix and was validated on the server.
+      window.location.assign(next);
+      return;
+    }
+
+    router.replace("/library");
+    router.refresh();
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -43,18 +62,17 @@ export function AuthForm({ mode }: AuthFormProps) {
           email: email.trim(),
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(`/${locale}/library`)}`,
+            emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(destination)}`,
           },
         });
 
         if (signUpError) {
-          setError(t("genericError"));
+          setError(t(signUpMessageKey(signUpError)));
           return;
         }
 
         if (data.session) {
-          router.replace("/library");
-          router.refresh();
+          finishSignIn();
           return;
         }
 
@@ -68,12 +86,11 @@ export function AuthForm({ mode }: AuthFormProps) {
       });
 
       if (signInError) {
-        setError(t("invalidCredentials"));
+        setError(t(signInMessageKey(signInError)));
         return;
       }
 
-      router.replace("/library");
-      router.refresh();
+      finishSignIn();
     } catch {
       setError(t("genericError"));
     } finally {
@@ -88,12 +105,10 @@ export function AuthForm({ mode }: AuthFormProps) {
     const supabase = createClient();
 
     try {
-      const next = `/${locale}/library`;
-
       const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(destination)}`,
         },
       });
 
@@ -133,6 +148,9 @@ export function AuthForm({ mode }: AuthFormProps) {
     );
   }
 
+  const inputClass =
+    "border-input bg-background focus-visible:ring-ring h-10 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2";
+
   return (
     <main id="main-content" className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md items-center px-6 py-12">
       <div className="w-full rounded-2xl border p-6 shadow-sm sm:p-8">
@@ -145,7 +163,11 @@ export function AuthForm({ mode }: AuthFormProps) {
         </div>
 
         {error && (
-          <div role="alert" className="border-destructive/30 bg-destructive/5 mb-5 rounded-lg border px-4 py-3 text-sm">
+          <div
+            id="auth-error"
+            role="alert"
+            className="border-destructive/30 bg-destructive/5 mb-5 rounded-lg border px-4 py-3 text-sm"
+          >
             {error}
           </div>
         )}
@@ -164,14 +186,27 @@ export function AuthForm({ mode }: AuthFormProps) {
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="border-input bg-background focus-visible:ring-ring h-10 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "auth-error" : undefined}
+              className={inputClass}
             />
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium">
-              {t("password")}
-            </label>
+            <div className="flex items-baseline justify-between gap-3">
+              <label htmlFor="password" className="text-sm font-medium">
+                {t("password")}
+              </label>
+
+              {!isRegister && (
+                <Link
+                  href="/forgot-password"
+                  className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
+                >
+                  {t("forgotPassword")}
+                </Link>
+              )}
+            </div>
 
             <input
               id="password"
@@ -181,7 +216,9 @@ export function AuthForm({ mode }: AuthFormProps) {
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="border-input bg-background focus-visible:ring-ring h-10 w-full rounded-md border px-3 text-sm outline-none focus-visible:ring-2"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "auth-error" : undefined}
+              className={inputClass}
             />
           </div>
 

@@ -1,25 +1,21 @@
-import { getLocale, getTranslations } from "next-intl/server";
-import { createClient } from "@/lib/supabase/server";
+import { Suspense } from "react";
 
-import { FiMenu, FiSearch, FiUser } from "react-icons/fi";
+import { getLocale, getTranslations } from "next-intl/server";
+import { FiSearch } from "react-icons/fi";
 import { HiOutlineBookOpen } from "react-icons/hi2";
 
+import { HeaderAuth, HeaderAuthFallback, MobileMenuAuthLinks } from "@/components/layout/HeaderAuth";
 import { LanguageSwitcher } from "@/components/layout/LanguageSwitcher";
+import { MobileMenu } from "@/components/layout/MobileMenu";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 
+// The session is read only inside the Suspense boundaries below, so the rest of the header, and the page
+// under it, never waits for the cookies.
 export async function Header() {
-  const [t, authT, locale, supabase] = await Promise.all([
-    getTranslations("nav"),
-    getTranslations("auth"),
-    getLocale(),
-    createClient(),
-  ]);
-
-  const { data, error } = await supabase.auth.getClaims();
-
-  const isAuthenticated = !error && Boolean(data?.claims?.sub);
+  const [t, locale] = await Promise.all([getTranslations("nav"), getLocale()]);
+  const menuLink = "hover:bg-muted rounded-lg px-3 py-2 text-sm";
 
   return (
     <header className="bg-background/90 sticky top-0 z-50 border-b backdrop-blur">
@@ -49,42 +45,23 @@ export async function Header() {
         </nav>
 
         <div className="ml-auto flex items-center gap-1">
-          <details className="relative md:hidden">
-            <summary className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex cursor-pointer list-none items-center gap-2 rounded-full px-3 py-2 text-sm transition focus-visible:ring-2">
-              <FiMenu aria-hidden="true" className="size-4" />
-              {t("menu")}
-            </summary>
-
-            <nav className="bg-popover absolute top-full right-0 z-50 mt-2 grid min-w-44 gap-1 rounded-xl border p-2 shadow-lg">
-              <Link href="/books" className="hover:bg-muted rounded-lg px-3 py-2 text-sm">
-                {t("discover")}
-              </Link>
-              <Link href="/categories" className="hover:bg-muted rounded-lg px-3 py-2 text-sm">
-                {t("categories")}
-              </Link>
-              <Link href="/authors" className="hover:bg-muted rounded-lg px-3 py-2 text-sm">
-                {t("authors")}
-              </Link>
-              <Link href="/library" className="hover:bg-muted rounded-lg px-3 py-2 text-sm">
-                {t("library")}
-              </Link>
-              {isAuthenticated ? (
-                <Link href="/account" className="hover:bg-muted rounded-lg px-3 py-2 text-sm">
-                  {authT("account")}
-                </Link>
-              ) : (
-                <>
-                  <Link href="/login" className="hover:bg-muted rounded-lg px-3 py-2 text-sm">
-                    {authT("signIn")}
-                  </Link>
-
-                  <Link href="/register" className="hover:bg-muted rounded-lg px-3 py-2 text-sm">
-                    {authT("register")}
-                  </Link>
-                </>
-              )}
-            </nav>
-          </details>
+          <MobileMenu label={t("menu")}>
+            <Link href="/books" className={menuLink}>
+              {t("discover")}
+            </Link>
+            <Link href="/categories" className={menuLink}>
+              {t("categories")}
+            </Link>
+            <Link href="/authors" className={menuLink}>
+              {t("authors")}
+            </Link>
+            <Link href="/library" className={menuLink}>
+              {t("library")}
+            </Link>
+            <Suspense fallback={null}>
+              <MobileMenuAuthLinks />
+            </Suspense>
+          </MobileMenu>
 
           <LanguageSwitcher
             locale={locale as Locale}
@@ -92,23 +69,9 @@ export async function Header() {
             errorLabel={t("languageLoadError")}
           />
 
-          {isAuthenticated ? (
-            <Button variant="ghost" size="icon" asChild>
-              <Link href="/account" aria-label={authT("account")}>
-                <FiUser aria-hidden="true" className="size-5" />
-              </Link>
-            </Button>
-          ) : (
-            <>
-              <Button variant="ghost" className="hidden sm:inline-flex" asChild>
-                <Link href="/login">{authT("signIn")}</Link>
-              </Button>
-
-              <Button className="hidden sm:inline-flex" asChild>
-                <Link href="/register">{authT("register")}</Link>
-              </Button>
-            </>
-          )}
+          <Suspense fallback={<HeaderAuthFallback />}>
+            <HeaderAuth />
+          </Suspense>
 
           <Button variant="ghost" size="icon" asChild>
             <Link href="/books" aria-label={t("search")}>

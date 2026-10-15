@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { getTranslations } from "next-intl/server";
 
-import { AuthForm } from "@/components/auth/AuthForm";
+import { AuthPage, type AuthSearchParams } from "@/components/auth/AuthPage";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("auth");
@@ -16,6 +16,6 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function LoginPage() {
-  return <AuthForm mode="login" />;
+export default function LoginPage({ searchParams }: { searchParams: Promise<AuthSearchParams> }) {
+  return <AuthPage mode="login" searchParams={searchParams} />;
 }

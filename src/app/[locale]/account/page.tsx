@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
+import { SignOutForm } from "@/components/account/SignOutForm";
 import { createClient } from "@/lib/supabase/server";
 import { routing } from "@/i18n/routing";
 
@@ -44,7 +44,8 @@ export default async function AccountPage({ params }: AccountPageProps) {
   const { data, error } = await supabase.auth.getClaims();
 
   if (error || !data?.claims?.sub) {
-    redirect(`/${locale}/login`);
+    // Come back here after signing in.
+    redirect(`/${locale}/login?next=${encodeURIComponent(`/${locale}/account`)}`);
   }
 
   const email = typeof data.claims.email === "string" ? data.claims.email : null;
@@ -75,13 +76,7 @@ export default async function AccountPage({ params }: AccountPageProps) {
           </div>
         </section>
 
-        <form action={signOut}>
-          <input type="hidden" name="locale" value={locale} />
-
-          <Button type="submit" variant="outline">
-            {t("signOut")}
-          </Button>
-        </form>
+        <SignOutForm action={signOut} locale={locale} userId={data.claims.sub} label={t("signOut")} />
       </div>
     </main>
   );
