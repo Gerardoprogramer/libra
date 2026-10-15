@@ -106,3 +106,27 @@ test("the book action can fetch an older edition outside the recent-history limi
   assert.ok(h.statements[0].params.includes(position.editionId));
   assert.ok(h.statements[0].params.includes(A));
 });
+
+test("L20: a client clock ahead of the server never stores a time later than the server's own", async () => {
+  const ahead = new Date(Date.now() + 240_000).toISOString();
+  const h = handler();
+
+  assert.equal((await h.POST(request({ ...position, updatedAt: ahead }))).status, 200);
+
+  const timestamps = h.statements[1].params.filter(
+    (value): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value),
+  );
+  assert.ok(timestamps.length >= 2, "both the inserted value and the ordering guard carry the time");
+  for (const timestamp of timestamps) {
+    assert.notEqual(timestamp, ahead);
+    assert.ok(Date.parse(timestamp) <= Date.now());
+  }
+});
+
+test("L20: timestamps from before the service existed, or far in the future, are rejected before SQL", async () => {
+  for (const updatedAt of ["2019-12-31T23:59:59.000Z", new Date(Date.now() + 3_600_000).toISOString()]) {
+    const h = handler();
+    assert.equal((await h.POST(request({ ...position, updatedAt }))).status, 400);
+    assert.equal(h.statements.length, 0);
+  }
+});

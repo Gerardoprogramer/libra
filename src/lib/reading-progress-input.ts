@@ -29,7 +29,8 @@ export function parseReadingProgressInput(value: unknown): ReadingProgressInput 
     input.percentage > 100 ||
     typeof input.updatedAt !== "string" ||
     !Number.isFinite(Date.parse(input.updatedAt)) ||
-    Date.parse(input.updatedAt) > Date.now() + 300_000
+    Date.parse(input.updatedAt) > Date.now() + 300_000 ||
+    Date.parse(input.updatedAt) < Date.parse("2020-01-01T00:00:00Z")
   )
     return null;
   return {

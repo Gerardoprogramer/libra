@@ -7,6 +7,9 @@ import {
   parseReadingProgress,
   READING_PROGRESS_CHANGE_EVENT,
   READING_PROGRESS_PREFIX,
+  clearSyncedScopedReadingProgress,
+  saveScopedReadingProgress,
+  readAllScopedReadingProgress,
   saveReadingProgress,
   calculateBookProgress,
   type ReadingProgress,
@@ -33,6 +36,9 @@ function createBrowser() {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => {
         values.set(key, value);
+      },
+      removeItem: (key: string) => {
+        values.delete(key);
       },
     },
   });
@@ -146,4 +152,52 @@ test("blocked and quota-limited storage fail without throwing or reporting succe
 
   assert.equal(saveReadingProgress(makeProgress("frankenstein")), false);
   assert.equal(quotaNotifications, 0);
+});
+
+test("L19: signing out removes the account's synced cache but keeps unsent changes and other scopes", () => {
+  const { browser } = createBrowser();
+  const alice = { type: "user", userId: "alice" } as const;
+  const bob = { type: "user", userId: "bob" } as const;
+  const guest = { type: "guest" } as const;
+  const entry = (slug: string, pendingSync: boolean): ReadingProgress => ({
+    ...makeProgress(slug),
+    editionId: `edition-${slug}`,
+    pendingSync,
+  });
+  let changes = 0;
+  browser.addEventListener(READING_PROGRESS_CHANGE_EVENT, () => changes++);
+
+  saveScopedReadingProgress(entry("synced-book", false), alice);
+  saveScopedReadingProgress(entry("unsent-book", true), alice);
+  saveScopedReadingProgress(entry("bob-book", false), bob);
+  saveScopedReadingProgress(entry("guest-book", false), guest);
+  changes = 0;
+
+  assert.equal(clearSyncedScopedReadingProgress(alice), 1);
+  assert.equal(changes, 1);
+  assert.deepEqual(
+    readAllScopedReadingProgress(alice)?.map((value) => JSON.parse(value).bookSlug),
+    ["unsent-book"],
+  );
+  assert.equal(readAllScopedReadingProgress(bob)?.length, 1);
+  assert.equal(readAllScopedReadingProgress(guest)?.length, 1);
+
+  // Nothing left to clear: no event, no error.
+  assert.equal(clearSyncedScopedReadingProgress(alice), 0);
+  assert.equal(changes, 1);
+});
+
+test("L19: clearing the cache tolerates unavailable storage", () => {
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: Object.assign(new EventTarget(), {
+      localStorage: {
+        get length(): number {
+          throw new Error("storage blocked");
+        },
+      },
+    }),
+  });
+
+  assert.equal(clearSyncedScopedReadingProgress({ type: "user", userId: "alice" }), 0);
 });

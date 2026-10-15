@@ -176,6 +176,39 @@ export function readAllScopedReadingProgress(scope: ReadingProgressScope): strin
 }
 
 /**
+ * Removes one user's cached entries that the server already has, i.e. everything not waiting in the outbox.
+ * Entries with unsent changes stay, so they still upload the next time that same user signs in on this browser.
+ * Meant for sign-out: the cache must not outlive the session on a shared computer.
+ */
+export function clearSyncedScopedReadingProgress(scope: Extract<ReadingProgressScope, { type: "user" }>): number {
+  try {
+    const prefix = getScopedReadingProgressPrefix(scope);
+    const keys: string[] = [];
+
+    for (let index = 0; index < window.localStorage.length; index++) {
+      const key = window.localStorage.key(index);
+
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+
+    let removed = 0;
+
+    for (const key of keys) {
+      if (parseReadingProgress(window.localStorage.getItem(key))?.pendingSync) continue;
+
+      window.localStorage.removeItem(key);
+      removed++;
+    }
+
+    if (removed > 0) window.dispatchEvent(new Event(READING_PROGRESS_CHANGE_EVENT));
+
+    return removed;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Legacy LocalStorage write.
  */
 export function saveReadingProgress(progress: ReadingProgress): boolean {

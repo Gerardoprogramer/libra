@@ -136,7 +136,10 @@ export async function POST(request: Request) {
       )
       .limit(1);
     if (!chapter) return reply({ error: "Chapter unavailable." }, 404);
-    const updatedAt = new Date(input.updatedAt);
+    // The client clock orders a user's own writes, but it cannot be trusted ahead of the server's: a device with
+    // a clock set days forward would otherwise make every other device's later position look older and be
+    // refused. The stored time is therefore never later than the server's own now.
+    const updatedAt = new Date(Math.min(Date.parse(input.updatedAt), Date.now()));
     const rows = await db
       .insert(readingProgress)
       .values({ ...input, updatedAt })
