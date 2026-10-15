@@ -63,6 +63,13 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          // Only the directives that cannot affect what the pages load: no script-src/img-src/connect-src yet, since
+          // Next.js streaming, Supabase and the R2 covers have not been enumerated for the deployed origin. They
+          // forbid framing by other sites, plugins, a rewritten <base> and forms that post to another origin.
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'; form-action 'self'",
+          },
         ],
       },
     ];
