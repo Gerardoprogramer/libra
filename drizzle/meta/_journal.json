@@ -64,6 +64,13 @@
       "when": 1792024081119,
       "tag": "0008_edition_reviews",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792024093559,
+      "tag": "0009_book_authors_author_index",
+      "breakpoints": true
     }
   ]
 }

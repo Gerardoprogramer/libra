@@ -1,4 +1,4 @@
-import { integer, pgTable, primaryKey, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, primaryKey, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
 
 import { authors } from "./authors";
 
@@ -49,5 +49,8 @@ export const bookAuthors = pgTable(
     primaryKey({
       columns: [table.bookId, table.authorId],
     }),
+
+    // The primary key leads with book_id; author pages and author counts look books up by author.
+    index("book_authors_author_idx").on(table.authorId),
   ],
 ).enableRLS();
