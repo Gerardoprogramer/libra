@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { getLocalizedChapterPath, type ContentLocale } from "@/db/queries/books";
+import { isSlug, isUuid } from "@/lib/catalog-filters";
 
 function isContentLocale(value: string | null): value is ContentLocale {
   return value === "es" || value === "en";
 }
+
+// Anything that cannot name a stored book or chapter is refused before it can become its own cache entry.
+const noStore = { "Cache-Control": "no-store" };
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -15,38 +19,21 @@ export async function GET(request: Request) {
   const to = url.searchParams.get("to");
   const edition = url.searchParams.get("edition") ?? undefined;
 
-  if (!book || !chapter || !isContentLocale(from) || !isContentLocale(to)) {
-    return NextResponse.json(
-      { error: "Invalid locale path request." },
-      {
-        status: 400,
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      },
-    );
+  if (
+    !isSlug(book) ||
+    !isSlug(chapter) ||
+    !isContentLocale(from) ||
+    !isContentLocale(to) ||
+    (edition !== undefined && !isUuid(edition))
+  ) {
+    return NextResponse.json({ error: "Invalid locale path request." }, { status: 400, headers: noStore });
   }
 
-  const pathname = await getLocalizedChapterPath(book, chapter, from, to, edition);
+  const destination = await getLocalizedChapterPath(book, chapter, from, to, edition);
 
-  if (!pathname) {
-    return NextResponse.json(
-      { error: "Localized chapter not found." },
-      {
-        status: 404,
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      },
-    );
+  if (!destination) {
+    return NextResponse.json({ error: "Localized chapter not found." }, { status: 404, headers: noStore });
   }
 
-  return NextResponse.json(
-    { pathname },
-    {
-      headers: {
-        "Cache-Control": "no-store",
-      },
-    },
-  );
+  return NextResponse.json(destination, { headers: noStore });
 }

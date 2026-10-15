@@ -241,8 +241,21 @@ async function main() {
     signal: AbortSignal.timeout(30_000),
   });
   assert.equal(missingImage.status, 404, "Missing book images must return 404");
+
+  // These are decided before anything streams, so unlike the missing book above they are real 404s: an unmatched
+  // localized URL (rendered inside the locale layout) and a chapter that exists in no public edition of a book.
+  const unmatched = await fetch(new URL("/es/libra-seo-missing-route-0f7b16", base), {
+    signal: AbortSignal.timeout(30_000),
+  });
+  assert.equal(unmatched.status, 404, "An unmatched localized URL must return 404");
+  assert.equal(load(await unmatched.text())("html").attr("lang"), "es", "The 404 must render in the locale layout");
+
+  const missingChapter = await fetch(new URL(`${samples[0]}/libra-seo-missing-chapter-0f7b16`, base), {
+    signal: AbortSignal.timeout(30_000),
+  });
+  assert.equal(missingChapter.status, 404, "A chapter that does not exist must return 404");
   console.log(
-    "PASS sitemap, robots, crawler HTML, distinct images, icons, manifest, missing-page noindex and image 404",
+    "PASS sitemap, robots, crawler HTML, distinct images, icons, manifest, missing-page noindex, real 404s and image 404",
   );
 }
 

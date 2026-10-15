@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { getBooks, getCategories, type ContentLocale } from "@/db/queries/books";
 
 import { Link } from "@/i18n/navigation";
+import { normalizeCategorySlug, normalizeSearchQuery } from "@/lib/catalog-filters";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
 
 interface BooksPageProps {
@@ -73,8 +74,9 @@ async function BooksContent({ searchParams }: BooksContentProps) {
 
   const params = await searchParams;
 
-  const query = (typeof params.q === "string" ? params.q : "").trim();
-  const selectedCategory = (typeof params.category === "string" ? params.category : "").trim();
+  // Bounded here as well as in the query: each distinct value would otherwise be its own cache entry.
+  const query = normalizeSearchQuery(params.q);
+  const selectedCategory = normalizeCategorySlug(params.category);
 
   const [books, categories] = await Promise.all([
     getBooks(locale, {

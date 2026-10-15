@@ -62,6 +62,13 @@ metadata de un libro inexistente. Con Cache Components, Next.js puede haber envi
 y JSON-LD de libro. La ruta de imagen sí devuelve un 404 HTTP. Es el comportamiento documentado de
 [notFound con streaming](https://nextjs.org/docs/app/api-reference/functions/not-found), conservando la arquitectura actual.
 
+Dos casos sí devuelven un 404 HTTP real porque se deciden antes de que empiece el streaming: una URL localizada que no
+coincide con ninguna ruta (`src/app/[locale]/[...rest]/page.tsx`, dentro del layout del idioma, con `<html lang>` y
+textos traducidos) y un capítulo que no existe en ninguna edición pública del libro (`chapterExistsInPublicEdition`,
+comprobado en la página antes del límite de Suspense; `generateStaticParams` prerrenderiza un capítulo por libro e
+idioma y el resto se genera en la primera visita). Un capítulo que existe pero no en la edición pedida con `?edition=`
+sigue siendo un soft 404 con `noindex`. `pnpm smoke:seo` comprueba ambos 404 contra un servidor en ejecución.
+
 Las fichas `/es/...` y `/en/...` tienen canonical propio. Se conservó la política editorial: si solo existe una edición
 inglesa, la ficha española puede mostrarla y compartirse, pero mantiene `noindex` y no se anuncia como traducción
 en hreflang o sitemap. Si existen ediciones públicas en ambos idiomas, se emiten alternates recíprocos.

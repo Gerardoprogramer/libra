@@ -36,6 +36,9 @@ export function LanguageMenu({ locale, open, onOpenChange, trigger }: LanguageMe
     }
 
     const [, bookSlug, chapterSlug] = segments;
+    // The book page lists the chapters of the edition shown in the target language, so it is always a
+    // coherent destination even when that language has no equivalent of this chapter.
+    const bookPage = `/books/${bookSlug}`;
 
     try {
       const params = new URLSearchParams({
@@ -52,13 +55,16 @@ export function LanguageMenu({ locale, open, onOpenChange, trigger }: LanguageMe
         cache: "no-store",
       });
 
-      if (!response.ok) {
+      const data: { pathname?: string; exact?: boolean } = response.ok ? await response.json() : {};
+
+      if (!data.pathname) {
+        router.replace(bookPage, { locale: nextLocale });
         return;
       }
 
-      const data: { pathname?: string } = await response.json();
-
-      if (!data.pathname) {
+      if (!data.exact) {
+        // Another edition: its chapters are not the ones being read, so land on its book page.
+        router.replace(data.pathname, { locale: nextLocale });
         return;
       }
 
@@ -67,7 +73,7 @@ export function LanguageMenu({ locale, open, onOpenChange, trigger }: LanguageMe
       const search = query.size ? `?${query.toString()}` : "";
       router.replace(`${data.pathname}${search}${window.location.hash}`, { locale: nextLocale });
     } catch {
-      // Keep the current page if the localized route cannot be resolved.
+      router.replace(bookPage, { locale: nextLocale });
     }
   }
 

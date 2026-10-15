@@ -193,13 +193,13 @@ export default async function BookPage({ params }: BookPageProps) {
                 {
                   "@type": "ListItem",
                   position: 1,
-                  name: interfaceLocale === "es" ? "Inicio" : "Home",
+                  name: t("breadcrumbHome"),
                   item: new URL(`/${interfaceLocale}`, siteUrl).href,
                 },
                 {
                   "@type": "ListItem",
                   position: 2,
-                  name: interfaceLocale === "es" ? "Libros" : "Books",
+                  name: t("breadcrumbBooks"),
                   item: new URL(`/${interfaceLocale}/books`, siteUrl).href,
                 },
                 {

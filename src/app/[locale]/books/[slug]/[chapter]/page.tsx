@@ -7,7 +7,13 @@ import { getMessages, getTranslations } from "next-intl/server";
 
 import { ReaderView } from "@/components/reader/ReaderView";
 
-import { getChapterBySlug, type ContentLocale } from "@/db/queries/books";
+import {
+  chapterExistsInPublicEdition,
+  getChapterBySlug,
+  getSitemapContent,
+  type ContentLocale,
+} from "@/db/queries/books";
+import { isSlug, isUuid } from "@/lib/catalog-filters";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getAbsolutePublicImageUrl, getConfiguredSiteUrl } from "@/lib/site-url";
@@ -33,11 +39,13 @@ function getLanguageCode(language: string) {
 export async function generateMetadata({ params, searchParams }: ReaderPageProps): Promise<Metadata> {
   const { locale, slug, chapter } = await params;
   const requestedEdition = (await searchParams).edition;
-  const editionId = typeof requestedEdition === "string" ? requestedEdition : undefined;
+  // An edition id that is not a UUID can never name an edition: do not let it become a cache key.
+  const invalidEdition = requestedEdition !== undefined && !isUuid(requestedEdition);
+  const editionId = isUuid(requestedEdition) ? requestedEdition : undefined;
   const interfaceLocale = getInterfaceLocale(locale);
 
   const [result, t] = await Promise.all([
-    getChapterBySlug(slug, chapter, interfaceLocale, editionId),
+    invalidEdition ? null : getChapterBySlug(slug, chapter, interfaceLocale, editionId),
     getTranslations({
       locale: interfaceLocale,
       namespace: "reader",
@@ -85,7 +93,30 @@ export async function generateMetadata({ params, searchParams }: ReaderPageProps
   });
 }
 
-export default function ReaderPage(props: ReaderPageProps) {
+// With Cache Components generateStaticParams must return at least one param. One chapter per book and locale is
+// prerendered; every other existing chapter renders on its first visit and is cached afterwards.
+export async function generateStaticParams() {
+  const { chapters } = await getSitemapContent();
+  const first = new Map<string, { locale: ContentLocale; slug: string; chapter: string }>();
+
+  for (const item of chapters) {
+    const key = `${item.locale}/${item.bookSlug}`;
+
+    if (!first.has(key)) first.set(key, { locale: item.locale, slug: item.bookSlug, chapter: item.slug });
+  }
+
+  return [...first.values()];
+}
+
+export default async function ReaderPage(props: ReaderPageProps) {
+  const { slug, chapter } = await props.params;
+
+  // A chapter that exists in no public edition is a real 404. The status has to be decided before the Suspense
+  // boundary below starts streaming: afterwards it is already 200 and can only be marked noindex.
+  if (!isSlug(slug) || !isSlug(chapter) || !(await chapterExistsInPublicEdition(slug, chapter))) {
+    notFound();
+  }
+
   return (
     <Suspense
       fallback={<main id="main-content" className="mx-auto min-h-screen max-w-3xl px-6 py-12" aria-busy="true" />}
@@ -98,12 +129,13 @@ export default function ReaderPage(props: ReaderPageProps) {
 async function ReaderContent({ params, searchParams }: ReaderPageProps) {
   const { locale, slug, chapter } = await params;
   const requestedEdition = (await searchParams).edition;
-  if (Array.isArray(requestedEdition)) notFound();
+  if (requestedEdition !== undefined && !isUuid(requestedEdition)) notFound();
   const interfaceLocale = getInterfaceLocale(locale);
 
-  const [result, messages] = await Promise.all([
+  const [result, messages, bookT] = await Promise.all([
     getChapterBySlug(slug, chapter, interfaceLocale, requestedEdition),
     getMessages(),
+    getTranslations({ locale: interfaceLocale, namespace: "book" }),
   ]);
 
   if (!result) {
@@ -184,13 +216,13 @@ async function ReaderContent({ params, searchParams }: ReaderPageProps) {
                 {
                   "@type": "ListItem",
                   position: 1,
-                  name: interfaceLocale === "es" ? "Inicio" : "Home",
+                  name: bookT("breadcrumbHome"),
                   item: new URL(`/${interfaceLocale}`, siteUrl).href,
                 },
                 {
                   "@type": "ListItem",
                   position: 2,
-                  name: interfaceLocale === "es" ? "Libros" : "Books",
+                  name: bookT("breadcrumbBooks"),
                   item: new URL(`/${interfaceLocale}/books`, siteUrl).href,
                 },
                 {

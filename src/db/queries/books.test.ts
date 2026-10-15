@@ -10,6 +10,7 @@ import { drizzle } from "drizzle-orm/pg-proxy";
 import ts from "typescript";
 
 import * as schema from "../schema";
+import * as filters from "../../lib/catalog-filters";
 import * as selection from "../../lib/edition-selection";
 import { isPublicEditionStatus } from "../../lib/editorial-status";
 import * as visibility from "./editorial-visibility";
@@ -54,6 +55,7 @@ function queriesWithRows(...responses: Row[][]) {
     "drizzle-orm": orm,
     "drizzle-orm/pg-core": pg,
     "@/db/schema": schema,
+    "@/lib/catalog-filters": filters,
     "@/lib/edition-selection": selection,
     "./editorial-visibility": visibility,
   };
@@ -356,4 +358,68 @@ test("authors and categories without public books do not appear in listings", as
   assert.deepEqual(await queries.getAuthors(), []);
   assert.deepEqual(await queries.getCategories("es"), []);
   statements.forEach(assertPublicFilter);
+});
+
+const chapterRow = (slug: string, number: number) => ({ id: `chapter-${slug}`, slug, number, title: slug });
+
+test("L05: switching language inside the same edition keeps the very same chapter", async () => {
+  // An English-only book resolves to the same edition in both interface languages.
+  const chapters = [chapterRow("one", 1), chapterRow("two", 2)];
+  const h = queriesWithRows([book], [author], [english], [], chapters, [book], [author], [english], [], chapters);
+
+  assert.deepEqual(await h.queries.getLocalizedChapterPath(book.slug, "two", "en", "es"), {
+    pathname: "/books/one-work/two",
+    exact: true,
+  });
+  h.assertConsumed();
+});
+
+test("L05: different editions never map chapters by number; the target book page is the safe destination", async () => {
+  // English chapter 2 and Spanish chapter 2 are not the same passage: the Spanish edition has a prologue.
+  const englishChapters = [chapterRow("one", 1), chapterRow("two", 2)];
+  const spanishChapters = [chapterRow("prologo", 1), chapterRow("capitulo-uno", 2), chapterRow("capitulo-dos", 3)];
+  const h = queriesWithRows(
+    [book],
+    [author],
+    [english, spanish],
+    [],
+    englishChapters,
+    [book],
+    [author],
+    [english, spanish],
+    [],
+    spanishChapters,
+  );
+
+  const destination = await h.queries.getLocalizedChapterPath(book.slug, "two", "en", "es");
+
+  assert.deepEqual(destination, { pathname: "/books/one-work", exact: false });
+  assert.ok(!JSON.stringify(destination).includes("capitulo"));
+  h.assertConsumed();
+});
+
+test("L05: a chapter or book that does not exist has no localized path", async () => {
+  const missingChapter = queriesWithRows([book], [author], [english], [], [chapterRow("one", 1)]);
+  assert.equal(await missingChapter.queries.getLocalizedChapterPath(book.slug, "ghost", "en", "es"), null);
+  missingChapter.assertConsumed();
+
+  const missingBook = queriesWithRows([]);
+  assert.equal(await missingBook.queries.getLocalizedChapterPath("nope", "one", "en", "es"), null);
+  missingBook.assertConsumed();
+});
+
+test("L11: search wildcards match literally and the pattern is bounded", async () => {
+  const h = queriesWithRows([]);
+  // The user types: 100%_done\x  (a percent, an underscore and a backslash)
+  await h.queries.getBooks("es", { query: String.raw`100%_done\x` });
+  const patterns = h.statements[0].params.filter((value) => typeof value === "string" && value.startsWith("%"));
+
+  assert.ok(patterns.length >= 1);
+  for (const pattern of patterns) assert.equal(pattern, String.raw`%100\%\_done\\x%`);
+
+  const long = queriesWithRows([]);
+  await long.queries.getBooks("es", { query: "a".repeat(5000), category: "c".repeat(5000) });
+  for (const value of long.statements[0].params) {
+    if (typeof value === "string") assert.ok(value.length <= 110, "no unbounded value reaches SQL");
+  }
 });

@@ -5,6 +5,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { cacheLife, cacheTag } from "next/cache";
 
 import { db } from "@/db";
+import { containsPattern, normalizeCategorySlug, normalizeSearchQuery } from "@/lib/catalog-filters";
 import { chooseEdition } from "@/lib/edition-selection";
 
 import {
@@ -158,8 +159,10 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
   cacheLife("editorial");
   cacheTag("library:editorial");
 
-  const query = filters.query?.trim();
-  const category = filters.category?.trim();
+  // Bounded and wildcard-free: callers normalize first (a cache key is made of the raw arguments), and this
+  // repeats it so no caller can put an unbounded or wildcard-bearing pattern into SQL.
+  const query = normalizeSearchQuery(filters.query);
+  const category = normalizeCategorySlug(filters.category);
 
   const rows = await db
     .select({
@@ -229,8 +232,8 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
 
         query
           ? or(
-              ilike(books.originalTitle, `%${query}%`),
-              ilike(authors.name, `%${query}%`),
+              ilike(books.originalTitle, containsPattern(query)),
+              ilike(authors.name, containsPattern(query)),
               exists(
                 db
                   .select({ id: editions.id })
@@ -239,7 +242,7 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
                     and(
                       eq(editions.bookId, books.id),
                       getPublicEditionVisibilityCondition(),
-                      ilike(editions.title, `%${query}%`),
+                      ilike(editions.title, containsPattern(query)),
                     ),
                   ),
               ),
@@ -716,24 +719,54 @@ export async function getChapterBySlug(
   };
 }
 
+/** Whether any public edition of the book has a chapter with this slug. Cheap enough to decide a 404 early. */
+export async function chapterExistsInPublicEdition(bookSlug: string, chapterSlug: string): Promise<boolean> {
+  "use cache";
+
+  cacheLife("editorial");
+  cacheTag(`book:${bookSlug}`, `chapter:${bookSlug}:${chapterSlug}`, "library:editorial");
+
+  const [row] = await db
+    .select({ id: chapters.id })
+    .from(chapters)
+    .innerJoin(editions, eq(editions.id, chapters.editionId))
+    .innerJoin(books, eq(books.id, editions.bookId))
+    .where(and(eq(books.slug, bookSlug), eq(chapters.slug, chapterSlug), getPublicEditionVisibilityCondition()))
+    .limit(1);
+
+  return Boolean(row);
+}
+
+export interface LocalizedChapterPath {
+  /** Path without the locale prefix. */
+  pathname: string;
+  /** True only when the destination is the very same chapter; false when it is a safe fallback. */
+  exact: boolean;
+}
+
+/**
+ * Where to go when the reader switches interface language.
+ *
+ * The same chapter is only certain when both locales resolve to the same edition. Two editions of a book
+ * (an original and a translation, or two translations) are different texts whose chapters are split and
+ * numbered differently, so chapter numbers never identify the same passage. In that case the safe,
+ * coherent destination is the book page in the target language, which lists that edition's chapters.
+ */
 export async function getLocalizedChapterPath(
   bookSlug: string,
   chapterSlug: string,
   fromLocale: ContentLocale,
   toLocale: ContentLocale,
   fromEditionId?: string,
-): Promise<string | null> {
+): Promise<LocalizedChapterPath | null> {
   "use cache";
 
   cacheLife("editorial");
   cacheTag(`book:${bookSlug}`, "library:editorial");
 
-  const [sourceBook, targetBook] = await Promise.all([
-    getBookBySlug(bookSlug, fromLocale, fromEditionId),
-    getBookBySlug(bookSlug, toLocale),
-  ]);
+  const sourceBook = await getBookBySlug(bookSlug, fromLocale, fromEditionId);
 
-  if (!sourceBook || !targetBook) {
+  if (!sourceBook) {
     return null;
   }
 
@@ -743,20 +776,20 @@ export async function getLocalizedChapterPath(
     return null;
   }
 
-  // If both locales resolve to the same edition,
-  // the chapter slug is already valid.
-  if (sourceBook.edition.id === targetBook.edition.id) {
-    return `/books/${encodeURIComponent(bookSlug)}/${encodeURIComponent(sourceChapter.slug)}`;
-  }
+  const targetBook = await getBookBySlug(bookSlug, toLocale);
 
-  // Different editions: map the chapter by its position/number.
-  const targetChapter = targetBook.chapters.find((chapter) => chapter.number === sourceChapter.number);
-
-  if (!targetChapter) {
+  if (!targetBook) {
     return null;
   }
 
-  return `/books/${encodeURIComponent(bookSlug)}/${encodeURIComponent(targetChapter.slug)}`;
+  if (sourceBook.edition.id === targetBook.edition.id) {
+    return {
+      pathname: `/books/${encodeURIComponent(bookSlug)}/${encodeURIComponent(sourceChapter.slug)}`,
+      exact: true,
+    };
+  }
+
+  return { pathname: `/books/${encodeURIComponent(bookSlug)}`, exact: false };
 }
 
 export async function getAuthors(): Promise<AuthorListItem[]> {
