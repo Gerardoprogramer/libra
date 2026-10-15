@@ -87,7 +87,9 @@ export async function generateMetadata({ params, searchParams }: ReaderPageProps
 
 export default function ReaderPage(props: ReaderPageProps) {
   return (
-    <Suspense fallback={<main className="mx-auto min-h-screen max-w-3xl px-6 py-12" aria-busy="true" />}>
+    <Suspense
+      fallback={<main id="main-content" className="mx-auto min-h-screen max-w-3xl px-6 py-12" aria-busy="true" />}
+    >
       <ReaderContent {...props} />
     </Suspense>
   );

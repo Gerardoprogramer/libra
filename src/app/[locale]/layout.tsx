@@ -68,13 +68,19 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
   }
 
   setRequestLocale(locale);
-  const messages = await getMessages();
+  const [messages, nav] = await Promise.all([getMessages(), getTranslations({ locale, namespace: "nav" })]);
 
   return (
     <html lang={locale}>
       <body>
         {/* Navigation needs the locale; only the error boundary needs global messages. */}
         <NextIntlClientProvider messages={{ errors: messages.errors, auth: messages.auth }}>
+          <a
+            href="#main-content"
+            className="bg-background text-foreground ring-ring sr-only rounded-md px-4 py-2 text-sm font-medium focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:ring-2"
+          >
+            {nav("skipToContent")}
+          </a>
           <Header />
           {children}
         </NextIntlClientProvider>

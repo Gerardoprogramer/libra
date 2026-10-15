@@ -33,7 +33,7 @@ export default async function AuthorsPage() {
   const [authors, t] = await Promise.all([getAuthors(), getTranslations("author")]);
 
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-6 py-14 md:py-20">
+    <main id="main-content" className="mx-auto min-h-screen max-w-7xl px-6 py-14 md:py-20">
       <header className="max-w-3xl">
         <p className="text-muted-foreground mb-3 text-xs tracking-[0.25em] uppercase">{t("listingEyebrow")}</p>
 

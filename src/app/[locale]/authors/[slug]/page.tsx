@@ -131,7 +131,7 @@ export default async function AuthorPage({ params }: AuthorPageProps) {
     <>
       {authorStructuredData && <JsonLd data={authorStructuredData} />}
 
-      <main className="min-h-screen">
+      <main id="main-content" className="min-h-screen">
         <section className="border-b">
           <div className="mx-auto max-w-7xl px-6 py-14 md:py-20">
             <p className="text-muted-foreground mb-3 text-xs tracking-[0.25em] uppercase">{t("eyebrow")}</p>

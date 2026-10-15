@@ -7,7 +7,8 @@
     "search": "Search",
     "menu": "Menu",
     "language": "Language: {locale}",
-    "languageLoadError": "The language selector could not be loaded. Please try again."
+    "languageLoadError": "The language selector could not be loaded. Please try again.",
+    "skipToContent": "Skip to main content"
   },
   "home": {
     "metadataTitle": "Libra — A library without walls",
@@ -79,7 +80,8 @@
     "readingWidth": "Reading width",
     "storageUnavailable": "Reading settings or progress could not be saved. Check that your browser allows site storage.",
     "chapterNotFoundTitle": "Chapter not found — Libra",
-    "chapterMetadataDescription": "Read {chapter} from {book} by {authors} on Libra."
+    "chapterMetadataDescription": "Read {chapter} from {book} by {authors} on Libra.",
+    "themeGroup": "Reading theme"
   },
   "catalog": {
     "booksMetadataTitle": "Explore the library — Libra",

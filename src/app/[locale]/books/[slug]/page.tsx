@@ -242,7 +242,7 @@ export default async function BookPage({ params }: BookPageProps) {
     <>
       {bookStructuredData && <JsonLd data={bookStructuredData} />}
 
-      <main className="min-h-screen">
+      <main id="main-content" className="min-h-screen">
         <nav aria-label={t("breadcrumbs")} className="mx-auto max-w-7xl px-6 pt-6 text-sm">
           <ol className="text-muted-foreground flex flex-wrap items-center gap-2">
             <li>
@@ -318,7 +318,10 @@ export default async function BookPage({ params }: BookPageProps) {
                 </div>
               )}
 
-              <h1 className="max-w-3xl font-serif text-4xl leading-tight tracking-tight sm:text-5xl md:text-6xl">
+              <h1
+                lang={getLanguageCode(book.edition.language)}
+                className="max-w-3xl font-serif text-4xl leading-tight tracking-tight sm:text-5xl md:text-6xl"
+              >
                 {book.edition.title}
               </h1>
 
@@ -345,7 +348,12 @@ export default async function BookPage({ params }: BookPageProps) {
               <EditionDetails edition={book.edition} chapterCount={book.chapters.length} />
 
               {book.edition.description && (
-                <p className="text-muted-foreground mt-8 max-w-2xl text-base leading-8">{book.edition.description}</p>
+                <p
+                  lang={getLanguageCode(book.edition.language)}
+                  className="text-muted-foreground mt-8 max-w-2xl text-base leading-8"
+                >
+                  {book.edition.description}
+                </p>
               )}
 
               <div className="mt-9 flex flex-wrap items-start gap-3">

@@ -102,3 +102,19 @@ test("BookCard displays the edition language independently of the UI locale, cov
     }
   }
 });
+
+test("L29: the title heading level is configurable and the title carries its own language", () => {
+  const html = renderToStaticMarkup(
+    <NextIntlClientProvider locale="es" messages={{}}>
+      <BookCard book={makeBook({ language: "en-GB" })} headingLevel={3} />
+      <BookCard book={makeBook({ id: "two", slug: "carmilla", title: "Carmilla", language: "es" })} />
+    </NextIntlClientProvider>,
+  );
+  const $ = load(html);
+
+  assert.equal($("h3").length, 1);
+  assert.equal($("h3").attr("lang"), "en");
+  assert.equal($("h2").length, 1);
+  assert.equal($("h2").attr("lang"), "es");
+  assert.equal($("h3").text(), "Dracula");
+});

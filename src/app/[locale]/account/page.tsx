@@ -55,7 +55,7 @@ export default async function AccountPage({ params }: AccountPageProps) {
   });
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
+    <main id="main-content" className="mx-auto max-w-3xl px-6 py-12">
       <div className="space-y-8">
         <header className="space-y-2">
           <h1 className="font-serif text-3xl font-semibold tracking-tight">{t("title")}</h1>

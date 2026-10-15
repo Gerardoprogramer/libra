@@ -328,11 +328,12 @@ export function ReaderView({
           </Link>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-lg border border-current/15 p-1">
+            <div role="group" aria-label={t("themeGroup")} className="flex rounded-lg border border-current/15 p-1">
               <Button
                 size="icon"
                 variant="ghost"
                 aria-label={t("lightTheme")}
+                aria-pressed={theme === "light"}
                 onClick={() => changeTheme("light")}
                 className={cn(theme === "light" && "bg-current/10")}
               >
@@ -343,6 +344,7 @@ export function ReaderView({
                 size="icon"
                 variant="ghost"
                 aria-label={t("sepiaTheme")}
+                aria-pressed={theme === "sepia"}
                 onClick={() => changeTheme("sepia")}
                 className={cn(theme === "sepia" && "bg-current/10")}
               >
@@ -353,6 +355,7 @@ export function ReaderView({
                 size="icon"
                 variant="ghost"
                 aria-label={t("darkTheme")}
+                aria-pressed={theme === "dark"}
                 onClick={() => changeTheme("dark")}
                 className={cn(theme === "dark" && "bg-current/10")}
               >
@@ -399,7 +402,7 @@ export function ReaderView({
         </div>
       </div>
 
-      <main className="px-6 pb-24">
+      <main id="main-content" className="px-6 pb-24">
         {(storageError || !preferencesAvailable) && (
           <p role="alert" className="mx-auto mt-6 max-w-3xl text-sm text-red-700">
             {t("storageUnavailable")}

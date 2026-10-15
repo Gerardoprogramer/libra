@@ -112,7 +112,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
   if (success) {
     return (
-      <section className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md items-center px-6 py-12">
+      <main id="main-content" className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md items-center px-6 py-12">
         <div className="w-full rounded-2xl border p-6 shadow-sm sm:p-8">
           <div className="mb-6 flex size-12 items-center justify-center rounded-full border">
             <FiMail className="size-5" aria-hidden="true" />
@@ -129,12 +129,12 @@ export function AuthForm({ mode }: AuthFormProps) {
             </Link>
           </p>
         </div>
-      </section>
+      </main>
     );
   }
 
   return (
-    <section className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md items-center px-6 py-12">
+    <main id="main-content" className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md items-center px-6 py-12">
       <div className="w-full rounded-2xl border p-6 shadow-sm sm:p-8">
         <div className="mb-8">
           <h1 className="font-serif text-3xl tracking-tight">{isRegister ? t("registerTitle") : t("loginTitle")}</h1>
@@ -212,6 +212,6 @@ export function AuthForm({ mode }: AuthFormProps) {
           </Link>
         </p>
       </div>
-    </section>
+    </main>
   );
 }

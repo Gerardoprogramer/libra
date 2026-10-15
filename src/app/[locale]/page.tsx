@@ -52,7 +52,7 @@ export default async function Home() {
   }));
 
   return (
-    <main>
+    <main id="main-content">
       <section className="border-b">
         <div className="mx-auto max-w-7xl px-6 py-16 md:py-24">
           <div className="max-w-3xl">
@@ -116,6 +116,7 @@ export default async function Home() {
               <BookCard
                 key={book.id}
                 book={book}
+                headingLevel={3}
                 eager={index < 2}
                 fetchPriority={index === 0 ? "high" : "auto"}
                 sizes="(max-width: 639px) calc((100vw - 4.5rem) / 2), (max-width: 1023px) calc((100vw - 6rem) / 3), 230px"

@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LoadingBookPage() {
   return (
-    <main className="min-h-screen">
+    <main id="main-content" className="min-h-screen">
       <section className="border-b">
         <div className="mx-auto grid max-w-7xl gap-12 px-6 py-14 md:grid-cols-[280px_1fr] md:py-20">
           {/* Cover */}

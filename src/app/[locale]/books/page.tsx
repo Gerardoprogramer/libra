@@ -87,7 +87,7 @@ async function BooksContent({ searchParams }: BooksContentProps) {
   const hasFilters = Boolean(query || selectedCategory);
 
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-6 py-14 md:py-20">
+    <main id="main-content" className="mx-auto min-h-screen max-w-7xl px-6 py-14 md:py-20">
       <header className="max-w-3xl">
         <p className="text-muted-foreground mb-3 text-xs tracking-[0.25em] uppercase">{t("eyebrow")}</p>
 
@@ -118,7 +118,7 @@ async function BooksContent({ searchParams }: BooksContentProps) {
           id="book-category"
           name="category"
           defaultValue={selectedCategory}
-          className="border-input bg-background h-9 rounded-md border px-3 text-sm outline-none"
+          className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-9 rounded-md border px-3 text-sm outline-none focus-visible:ring-[3px]"
         >
           <option value="">{t("allCategories")}</option>
 
@@ -172,7 +172,7 @@ async function BooksContent({ searchParams }: BooksContentProps) {
 
 function BooksPageFallback() {
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-6 py-14 md:py-20">
+    <main id="main-content" className="mx-auto min-h-screen max-w-7xl px-6 py-14 md:py-20">
       <header className="max-w-3xl">
         <div className="bg-muted h-3 w-28 animate-pulse rounded" />
         <div className="bg-muted mt-5 h-14 w-72 max-w-full animate-pulse rounded" />

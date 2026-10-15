@@ -36,7 +36,7 @@ export default async function CategoriesPage() {
   const categories = await getCategories(locale);
 
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-6 py-14 md:py-20">
+    <main id="main-content" className="mx-auto min-h-screen max-w-7xl px-6 py-14 md:py-20">
       <header className="max-w-3xl">
         <p className="text-muted-foreground mb-3 text-xs tracking-[0.25em] uppercase">{t("categoriesEyebrow")}</p>
 

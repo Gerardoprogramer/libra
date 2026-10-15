@@ -10,6 +10,8 @@ interface BookCardProps {
   sizes?: string;
   fetchPriority?: "high" | "low" | "auto";
   preload?: boolean;
+  /** Heading level of the title: 2 under a page title, 3 when the cards sit under a section heading. */
+  headingLevel?: 2 | 3;
 }
 
 const coverStyles = [
@@ -37,7 +39,10 @@ function getCoverStyle(slug: string) {
   return coverStyles[value % coverStyles.length];
 }
 
-export function BookCard({ book, eager = false, sizes, fetchPriority, preload }: BookCardProps) {
+export function BookCard({ book, eager = false, sizes, fetchPriority, preload, headingLevel = 2 }: BookCardProps) {
+  const Heading = headingLevel === 3 ? "h3" : "h2";
+  // The title is in the language of the edition shown, which may differ from the interface language.
+  const titleLanguage = book.language.toLowerCase().split("-")[0];
   const coverStyle = getCoverStyle(book.slug);
   const visibleCategories = getVisibleCategories(book.categories);
 
@@ -76,7 +81,9 @@ export function BookCard({ book, eager = false, sizes, fetchPriority, preload }:
         </div>
 
         <div className="mt-4">
-          <h2 className="font-serif text-lg leading-tight">{book.title}</h2>
+          <Heading lang={titleLanguage} className="font-serif text-lg leading-tight">
+            {book.title}
+          </Heading>
 
           <p className="text-muted-foreground mt-1 text-sm">{book.author}</p>
 

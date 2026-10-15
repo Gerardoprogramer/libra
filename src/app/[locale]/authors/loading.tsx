@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LoadingAuthorsPage() {
   return (
-    <main aria-hidden="true" className="mx-auto min-h-screen max-w-7xl px-6 py-14 md:py-20">
+    <main id="main-content" aria-hidden="true" className="mx-auto min-h-screen max-w-7xl px-6 py-14 md:py-20">
       <header className="max-w-3xl">
         <Skeleton className="mb-4 h-3 w-20" />
         <Skeleton className="h-14 w-full max-w-md md:h-16" />

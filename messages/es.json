@@ -7,7 +7,8 @@
     "search": "Buscar",
     "menu": "Menú",
     "language": "Idioma: {locale}",
-    "languageLoadError": "No se pudo cargar el selector de idioma. Inténtalo de nuevo."
+    "languageLoadError": "No se pudo cargar el selector de idioma. Inténtalo de nuevo.",
+    "skipToContent": "Saltar al contenido principal"
   },
   "home": {
     "metadataTitle": "Libra — Una biblioteca sin fronteras",
@@ -79,7 +80,8 @@
     "readingWidth": "Ancho de lectura",
     "storageUnavailable": "No se pudieron guardar las preferencias o el progreso de lectura. Comprueba que el navegador permita guardar datos.",
     "chapterNotFoundTitle": "Capítulo no encontrado — Libra",
-    "chapterMetadataDescription": "Lee {chapter} de {book}, de {authors}, en Libra."
+    "chapterMetadataDescription": "Lee {chapter} de {book}, de {authors}, en Libra.",
+    "themeGroup": "Tema de lectura"
   },
   "catalog": {
     "booksMetadataTitle": "Explora la biblioteca — Libra",

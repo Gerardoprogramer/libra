@@ -3,7 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LoadingAuthorPage() {
   return (
-    <main className="min-h-screen">
+    <main id="main-content" className="min-h-screen">
       <section className="border-b">
         <div className="mx-auto max-w-7xl px-6 py-14 md:py-20">
           <Skeleton className="mb-4 h-3 w-16" />
