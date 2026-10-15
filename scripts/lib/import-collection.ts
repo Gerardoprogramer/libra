@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import { formatImportError } from "./import-errors";
-import { importGutenbergBook } from "./import-gutenberg";
+import { importGutenbergBook, type ImportGutenbergOptions, type ImportOutcome } from "./import-gutenberg";
 
 export const PROJECT_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -161,29 +161,62 @@ export function parseCollectionArguments(args: string[]) {
     options: {
       apply: { type: "boolean", default: false },
       "fail-fast": { type: "boolean", default: false },
+      "epub-only": { type: "boolean", default: false },
+      "confirm-database": { type: "string" },
+      "allow-removals": { type: "boolean", default: false },
+      "allow-slug-changes": { type: "boolean", default: false },
+      "accept-warnings": { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
     strict: true,
     allowPositionals: false,
   });
 
-  return { apply: values.apply, failFast: values["fail-fast"], help: values.help };
+  if (values.apply && values["epub-only"]) {
+    throw new Error("--epub-only analyzes the EPUBs without the database and cannot be combined with --apply.");
+  }
+
+  return {
+    apply: values.apply,
+    failFast: values["fail-fast"],
+    epubOnly: values["epub-only"],
+    confirmDatabase: values["confirm-database"],
+    allowRemovals: values["allow-removals"],
+    allowSlugChanges: values["allow-slug-changes"],
+    acceptWarnings: values["accept-warnings"],
+    help: values.help,
+  };
 }
 
 interface CollectionOptions {
   apply?: boolean;
   failFast?: boolean;
   projectRoot?: string;
+  /** Analyze the EPUBs alone, without comparing them with the database. */
+  epubOnly?: boolean;
+  confirmDatabase?: string;
+  allowRemovals?: boolean;
+  allowSlugChanges?: boolean;
+  acceptWarnings?: boolean;
 }
 
 interface CollectionDependencies {
-  importBook?: typeof importGutenbergBook;
+  importBook?: (options: ImportGutenbergOptions) => Promise<ImportOutcome | void>;
   logger?: Pick<Console, "log" | "error">;
 }
 
 export async function importCollection(
   manifest: unknown,
-  { apply = false, failFast = false, projectRoot = PROJECT_ROOT }: CollectionOptions = {},
+  {
+    apply = false,
+    failFast = false,
+    projectRoot = PROJECT_ROOT,
+    epubOnly = false,
+    confirmDatabase,
+    allowRemovals,
+    allowSlugChanges,
+    acceptWarnings,
+  }: CollectionOptions = {},
   { importBook = importGutenbergBook, logger = console }: CollectionDependencies = {},
 ) {
   // Validate the entire manifest before starting any import.
@@ -191,8 +224,13 @@ export async function importCollection(
   let succeeded = 0;
   let missing = 0;
   let failed = 0;
+  let blocked = 0;
+  const mode = apply ? "APPLY" : epubOnly ? "EPUB-ONLY DRY RUN" : "DRY RUN";
 
-  logger.log(`Collection: ${entries.length} book(s). Mode: ${apply ? "APPLY" : "DRY RUN"}.`);
+  logger.log(`Collection: ${entries.length} book(s). Mode: ${mode}.`);
+  if (epubOnly) {
+    logger.log("EPUB-only analysis: nothing is compared with the database, so removals and changes are NOT reported.");
+  }
   logger.log(`Sequential imports. On error: ${failFast ? "stop immediately" : "continue; final exit code 1"}.`);
 
   for (const [index, entry] of entries.entries()) {
@@ -220,7 +258,9 @@ export async function importCollection(
 
     try {
       // Await the entire pipeline, including invalidation and connection cleanup.
-      await importBook({
+      // A published edition is never revised from a collection run (no --revise-published here): each one
+      // needs its own reviewed plan through pnpm import:gutenberg.
+      const outcome = await importBook({
         file,
         gutenbergId: String(entry.gutenbergId),
         slug: entry.slug,
@@ -229,9 +269,30 @@ export async function importCollection(
         year: entry.year,
         editionPublicationYear: entry.editionPublicationYear,
         apply,
+        epubOnly,
+        confirmDatabase,
+        allowRemovals,
+        allowSlugChanges,
+        acceptWarnings,
       });
-      succeeded++;
-      logger.log(`${label} OK: ${apply ? "import committed" : "EPUB checked; no writes"}.`);
+
+      if (outcome?.status === "blocked") {
+        blocked++;
+        logger.error(`${label} BLOCKED: ${outcome.violations.join(" | ")}`);
+      } else {
+        succeeded++;
+        const description =
+          outcome?.status === "epub-only"
+            ? "EPUB analyzed; NOT compared with the database"
+            : outcome?.status === "unchanged"
+              ? "already matches the database; nothing to write"
+              : outcome?.status === "planned"
+                ? "plan checked against the database; no writes"
+                : apply
+                  ? "import committed"
+                  : "EPUB checked; no writes";
+        logger.log(`${label} OK: ${description}.`);
+      }
     } catch (error) {
       failed++;
       logger.error(`${label} FAILED: ${formatImportError(error)}`);
@@ -239,10 +300,17 @@ export async function importCollection(
     }
   }
 
-  const notProcessed = entries.length - succeeded - missing - failed;
+  const notProcessed = entries.length - succeeded - missing - failed - blocked;
   logger.log(
-    `\nSummary (${apply ? "APPLY" : "DRY RUN"}): ${succeeded} succeeded, ${missing} missing, ${failed} failed, ${notProcessed} not processed.`,
+    `\nSummary (${mode}): ${succeeded} succeeded, ${missing} missing, ${failed} failed, ${blocked} blocked, ${notProcessed} not processed.`,
   );
 
-  return { succeeded, missing, failed, notProcessed, exitCode: missing > 0 || failed > 0 ? 1 : 0 };
+  return {
+    succeeded,
+    missing,
+    failed,
+    blocked,
+    notProcessed,
+    exitCode: missing > 0 || failed > 0 || blocked > 0 ? 1 : 0,
+  };
 }

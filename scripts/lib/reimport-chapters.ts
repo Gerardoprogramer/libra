@@ -18,12 +18,12 @@ function normalizedTitle(title: string) {
   return title.normalize("NFKC").toLocaleLowerCase().replace(/\s+/g, " ").trim();
 }
 
-/** Match identity, never chapter number: a new prologue shifts every number. */
-export function planChapterReimport(
-  existing: ExistingChapter[],
-  incoming: ChapterContent[],
-  referencedChapterIds: ReadonlySet<string>,
-) {
+/**
+ * Pairs incoming chapters with existing ones by identity (unique content, then unique unchanged title and
+ * slug), never by chapter number: a new prologue shifts every number. Unmatched existing chapters are
+ * `removed`. Pure: it neither writes nor decides whether a removal is acceptable.
+ */
+export function matchChapters<Incoming extends ChapterContent>(existing: ExistingChapter[], incoming: Incoming[]) {
   if (!incoming.length) throw new Error("Cannot replace an edition with no chapters.");
   if (
     new Set(incoming.map((chapter) => chapter.slug)).size !== incoming.length ||
@@ -56,7 +56,19 @@ export function planChapterReimport(
       used.add(candidate.id);
     }
   }
-  const removed = existing.filter((chapter) => !used.has(chapter.id));
+  return {
+    chapters: incoming.map((chapter, index) => ({ ...chapter, existing: matches.get(index) })),
+    removed: existing.filter((chapter) => !used.has(chapter.id)),
+  };
+}
+
+/** Same matching, but a removed chapter that still has saved reading progress aborts the plan. */
+export function planChapterReimport(
+  existing: ExistingChapter[],
+  incoming: ChapterContent[],
+  referencedChapterIds: ReadonlySet<string>,
+) {
+  const { chapters, removed } = matchChapters(existing, incoming);
   const blocked = removed.filter((chapter) => referencedChapterIds.has(chapter.id));
   if (blocked.length) {
     throw new Error(
@@ -64,9 +76,42 @@ export function planChapterReimport(
     );
   }
   return {
-    chapters: incoming.map((chapter, index) => ({ ...chapter, existing: matches.get(index) })),
+    chapters,
     removedIds: removed.map((chapter) => chapter.id),
   };
+}
+
+/**
+ * Where a saved position lands once a chapter's text changed, with a chapter percentage that agrees with it.
+ *
+ * `percentage` is stored (reading_progress.percentage) and shown as-is until the reader scrolls: the reader measures
+ * it as the share of the article's scroll range already passed, and the book progress derives from it
+ * (calculateBookProgress). The page height grows with the text, so the share of the text that precedes the
+ * paragraph is the equivalent of that measurement for a paragraph-addressed position. A reader who had finished the
+ * chapter and whose last paragraph is still the last one stays at the value they had.
+ */
+export function remapReadingPosition(
+  oldContent: string,
+  newContent: string,
+  saved: { paragraphIndex: number; percentage: number },
+) {
+  const paragraphs = (content: string) =>
+    content
+      .split(/\n\s*\n/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  const words = (value: string) => value.split(/\s+/).filter(Boolean).length;
+  const oldParagraphs = paragraphs(oldContent);
+  const newParagraphs = paragraphs(newContent);
+  const paragraphIndex = remapParagraphIndex(oldContent, newContent, saved.paragraphIndex);
+  const finishedAndStillLast =
+    saved.paragraphIndex >= oldParagraphs.length - 1 && paragraphIndex === newParagraphs.length - 1;
+  if (finishedAndStillLast) return { paragraphIndex, percentage: saved.percentage };
+
+  const total = newParagraphs.reduce((sum, paragraph) => sum + words(paragraph), 0);
+  const before = newParagraphs.slice(0, paragraphIndex).reduce((sum, paragraph) => sum + words(paragraph), 0);
+
+  return { paragraphIndex, percentage: total > 0 ? Math.min(100, Math.max(0, Math.round((before / total) * 100))) : 0 };
 }
 
 export function remapParagraphIndex(oldContent: string, newContent: string, paragraphIndex: number) {

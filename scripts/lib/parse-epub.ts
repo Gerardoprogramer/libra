@@ -1,9 +1,14 @@
 import path from "node:path";
 
-import { XMLParser } from "fast-xml-parser";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 import JSZip from "jszip";
 
-import { extractEpubSections, type EpubDocument, type EpubNavigation } from "./epub-sections";
+import {
+  extractEpubSectionsWithReport,
+  type EpubDocument,
+  type EpubNavigation,
+  type ExtractionReport,
+} from "./epub-sections";
 
 export interface ParsedChapter {
   number: number;
@@ -20,6 +25,8 @@ export interface ParsedEpub {
   language: string;
   cover: ParsedCover | null;
   chapters: ParsedChapter[];
+  /** What the section extractor kept and discarded; review `warnings` before importing. */
+  extraction: ExtractionReport;
 }
 
 export interface ParsedCover {
@@ -140,8 +147,107 @@ function resolveEpubPath(opfPath: string, href: string) {
   return path.posix.normalize(path.posix.join(path.posix.dirname(opfPath), cleanHref));
 }
 
-export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
-  const zip = await JSZip.loadAsync(buffer);
+function validateXml(xml: string, resource: string) {
+  const result = XMLValidator.validate(xml);
+  if (result !== true) {
+    throw new Error(`EPUB validation failed: invalid XML in ${resource}: ${result.err.msg} (line ${result.err.line})`);
+  }
+}
+
+function resolveSpinePath(opfPath: string, href: string, idref: string) {
+  try {
+    const file = decodeURIComponent(href.split("#")[0].split("?")[0]);
+    const resolved = resolveEpubPath(opfPath, href);
+    if (
+      !file.trim() ||
+      /^(?:[a-z][a-z0-9+.-]*:|\/)/i.test(file) ||
+      file.includes("\\") ||
+      file.includes("\0") ||
+      resolved === ".." ||
+      resolved.startsWith("../")
+    ) {
+      throw new Error("Expected a local ZIP resource");
+    }
+    return resolved;
+  } catch (cause) {
+    throw new Error(`EPUB validation failed: invalid spine reference: ${idref} -> ${href}`, { cause });
+  }
+}
+
+export interface EpubLimits {
+  /** Size of the EPUB file itself. */
+  maxFileBytes: number;
+  /** Uncompressed size of any single ZIP entry. */
+  maxEntryBytes: number;
+  /** Uncompressed size of all entries together. */
+  maxTotalBytes: number;
+  maxEntries: number;
+  maxCoverBytes: number;
+}
+
+export const defaultEpubLimits: EpubLimits = {
+  maxFileBytes: 200 * 1024 * 1024,
+  maxEntryBytes: 100 * 1024 * 1024,
+  maxTotalBytes: 600 * 1024 * 1024,
+  maxEntries: 20_000,
+  maxCoverBytes: 10 * 1024 * 1024,
+};
+
+// JSZip records the size declared in the central directory; reading it avoids inflating a zip bomb first.
+function declaredSize(file: JSZip.JSZipObject) {
+  const size = (file as unknown as { _data?: { uncompressedSize?: unknown } })._data?.uncompressedSize;
+
+  return typeof size === "number" ? size : 0;
+}
+
+function assertZipWithinLimits(zip: JSZip, limits: EpubLimits) {
+  const files = Object.values(zip.files).filter((file) => !file.dir);
+  let total = 0;
+
+  if (files.length > limits.maxEntries) {
+    throw new Error(`EPUB validation failed: ${files.length} ZIP entries exceed the limit of ${limits.maxEntries}`);
+  }
+
+  for (const file of files) {
+    const size = declaredSize(file);
+    total += size;
+
+    if (size > limits.maxEntryBytes) {
+      throw new Error(
+        `EPUB validation failed: ZIP entry ${file.name} expands to ${size} bytes (limit ${limits.maxEntryBytes})`,
+      );
+    }
+  }
+
+  if (total > limits.maxTotalBytes) {
+    throw new Error(`EPUB validation failed: the archive expands to ${total} bytes (limit ${limits.maxTotalBytes})`);
+  }
+}
+
+/** Recognizes the raster formats the site can serve by their magic bytes, never by the declared media type. */
+export function detectCoverImage(data: Buffer): { mediaType: string; extension: string } | null {
+  if (data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) {
+    return { mediaType: "image/jpeg", extension: "jpg" };
+  }
+  if (data.length >= 8 && data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return { mediaType: "image/png", extension: "png" };
+  }
+  if (data.length >= 12 && data.toString("ascii", 0, 4) === "RIFF" && data.toString("ascii", 8, 12) === "WEBP") {
+    return { mediaType: "image/webp", extension: "webp" };
+  }
+
+  return null;
+}
+
+export async function parseEpub(buffer: Buffer, overrides: Partial<EpubLimits> = {}): Promise<ParsedEpub> {
+  const limits = { ...defaultEpubLimits, ...overrides };
+
+  if (buffer.length > limits.maxFileBytes) {
+    throw new Error(`EPUB validation failed: the file is ${buffer.length} bytes (limit ${limits.maxFileBytes})`);
+  }
+
+  const zip = await JSZip.loadAsync(buffer, { checkCRC32: true });
+  assertZipWithinLimits(zip, limits);
 
   const containerFile = zip.file("META-INF/container.xml");
 
@@ -158,6 +264,7 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
   });
 
   const containerXml = await containerFile.async("string");
+  validateXml(containerXml, "META-INF/container.xml");
   const container = xmlParser.parse(containerXml);
 
   const rootFiles = asArray(container?.container?.rootfiles?.rootfile);
@@ -174,6 +281,7 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
   }
 
   const opfXml = await opfFile.async("string");
+  validateXml(opfXml, opfPath);
   const opf = xmlParser.parse(opfXml);
   const pkg = opf?.package;
 
@@ -215,6 +323,9 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
 
   for (const item of manifestItems) {
     if (item["@_id"]) {
+      if (manifest.has(item["@_id"])) {
+        throw new Error(`EPUB validation failed: duplicate manifest id: ${item["@_id"]}`);
+      }
       manifest.set(item["@_id"], item);
     }
   }
@@ -241,6 +352,7 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
   }
 
   let cover: ParsedCover | null = null;
+  const coverWarnings: string[] = [];
 
   if (coverItem?.["@_href"]) {
     const coverPath = resolveEpubPath(opfPath, coverItem["@_href"]);
@@ -248,15 +360,19 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
     const coverFile = zip.file(coverPath);
 
     if (coverFile) {
-      const mediaType = coverItem["@_media-type"] ?? "image/jpeg";
+      const data = await coverFile.async("nodebuffer");
+      const image = detectCoverImage(data);
 
-      const extension = mediaType === "image/png" ? "png" : mediaType === "image/webp" ? "webp" : "jpg";
-
-      cover = {
-        data: await coverFile.async("nodebuffer"),
-        mediaType,
-        extension,
-      };
+      if (data.length > limits.maxCoverBytes) {
+        coverWarnings.push(`Cover ignored: ${coverPath} is ${data.length} bytes (limit ${limits.maxCoverBytes}).`);
+      } else if (!image) {
+        coverWarnings.push(
+          `Cover ignored: ${coverPath} is not a JPEG, PNG or WebP image (declared ${coverItem["@_media-type"] ?? "no media type"}).`,
+        );
+      } else {
+        // The detected format wins over whatever the manifest declares.
+        cover = { data, ...image };
+      }
     }
   }
 
@@ -266,14 +382,18 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
 
   const documents: EpubDocument[] = [];
 
-  for (const spineItem of spineItems) {
+  for (const [index, spineItem] of spineItems.entries()) {
     const idref = spineItem["@_idref"];
 
-    if (!idref) continue;
+    if (!idref?.trim()) {
+      throw new Error(`EPUB validation failed: spine item ${index + 1} has no idref`);
+    }
 
     const item = manifest.get(idref);
 
-    if (!item?.["@_href"]) continue;
+    if (!item) {
+      throw new Error(`EPUB validation failed: spine manifest item not found: ${idref}`);
+    }
 
     const mediaType = item["@_media-type"];
     const properties = item["@_properties"] ?? "";
@@ -286,19 +406,40 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
       continue;
     }
 
+    if (!mediaType) {
+      throw new Error(`EPUB validation failed: spine manifest item has no media-type: ${idref}`);
+    }
+
     if (mediaType !== "application/xhtml+xml" && mediaType !== "text/html") {
       continue;
     }
 
-    const filePath = resolveEpubPath(opfPath, item["@_href"]);
+    const href = item["@_href"];
+    if (!href?.trim()) {
+      throw new Error(`EPUB validation failed: spine manifest item has no href: ${idref}`);
+    }
+    const filePath = resolveSpinePath(opfPath, href, idref);
 
     const contentFile = zip.file(filePath);
 
-    if (!contentFile) continue;
+    if (!contentFile) {
+      throw new Error(`EPUB validation failed: spine document not found: ${filePath} (idref: ${idref})`);
+    }
+
+    let html: string;
+    try {
+      html = await contentFile.async("string");
+    } catch (cause) {
+      throw new Error(`EPUB validation failed: cannot read spine document: ${filePath}`, { cause });
+    }
+    if (!html.trim()) {
+      throw new Error(`EPUB validation failed: empty spine document: ${filePath}`);
+    }
+    if (mediaType === "application/xhtml+xml") validateXml(html, filePath);
 
     documents.push({
       path: filePath,
-      html: await contentFile.async("string"),
+      html,
       xhtml: mediaType === "application/xhtml+xml",
     });
   }
@@ -373,7 +514,7 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
    * Structural chapter extraction.
    */
 
-  const rawSections = extractEpubSections(documents, navigation, title);
+  const { sections: rawSections, report: extraction } = extractEpubSectionsWithReport(documents, navigation, title);
 
   if (rawSections.length === 0) {
     throw new Error("No readable chapters were detected in the EPUB");
@@ -405,6 +546,8 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
     };
   });
 
+  extraction.warnings.push(...coverWarnings);
+
   return {
     title,
     creators: creators.map(getXmlText).filter(Boolean),
@@ -412,5 +555,6 @@ export async function parseEpub(buffer: Buffer): Promise<ParsedEpub> {
     language,
     cover,
     chapters,
+    extraction,
   };
 }

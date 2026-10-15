@@ -1,15 +1,23 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
-import { randomUUID } from "node:crypto";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-
-import { authors, bookAuthors, books, chapters, editions, readingProgress } from "../../src/db/schema";
-
-import { planChapterReimport, remapParagraphIndex } from "./reimport-chapters";
+import { createPostgresImportDatabase, type ApplyResult, type ImportDatabase } from "./import-database";
+import { formatImportError } from "./import-errors";
+import {
+  buildImportDiff,
+  computePlanDigest,
+  evaluateImportPolicy,
+  formatImportDiff,
+  isValidBookSlug,
+  normalizeCreatorName,
+  slugify,
+  type ImportDiff,
+  type ImportFlags,
+  type PlanInput,
+} from "./import-plan";
+import { ImportBlockedError, type StateRequest } from "./import-state";
 import { parseEpub } from "./parse-epub";
-import { uploadCover } from "./r2";
+import { coverKeyFor, uploadCover } from "./r2";
 import { revalidateEditorialCache } from "./revalidate-cache";
 
 export interface ImportGutenbergOptions {
@@ -20,48 +28,98 @@ export interface ImportGutenbergOptions {
   originalLanguage: string;
   year?: number;
   editionPublicationYear?: number;
+  /** Write to the database. Without it the run is a read-only dry run. */
   apply?: boolean;
+  /**
+   * Analyze the EPUB alone. The result says nothing about the database: no chapters are reported as kept,
+   * unchanged or removed. Never combined with `apply`.
+   */
+  epubOnly?: boolean;
+  /** Token printed by the dry run for the target database; required to apply. */
+  confirmDatabase?: string;
+  revisePublished?: boolean;
+  planHash?: string;
+  allowRemovals?: boolean;
+  allowSlugChanges?: boolean;
+  acceptWarnings?: boolean;
 }
 
-function slugify(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+export interface ImportDependencies {
+  /** Injected in tests; otherwise opened from DIRECT_DATABASE_URL and closed afterwards. */
+  database?: ImportDatabase;
+  uploadCover?: typeof uploadCover;
+  revalidate?: typeof revalidateEditorialCache;
 }
 
-function normalizeCreatorName(value: string) {
-  const parts = value
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean);
+export type ImportOutcome =
+  | { status: "epub-only" }
+  | { status: "blocked"; diff: ImportDiff; planDigest: string; violations: string[] }
+  | { status: "planned"; diff: ImportDiff; planDigest: string }
+  | { status: "unchanged"; diff: ImportDiff; planDigest: string }
+  | { status: "applied"; diff: ImportDiff; planDigest: string; result: ApplyResult };
 
-  if (parts.length === 2) {
-    return `${parts[1]} ${parts[0]}`;
+const GUTENBERG_ID_PATTERN = /^[1-9]\d{0,9}$/;
+
+function openDatabase(): ImportDatabase {
+  const url = process.env.DIRECT_DATABASE_URL;
+
+  if (!url) {
+    throw new Error(
+      "DIRECT_DATABASE_URL is not defined. The comparison with the current database cannot be made, so no plan is reported. Configure it, or pass --epub-only for an analysis of the EPUB alone.",
+    );
   }
 
-  return value.trim();
+  return createPostgresImportDatabase(url);
 }
 
-export async function importGutenbergBook({
-  file: filePath,
-  gutenbergId,
-  slug: requestedSlug,
-  originalTitle,
-  originalLanguage,
-  year,
-  editionPublicationYear,
-  apply: shouldApply = false,
-}: ImportGutenbergOptions): Promise<void> {
-  const publicationYear = editionPublicationYear ?? null;
+export async function importGutenbergBook(
+  options: ImportGutenbergOptions,
+  dependencies: ImportDependencies = {},
+): Promise<ImportOutcome> {
+  const {
+    file: filePath,
+    gutenbergId,
+    slug: requestedSlug,
+    originalTitle,
+    originalLanguage,
+    year,
+    editionPublicationYear,
+    apply: shouldApply = false,
+    epubOnly = false,
+  } = options;
+
+  if (shouldApply && epubOnly) {
+    throw new Error("--epub-only analyzes the EPUB without the database and can never be combined with --apply.");
+  }
+
+  if (!GUTENBERG_ID_PATTERN.test(gutenbergId)) {
+    throw new Error(`Invalid Gutenberg ID "${gutenbergId}": expected a positive integer.`);
+  }
+
+  if (requestedSlug !== undefined && !isValidBookSlug(requestedSlug)) {
+    throw new Error(
+      `Invalid slug "${requestedSlug}": use lowercase letters, numbers and single hyphens (at most 251 characters).`,
+    );
+  }
+
+  if (!originalTitle.trim()) {
+    throw new Error("The original title must not be empty.");
+  }
+
+  if (!/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(originalLanguage)) {
+    throw new Error(`Invalid original language "${originalLanguage}".`);
+  }
 
   const file = await fs.readFile(filePath);
 
   const epub = await parseEpub(file);
 
+  const slugWasExplicit = requestedSlug !== undefined;
   const bookSlug = requestedSlug ?? slugify(epub.title);
+
+  if (!isValidBookSlug(bookSlug)) {
+    throw new Error(`The slug derived from the EPUB title ("${bookSlug}") is not usable; pass --slug explicitly.`);
+  }
 
   console.log("");
   console.log("EPUB parsed successfully");
@@ -75,13 +133,33 @@ export async function importGutenbergBook({
 
   console.log(`Translator: ${epub.translator ?? "Not specified"}`);
 
-  console.log(`Book slug: ${bookSlug}`);
+  console.log(`Book slug: ${bookSlug}${slugWasExplicit ? "" : " (derived from the title)"}`);
 
   console.log(`Gutenberg ID: ${gutenbergId}`);
 
   console.log(`Chapters detected: ${epub.chapters.length}`);
 
   console.log(`Cover: ${epub.cover ? `${epub.cover.mediaType} (${epub.cover.data.length} bytes)` : "Not detected"}`);
+
+  const { extraction } = epub;
+  console.log(
+    `Text coverage: ${extraction.keptWords} of ${extraction.totalWords} readable words in ${epub.chapters.length} chapter(s)` +
+      `${extraction.mergedSubsections ? `, ${extraction.mergedSubsections} numbered subsection(s) merged into their chapters` : ""}; ` +
+      `${extraction.closingLines ? `${extraction.closingLines} closing line(s) kept at the end of their chapters; ` : ""}` +
+      `${extraction.discardedWords} discarded in ${extraction.discarded.length} section(s), ${extraction.leadingWords} before the first section.`,
+  );
+
+  if (extraction.discarded.length) {
+    console.log("Discarded sections:");
+    for (const item of extraction.discarded.slice(0, 40)) {
+      console.log(
+        `  ${item.definitive ? "-" : "?"} ${item.reason.padEnd(16)} ${String(item.words).padStart(6)} words  ${item.title.slice(0, 70)}`,
+      );
+    }
+    if (extraction.discarded.length > 40) console.log(`  ... and ${extraction.discarded.length - 40} more`);
+  }
+
+  for (const warning of extraction.warnings) console.warn(`WARNING: ${warning}`);
 
   console.log("");
 
@@ -90,298 +168,199 @@ export async function importGutenbergBook({
   }
 
   /*
-   * DRY RUN
+   * EPUB-ONLY ANALYSIS
    *
-   * Nothing is uploaded to R2 or written
-   * to PostgreSQL unless --apply is used.
+   * Explicit opt-in. It reports on the file alone and makes no claim about what exists in the database.
    */
-  if (!shouldApply) {
+  if (!shouldApply && epubOnly) {
     console.log("");
-
+    console.log("EPUB-ONLY ANALYSIS: this EPUB was NOT compared with the database.");
+    console.log("It does not show which existing chapters would be changed or removed.");
     console.log("Dry run only. Nothing was written to the database or R2.");
 
-    console.log("Run again with --apply if the chapter list looks correct.");
-
-    return;
+    return { status: "epub-only" };
   }
 
-  // Dry runs never create a database client or require credentials.
-  if (!process.env.DIRECT_DATABASE_URL) {
-    throw new Error("DIRECT_DATABASE_URL is not defined");
-  }
-
-  const client = postgres(process.env.DIRECT_DATABASE_URL, {
-    max: 1,
-    prepare: false,
-    ssl: "require",
-  });
-  const db = drizzle(client);
+  const database = dependencies.database ?? openDatabase();
+  const ownsDatabase = !dependencies.database;
 
   try {
-    /*
-     * COVER
-     *
-     * Upload before writing the edition so
-     * PostgreSQL receives the final public URL.
-     */
-    let coverUrl: string | null = null;
+    const flags: ImportFlags = {
+      allowRemovals: options.allowRemovals ?? false,
+      allowSlugChanges: options.allowSlugChanges ?? false,
+      revisePublished: options.revisePublished ?? false,
+      planHash: options.planHash,
+      acceptWarnings: options.acceptWarnings ?? false,
+    };
 
-    if (epub.cover) {
-      coverUrl = await uploadCover({
-        bookSlug,
-        gutenbergId,
-        data: epub.cover.data,
-        mediaType: epub.cover.mediaType,
-        extension: epub.cover.extension,
+    const input: PlanInput = {
+      bookSlug,
+      slugWasExplicit,
+      gutenbergId,
+      epubSha256: createHash("sha256").update(file).digest("hex"),
+      editionPublicationYear,
+      incoming: {
+        title: epub.title,
+        language: epub.language,
+        translator: epub.translator,
+        creators: epub.creators,
+        coverKey: epub.cover
+          ? coverKeyFor({ bookSlug, gutenbergId, data: epub.cover.data, extension: epub.cover.extension })
+          : null,
+        chapters: epub.chapters,
+      },
+    };
+
+    const request: StateRequest = {
+      bookSlug,
+      gutenbergId,
+      creatorSlugs: [
+        ...new Set(epub.creators.map((creator) => slugify(normalizeCreatorName(creator))).filter(Boolean)),
+      ],
+    };
+
+    const { target } = database;
+    console.log("");
+    console.log(`Target database: ${target.host} (role ${target.role}, id ${target.token})`);
+
+    const evaluate = (state: Parameters<typeof buildImportDiff>[0]) => {
+      const diff = buildImportDiff(state, input);
+      const planDigest = computePlanDigest(state, input, diff);
+      const violations = evaluateImportPolicy({
+        diff,
+        digest: planDigest,
+        extractionWarnings: extraction.warnings,
+        slugWasExplicit,
+        flags,
       });
 
-      console.log("");
-
-      console.log(`Cover uploaded: ${coverUrl}`);
-    } else {
-      console.log("");
-
-      console.log("No cover found in EPUB.");
-    }
+      return { diff, planDigest, violations };
+    };
 
     /*
-     * DATABASE
+     * DRY RUN
+     *
+     * Compares the EPUB with a consistent read-only snapshot of the real database. If that snapshot cannot be
+     * read the run fails: an unreadable database is never treated as an empty one.
      */
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`Project Gutenberg:${gutenbergId}`}, 0))`);
-      /*
-       * BOOK
-       */
-      const [existingBook] = await tx.select().from(books).where(eq(books.slug, bookSlug)).limit(1);
+    if (!shouldApply) {
+      let state;
 
-      let book = existingBook;
-
-      if (!book) {
-        const [createdBook] = await tx
-          .insert(books)
-          .values({
-            slug: bookSlug,
-
-            originalTitle,
-
-            originalLanguage,
-
-            originalPublicationYear: year ?? null,
-          })
-          .returning();
-
-        if (!createdBook) {
-          throw new Error("Could not create book");
-        }
-
-        book = createdBook;
-      }
-
-      /*
-       * AUTHORS
-       *
-       * Only create author relations when
-       * the book doesn't have any yet.
-       */
-      const existingAuthors = await tx
-        .select({
-          id: authors.id,
-        })
-        .from(bookAuthors)
-        .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
-        .where(eq(bookAuthors.bookId, book.id));
-
-      if (existingAuthors.length === 0) {
-        for (const [index, rawCreator] of epub.creators.entries()) {
-          const creator = normalizeCreatorName(rawCreator);
-
-          const authorSlug = slugify(creator);
-
-          const [author] = await tx
-            .insert(authors)
-            .values({
-              slug: authorSlug,
-              name: creator,
-            })
-            .onConflictDoUpdate({
-              target: authors.slug,
-
-              set: {
-                name: creator,
-                updatedAt: new Date(),
-              },
-            })
-            .returning();
-
-          if (!author) {
-            throw new Error(`Could not create author: ${creator}`);
-          }
-
-          await tx
-            .insert(bookAuthors)
-            .values({
-              bookId: book.id,
-              authorId: author.id,
-              position: index,
-            })
-            .onConflictDoNothing();
-        }
-      }
-
-      // Other editions are never deleted as a side effect of an import.
-      const [sourceEdition] = await tx
-        .select({ bookId: editions.bookId })
-        .from(editions)
-        .where(and(eq(editions.sourceName, "Project Gutenberg"), eq(editions.sourceIdentifier, gutenbergId)))
-        .limit(1);
-      if (sourceEdition && sourceEdition.bookId !== book.id) {
+      try {
+        state = await database.readState(request);
+      } catch (error) {
         throw new Error(
-          "This Gutenberg source already belongs to another book; reparenting requires an explicit migration.",
+          `Could not read the current database state (${formatImportError(error)}). No comparison was made, so no plan is reported.`,
         );
       }
 
-      /*
-       * EDITION
-       */
-      const editionSlug = `${epub.language}-gutenberg-${gutenbergId}`;
+      const { diff, planDigest, violations } = evaluate(state);
 
-      const [edition] = await tx
-        .insert(editions)
-        .values({
-          bookId: book.id,
+      console.log("");
+      console.log("Plan against the current database");
+      console.log("---------------------------------");
+      for (const line of formatImportDiff(diff)) console.log(line);
+      console.log(`Plan digest: ${planDigest}`);
 
-          slug: editionSlug,
-
-          language: epub.language,
-
-          title: epub.title,
-
-          translator: epub.translator,
-
-          publicationYear,
-
-          coverUrl,
-
-          sourceName: "Project Gutenberg",
-
-          sourceIdentifier: gutenbergId,
-
-          sourceUrl: `https://www.gutenberg.org/ebooks/${gutenbergId}`,
-
-          copyrightStatus: "PENDING_REVIEW",
-
-          publicationStatus: "DRAFT",
-
-          copyrightNotes: "Imported for manual copyright and edition review before publication.",
-        })
-        .onConflictDoUpdate({
-          target: [editions.sourceName, editions.sourceIdentifier],
-
-          /*
-           * IMPORTANT:
-           *
-           * We intentionally DON'T modify:
-           *
-           * copyrightStatus
-           * publicationStatus
-           * verifiedAt
-           * copyrightNotes
-           *
-           * That means re-importing an already
-           * approved book doesn't turn it back
-           * into DRAFT.
-           */
-          set: {
-            bookId: book.id,
-
-            slug: editionSlug,
-
-            language: epub.language,
-
-            title: epub.title,
-
-            translator: epub.translator,
-
-            ...(editionPublicationYear !== undefined ? { publicationYear: editionPublicationYear } : {}),
-
-            ...(epub.cover ? { coverUrl } : {}),
-
-            sourceUrl: `https://www.gutenberg.org/ebooks/${gutenbergId}`,
-
-            updatedAt: new Date(),
-          },
-        })
-        .returning();
-
-      if (!edition) {
-        throw new Error("Could not create or update edition");
+      console.log("");
+      if (violations.length) {
+        console.log("BLOCKED: --apply would be refused for these reasons:");
+        for (const violation of violations) console.log(`  - ${violation}`);
+      } else if (diff.hasChanges) {
+        console.log(
+          `--apply would write this plan. Required: --confirm-database ${target.token}${diff.edition.publicationStatus === "PUBLISHED" ? ` --revise-published --plan-hash ${planDigest}` : ""}.`,
+        );
       }
 
-      // Lock chapter/progress rows while reconciling identities. RESTRICT also
-      // protects references created concurrently with an import.
-      const existingChapters = await tx.select().from(chapters).where(eq(chapters.editionId, edition.id)).for("update");
-      const savedPositions = await tx
-        .select()
-        .from(readingProgress)
-        .where(eq(readingProgress.editionId, edition.id))
-        .for("update");
-      const plan = planChapterReimport(
-        existingChapters,
-        epub.chapters,
-        new Set(savedPositions.map((position) => position.chapterId)),
+      console.log("Dry run only. Nothing was written to the database or R2.");
+
+      return violations.length
+        ? { status: "blocked", diff, planDigest, violations }
+        : diff.hasChanges
+          ? { status: "planned", diff, planDigest }
+          : { status: "unchanged", diff, planDigest };
+    }
+
+    /*
+     * APPLY
+     */
+    if (options.confirmDatabase !== target.token) {
+      throw new Error(
+        `Writing requires --confirm-database ${target.token} to confirm the target (${target.host}, role ${target.role}). ${options.confirmDatabase ? "The value given does not match." : "It was not given."}`,
       );
+    }
 
-      // Vacate unique slugs/numbers without deleting UUIDs or their FK targets.
-      const temporaryPrefix = randomUUID();
-      for (const [index, chapter] of existingChapters.entries()) {
-        await tx
-          .update(chapters)
-          .set({ slug: "__import_" + temporaryPrefix + "_" + index, number: -(index + 1) })
-          .where(eq(chapters.id, chapter.id));
+    const upload = dependencies.uploadCover ?? uploadCover;
+
+    const outcome = await database.write(request, async (state, operations): Promise<ImportOutcome> => {
+      // Everything is decided again here, from the state read under lock, never from the earlier dry run.
+      const { diff, planDigest, violations } = evaluate(state);
+
+      console.log("");
+      console.log("Plan under lock");
+      console.log("---------------");
+      for (const line of formatImportDiff(diff)) console.log(line);
+      console.log(`Plan digest: ${planDigest}`);
+
+      if (violations.length) throw new ImportBlockedError(violations);
+
+      if (!diff.hasChanges) return { status: "unchanged", diff, planDigest };
+
+      let coverUrl: string | null = null;
+      const coverChanges = !state.edition || diff.metadata.some((change) => change.field === "cover");
+
+      // Upload only after every check has passed.
+      if (epub.cover && coverChanges) {
+        coverUrl = await upload({
+          bookSlug,
+          gutenbergId,
+          data: epub.cover.data,
+          mediaType: epub.cover.mediaType,
+          extension: epub.cover.extension,
+        });
+        console.log("");
+        console.log(`Cover uploaded: ${coverUrl}`);
       }
-      if (plan.removedIds.length) await tx.delete(chapters).where(inArray(chapters.id, plan.removedIds));
-      for (const { existing, ...chapter } of plan.chapters) {
-        if (existing) {
-          await tx
-            .update(chapters)
-            .set({ ...chapter, updatedAt: new Date() })
-            .where(eq(chapters.id, existing.id));
-          if (existing.content !== chapter.content) {
-            for (const saved of savedPositions.filter((position) => position.chapterId === existing.id)) {
-              await tx
-                .update(readingProgress)
-                .set({
-                  paragraphIndex: remapParagraphIndex(existing.content, chapter.content, saved.paragraphIndex),
-                })
-                .where(eq(readingProgress.id, saved.id));
-            }
-          }
-        } else {
-          await tx.insert(chapters).values({ ...chapter, editionId: edition.id });
-        }
-      }
+
+      const result = await operations.apply({
+        state,
+        diff,
+        gutenbergId,
+        book: { slug: bookSlug, originalTitle, originalLanguage, originalPublicationYear: year ?? null },
+        edition: {
+          slug: `${epub.language}-gutenberg-${gutenbergId}`,
+          language: epub.language,
+          title: epub.title,
+          translator: epub.translator,
+          publicationYear: editionPublicationYear ?? null,
+          sourceUrl: `https://www.gutenberg.org/ebooks/${gutenbergId}`,
+          coverUrl,
+        },
+      });
 
       console.log("");
       console.log("Database import staged for commit");
+      console.log(`Book ID: ${result.bookId}`);
+      console.log(`Edition ID: ${result.editionId}`);
+      console.log(`Chapters in the edition: ${result.chapters}`);
 
-      console.log(`Book ID: ${book.id}`);
-
-      console.log(`Edition ID: ${edition.id}`);
-
-      console.log(`Chapters imported: ${plan.chapters.length}`);
-
-      console.log(`Cover URL: ${edition.coverUrl ?? "None"}`);
-
-      console.log(`Copyright: ${edition.copyrightStatus}`);
-
-      console.log(`Publication: ${edition.publicationStatus}`);
+      return { status: "applied", diff, planDigest, result };
     });
+
+    if (outcome.status === "unchanged") {
+      console.log("");
+      console.log("Nothing to write: the stored edition already matches the EPUB.");
+
+      return outcome;
+    }
 
     console.log("Database import committed.");
 
     // The book tag also covers replaced/deleted chapters in every locale.
-    await revalidateEditorialCache([`book:${bookSlug}`, "library"]);
+    await (dependencies.revalidate ?? revalidateEditorialCache)([`book:${bookSlug}`, "library"]);
+
+    return outcome;
   } finally {
-    await client.end();
+    if (ownsDatabase) await database.close();
   }
 }

@@ -2,12 +2,15 @@ import { createHash } from "node:crypto";
 
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
-interface UploadCoverInput {
+export interface CoverKeyInput {
   bookSlug: string;
   gutenbergId: string;
   data: Buffer;
-  mediaType: string;
   extension: string;
+}
+
+interface UploadCoverInput extends CoverKeyInput {
+  mediaType: string;
 }
 
 function getEnv(name: string): string {
@@ -18,6 +21,16 @@ function getEnv(name: string): string {
   }
 
   return value;
+}
+
+/**
+ * Deterministic object key: the same bytes always map to the same key, so a stored cover can be compared with
+ * an EPUB cover without any request to R2, and re-uploading can never replace a different image.
+ */
+export function coverKeyFor({ bookSlug, gutenbergId, data, extension }: CoverKeyInput): string {
+  const hash = createHash("sha256").update(data).digest("hex").slice(0, 12);
+
+  return `covers/${bookSlug}-${gutenbergId}-${hash}.${extension}`;
 }
 
 export async function uploadCover({ bookSlug, gutenbergId, data, mediaType, extension }: UploadCoverInput) {
@@ -47,11 +60,11 @@ export async function uploadCover({ bookSlug, gutenbergId, data, mediaType, exte
     },
   });
 
-  const hash = createHash("sha256").update(data).digest("hex").slice(0, 12);
-
-  const key = `covers/${bookSlug}-${gutenbergId}-${hash}.${extension}`;
+  const key = coverKeyFor({ bookSlug, gutenbergId, data, extension });
 
   try {
+    // Keys are content-addressed and objects are never deleted here: an upload that is followed by a
+    // rolled-back transaction leaves an unreferenced but harmless object, never a broken reference.
     await client.send(
       new PutObjectCommand({
         Bucket: bucketName,

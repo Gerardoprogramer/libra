@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { planChapterReimport, remapParagraphIndex } from "./reimport-chapters";
+import { planChapterReimport, remapParagraphIndex, remapReadingPosition } from "./reimport-chapters";
 
 const chapter = (id: string, number: number, title = id, content = `${id} paragraph one\n\n${id} paragraph two`) => ({
   id,
@@ -56,4 +56,34 @@ test("edited chapters retain identity and remap existing paragraph references", 
   assert.equal(planChapterReimport([before], [after], new Set(["one"])).chapters[0].existing?.id, "one");
   assert.equal(remapParagraphIndex(before.content, after.content, 1), 2);
   assert.equal(remapParagraphIndex(before.content, "Only paragraph", 200), 0);
+});
+
+test("a position keeps its paragraph and gets the share of the text that precedes it as percentage", () => {
+  const before = "one two\n\nthree four\n\nfive six";
+  const after = `${before}\n\n${"seven ".repeat(6).trim()}\n\n${"eight ".repeat(6).trim()}`;
+  // 18 words after, 6 before: start 0 %, second paragraph 2/18 words = 11 %, third = 4/18 = 22 %.
+  assert.deepEqual(remapReadingPosition(before, after, { paragraphIndex: 0, percentage: 0 }), {
+    paragraphIndex: 0,
+    percentage: 0,
+  });
+  assert.deepEqual(remapReadingPosition(before, after, { paragraphIndex: 1, percentage: 50 }), {
+    paragraphIndex: 1,
+    percentage: 11,
+  });
+  // A reader who had finished the shorter text is at its last paragraph of the longer one, no longer at 100 %.
+  assert.deepEqual(remapReadingPosition(before, after, { paragraphIndex: 2, percentage: 100 }), {
+    paragraphIndex: 2,
+    percentage: 22,
+  });
+});
+
+test("a reader who finished a chapter whose last paragraph is still the last one stays finished", () => {
+  const before = "one two\n\nthree four\n\nfive six";
+  const after = "zero\n\none two\n\nthree four\n\nfive six";
+  assert.deepEqual(remapReadingPosition(before, after, { paragraphIndex: 2, percentage: 100 }), {
+    paragraphIndex: 3,
+    percentage: 100,
+  });
+  // The same index in the middle of the text is recomputed.
+  assert.equal(remapReadingPosition(before, after, { paragraphIndex: 1, percentage: 60 }).percentage, 43);
 });

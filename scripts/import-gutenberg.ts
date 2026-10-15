@@ -1,57 +1,23 @@
 import { config } from "dotenv";
 
+import { gutenbergHelp, parseGutenbergArguments } from "./lib/import-arguments";
 import { formatImportError } from "./lib/import-errors";
 import { importGutenbergBook } from "./lib/import-gutenberg";
 
-function getArgument(name: string): string | undefined {
-  const index = process.argv.indexOf(name);
-
-  if (index === -1) {
-    return undefined;
-  }
-
-  return process.argv[index + 1];
-}
-
-function getRequiredArgument(name: string): string {
-  const value = getArgument(name);
-
-  if (!value) {
-    throw new Error(`Missing ${name} argument`);
-  }
-
-  return value;
-}
-
-function getOptionalYear(name: string): number | undefined {
-  const argument = getArgument(name);
-
-  if (argument === undefined) {
-    return undefined;
-  }
-
-  const year = Number(argument);
-
-  if (!Number.isInteger(year) || year < -2147483648 || year > 2147483647) {
-    throw new Error(`${name} must be a PostgreSQL-supported integer.`);
-  }
-
-  return year;
-}
-
 async function main() {
-  config({ path: ".env.local", quiet: true });
+  const { help, options } = parseGutenbergArguments(process.argv.slice(2));
 
-  await importGutenbergBook({
-    file: getRequiredArgument("--file"),
-    gutenbergId: getRequiredArgument("--gutenberg-id"),
-    slug: getArgument("--slug"),
-    originalTitle: getRequiredArgument("--original-title"),
-    originalLanguage: getRequiredArgument("--original-language"),
-    year: getOptionalYear("--year"),
-    editionPublicationYear: getOptionalYear("--edition-year"),
-    apply: process.argv.includes("--apply"),
-  });
+  if (help || !options) {
+    console.log(gutenbergHelp);
+    return;
+  }
+
+  // The dry run needs the database to compare against; only the explicit EPUB-only analysis can do without.
+  if (!options.epubOnly) config({ path: ".env.local", quiet: true });
+
+  const outcome = await importGutenbergBook(options);
+
+  if (outcome.status === "blocked") process.exitCode = 1;
 }
 
 main().catch((error: unknown) => {

@@ -47,7 +47,10 @@ interface Boundary {
   position: number;
   title: string;
   ignored: boolean;
+  discard?: Classification;
   heading?: DomElement;
+  /** Headings that already form the title and are left out of the section text. Defaults to `heading`. */
+  omit?: DomElement[];
   level: number;
 }
 
@@ -114,10 +117,18 @@ function normalizeStructuralTitle(value: string) {
     .trim();
 }
 
-function isRomanMarker(value: string) {
-  const normalized = normalizeStructuralTitle(value);
+// Well-formed roman numerals up to 399. A bare run of roman letters is not enough:
+// "civil", "mild", "dim" or "did" are words, and "MIX" or "DIM" are headings.
+const romanNumeral = /^c{0,3}(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})$/i;
 
-  return /^[\s\-–—]*[ivxlcdm]+[\s\-–—]*$/i.test(normalized);
+function isRomanNumeral(value: string) {
+  return value.length > 0 && romanNumeral.test(value);
+}
+
+function isRomanMarker(value: string) {
+  const match = /^[\s\-–—]*([ivxlc]+)[\s\-–—]*$/i.exec(normalizeStructuralTitle(value));
+
+  return Boolean(match && isRomanNumeral(match[1]));
 }
 
 function isLowercaseRomanMarker(value: string) {
@@ -127,7 +138,7 @@ function isLowercaseRomanMarker(value: string) {
     return false;
   }
 
-  const letters = normalized.replace(/[^ivxlcdm]/gi, "");
+  const letters = normalized.replace(/[^ivxlc]/gi, "");
 
   return letters.length > 0 && letters === letters.toLowerCase();
 }
@@ -139,15 +150,27 @@ function isUppercaseRomanMarker(value: string) {
     return false;
   }
 
-  const letters = normalized.replace(/[^ivxlcdm]/gi, "");
+  const letters = normalized.replace(/[^ivxlc]/gi, "");
 
   return letters.length > 0 && letters === letters.toUpperCase();
 }
 
 function isChapterMarker(value: string) {
-  const normalized = normalizeStructuralTitle(value);
+  const match = /^(?:chapter|cap[ií]tulo)\s+([ivxlc]+)$/iu.exec(normalizeStructuralTitle(value));
 
-  return /^(?:chapter|cap[ií]tulo)\s+[ivxlcdm]+$/iu.test(normalized);
+  return Boolean(match && isRomanNumeral(match[1]));
+}
+
+// The author's closing lines of a part or of the novel: "Madrid.—Enero de 1886." and "FIN DE LA PRIMERA PARTE",
+// "FIN DE LA PARTE SEGUNDA", "FIN DE LA NOVELA". Deliberately narrow (capitals, a dated place line, a "FIN DE LA ..."
+// formula), so that other books keep discarding whatever they discarded before.
+const closingLine = new RegExp(
+  String.raw`^(?:\p{Lu}[\p{L} ]*\.\s*[—–-]\s*\p{L}+ de \d{4}\.?\s+)?FIN DE LA (?:PARTE \p{Lu}+|\p{Lu}+ PARTE|NOVELA)$|^\p{Lu}[\p{L} ]*\.\s*[—–-]\s*\p{L}+ de \d{4}\.?$`,
+  "u",
+);
+
+function isClosingLine(title: string) {
+  return closingLine.test(normalizeStructuralTitle(title));
 }
 
 function isContents(title: string) {
@@ -156,39 +179,99 @@ function isContents(title: string) {
   );
 }
 
-function isPartSection(title: string) {
-  const normalized = normalizeStructuralTitle(title).replace(/\s+/g, " ");
+const partWords = new Set(
+  [
+    // English
+    "one,two,three,four,five,six,seven,eight,nine,ten,first,second,third,fourth,fifth,sixth,seventh,eighth,ninth,tenth,final,last",
+    // Spanish
+    "uno,dos,tres,cuatro,cinco,seis,siete,ocho,nueve,diez,primero,primera,segundo,segunda,tercero,tercera,cuarto,cuarta,quinto,quinta,sexto,sexta,séptimo,séptima,septimo,septima,octavo,octava,noveno,novena,décimo,décima,decimo,decima,único,única,unico,unica,final,última,ultima",
+  ].flatMap((list) => list.split(",")),
+);
+
+function isPartNumber(token: string) {
+  const value = token.toLowerCase();
 
   return (
-    /^(?:parte|part)\s+(?:[ivxlcdm]+|\d+|[\p{L}]+)(?:(?:\s+|[-–—:])\S.*)?$/iu.test(normalized) ||
-    /^(?:[ivxlcdm]+|\d+|[\p{L}]+)\s+(?:parte|part)(?:(?:\s+|[-–—:])\S.*)?$/iu.test(normalized)
+    /^\d+(?:ª|º|st|nd|rd|th)?$/.test(value) ||
+    partWords.has(value) ||
+    (/^[ivxlc]+$/.test(value) && isRomanNumeral(value))
   );
+}
+
+// A "Part" divider names its number: "Part II", "Parte primera", "Second Part: The Voyage".
+// Titles that merely contain the word ("Parte de la noche", "Take Part in the Hunt") are chapters.
+function isPartSection(title: string) {
+  const normalized = normalizeStructuralTitle(title).replace(/\s+/g, " ");
+  const rest = String.raw`(?![\p{L}\p{N}])(?:(?:\s+|\s*[-–—:.]\s*)\S.*)?$`;
+  const forward = new RegExp(String.raw`^(?:parte|part)\s+([\p{L}\p{N}ªº]+)${rest}`, "iu").exec(normalized);
+  const reverse = new RegExp(String.raw`^([\p{L}\p{N}ªº]+)\s+(?:parte|part)${rest}`, "iu").exec(normalized);
+
+  return Boolean((forward && isPartNumber(forward[1])) || (reverse && isPartNumber(reverse[1])));
+}
+
+export type DiscardReason =
+  | "contents"
+  | "byline"
+  | "title-page"
+  | "excluded-markup"
+  | "front-matter"
+  | "boilerplate"
+  | "transcriber-notes"
+  | "end-marker"
+  | "paratext"
+  | "part-divider"
+  | "roman-subsection"
+  | "no-prose";
+
+interface Classification {
+  reason: DiscardReason;
+  /** A non-definitive classification is a heuristic: the discarded text must be reviewed if it is substantial. */
+  definitive: boolean;
+}
+
+function classifyNonReading(title: string): Classification | null {
+  const normalized = normalizeStructuralTitle(title);
+
+  if (isContents(title)) return { reason: "contents", definitive: true };
+  if (isByline(title)) return { reason: "byline", definitive: true };
+  if (isPartSection(title)) return { reason: "part-divider", definitive: false };
+  if (isNonChapterSection(title)) return { reason: "paratext", definitive: true };
+  if (isLowercaseRomanMarker(title)) return { reason: "roman-subsection", definitive: false };
+  if (/^fin de (?:la\s+)?(?:parte|novela)\b/iu.test(normalized)) return { reason: "end-marker", definitive: true };
+  if (/^(?:(?:list of )?illustrations|copyright(?: page)?|title page|colophon|credits)[\s.:]*$/iu.test(title)) {
+    return { reason: "front-matter", definitive: true };
+  }
+  if (/^(?:the (?:full )?)?project gutenberg\b.*(?:license|ebook)/i.test(title)) {
+    return { reason: "boilerplate", definitive: true };
+  }
+  if (/\bproject gutenberg collection\b/i.test(title)) return { reason: "boilerplate", definitive: true };
+  if (/^transcriber[â€™']?s?\s+notes?\b/i.test(title)) return { reason: "transcriber-notes", definitive: true };
+
+  return null;
 }
 
 function isNonReading(title: string) {
-  return (
-    isContents(title) ||
-    isByline(title) ||
-    isPartSection(title) ||
-    isNonChapterSection(title) ||
-    isLowercaseRomanMarker(title) ||
-    /^fin de (?:la\s+)?(?:parte|novela)\b/iu.test(normalizeStructuralTitle(title)) ||
-    /^(?:(?:list of )?illustrations|copyright(?: page)?|title page|colophon|credits)[\s.:]*$/iu.test(title) ||
-    /^(?:the (?:full )?)?project gutenberg\b.*(?:license|ebook)/i.test(title) ||
-    /\bproject gutenberg collection\b/i.test(title) ||
-    /^transcriber[â€™']?s?\s+notes?\b/i.test(title)
-  );
+  return classifyNonReading(title) !== null;
 }
 
+// Only unmistakable paratext: the bare word ("Preface", "Notas"), a parenthetical ("Extracts (Supplied by…)")
+// or the word followed by a preposition naming its subject ("Notes on the Text", "Prefacio del traductor").
+// "Notes from the Underground" or "Notas de un viajero" are literary titles.
 function isNonChapterSection(title: string) {
   const normalized = cleanText(title)
     .replace(/[.:]+$/, "")
     .trim()
     .toLowerCase();
+  const heads = String.raw`(?:the\s+)?(?:introduction|preface|foreword|afterword|etymology|extracts?|notes?|notas?|introducción|prefacio)(?![\p{L}\p{N}])`;
+  const qualifiers = [
+    String.raw`[.:]?\s*[(\[].*`,
+    String.raw`\s+(?:to|on|by|about)\b.*`,
+    String.raw`\s+of\s+the\s+(?:translator|author|editor|text|edition)\b.*`,
+    String.raw`\s+(?:del?|de\s+la)\s+(?:traductor|traductora|autor|autora|editor|editora|edici[oó]n|texto|transcriptor)\b.*`,
+    String.raw`\s+(?:al|a\s+la|sobre|para|por)\b.*`,
+  ];
 
-  return /^(?:the\s+)?(?:introduction|preface|foreword|afterword|etymology|extracts?|notes?|notas?|introducción|prefacio)(?:\b.*)?$/iu.test(
-    normalized,
-  );
+  return new RegExp(String.raw`^${heads}(?:${qualifiers.join("|")})?$`, "iu").test(normalized);
 }
 
 /** Resolve file and fragment separately; #anchors must never be discarded. */
@@ -246,9 +329,61 @@ function parseNavigation(source: EpubNavigation): NavigationEntry[] {
     .flatMap((nav) => $(nav).children("ol,ul").toArray().flatMap(list));
 }
 
-/** Chapter ranges use one ordered spine stream, so a section can cross XHTML files. */
+export interface ExtractedSection {
+  title: string;
+  content: string;
+}
+
+export interface DiscardedSection {
+  title: string;
+  reason: DiscardReason;
+  definitive: boolean;
+  /** Approximate number of words in the discarded range, including its heading. */
+  words: number;
+}
+
+export interface ExtractionReport {
+  /** Readable words in the whole spine stream (hidden and excluded markup not counted). */
+  totalWords: number;
+  /** Words in retained sections, headings included. */
+  keptWords: number;
+  /** Words in discarded sections listed in `discarded`. */
+  discardedWords: number;
+  /** Words before the first section boundary; they belong to no section. */
+  leadingWords: number;
+  /** Numbered subsections ("-ii-") appended to the chapter they continue; counted in keptWords. */
+  mergedSubsections: number;
+  /** Closing lines of a part ("Madrid.—Enero de 1886.", "FIN DE LA PRIMERA PARTE") appended to its last chapter. */
+  closingLines: number;
+  discarded: DiscardedSection[];
+  /** Navigation entries with a link that does not resolve to any spine document or anchor. */
+  unresolvedNavigation: string[];
+  /** Conditions that need a human decision before the extraction is trusted. */
+  warnings: string[];
+}
+
+const REVIEW_WORDS = 100;
+// Even a definitive classification deserves a human look when it removes this much text.
+const LARGE_DISCARD_WORDS = 1500;
+const BULKY_REASONS: readonly DiscardReason[] = ["contents", "boilerplate", "excluded-markup"];
+const MAX_DISCARDED_RATIO = 0.15;
+
+function countWords(value: string) {
+  return value.split(/\s+/).filter(Boolean).length;
+}
+
 export function extractEpubSections(documents: EpubDocument[], navigation: EpubNavigation[], bookTitle: string) {
+  return extractEpubSectionsWithReport(documents, navigation, bookTitle).sections;
+}
+
+/** Chapter ranges use one ordered spine stream, so a section can cross XHTML files. */
+export function extractEpubSectionsWithReport(
+  documents: EpubDocument[],
+  navigation: EpubNavigation[],
+  bookTitle: string,
+): { sections: ExtractedSection[]; report: ExtractionReport } {
   let cursor = 0;
+  const unresolvedNavigation: string[] = [];
   const positions = new Map<DomNode, number>();
   const tokens: TextToken[] = [];
   const indexes: DocumentIndex[] = [];
@@ -279,7 +414,9 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
     // XHTML self-closing anchors are XML, not unclosed HTML <a> elements.
     const $ = load(document.html, document.xhtml ? { xml: true } : undefined);
     const body = $("body").get(0);
-    if (!body) continue;
+    if (!body) {
+      throw new Error(`EPUB validation failed: spine document has no readable body: ${document.path}`);
+    }
     const index: DocumentIndex = { path: document.path, $, start: cursor, end: cursor, elements: [], ids: new Map() };
 
     function visit(node: DomNode, heading?: DomElement, hidden = false) {
@@ -312,13 +449,13 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
   }
 
   const byPath = new Map(indexes.map((document) => [document.path, document]));
-  function textBetween(start: number, end: number, omittedHeading?: DomElement, proseOnly = false) {
+  function textBetween(start: number, end: number, omitted?: DomElement[], proseOnly = false) {
     return tokens
       .filter(
         (token) =>
           token.position >= start &&
           token.position < end &&
-          (!omittedHeading || token.heading !== omittedHeading) &&
+          !(token.heading && omitted?.includes(token.heading)) &&
           (!proseOnly || !token.heading),
       )
       .map((token) => token.text)
@@ -329,12 +466,15 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
       .join("\n\n");
   }
 
+  // Title headings already folded into the boundary of their roman marker; they never start a chapter themselves.
+  const mergedTitleHeadings = new Set<DomElement>();
+
   function mergeRomanChapterHeading(
     document: DocumentIndex,
     position: number,
     heading: DomElement | undefined,
     title: string,
-  ) {
+  ): { position: number; heading: DomElement | undefined; title: string; omit?: DomElement[] } {
     if (!heading) {
       return {
         position,
@@ -389,10 +529,15 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
         };
       }
 
+      // The boundary stays on the marker: starting at the title would leave the marker at the end of the
+      // previous section. Both headings become the chapter title, so neither belongs to its text.
+      mergedTitleHeadings.add(nextHeading);
+
       return {
-        position: nextPosition,
+        position,
         heading: nextHeading,
         title: `${headingTitle} ${nextTitle}`,
+        omit: [heading, nextHeading],
       };
     }
 
@@ -453,10 +598,13 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
         };
       }
 
+      mergedTitleHeadings.add(chapterTitleHeading);
+
       return {
-        position: positions.get(chapterTitleHeading)!,
+        position: positions.get(chapterMarkerHeading)!,
         heading: chapterTitleHeading,
         title: `${chapterMarker} ${chapterTitle}`,
+        omit: [chapterMarkerHeading, chapterTitleHeading],
       };
     }
 
@@ -498,6 +646,7 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
     position = mergedHeading.position;
     heading = mergedHeading.heading;
     title = mergedHeading.title;
+    const omit = mergedHeading.omit;
     // Auto-generated TOCs may copy a heading including its illustration caption.
     if (heading && $(heading).find(captions).length && cleanText(title) === headingText($, heading, false))
       title = cleanHeading;
@@ -511,11 +660,19 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
       .toArray()
       .some((element) => isDomElement(element) && excludedElement($, element));
 
+    const discard: Classification | null = titlePage
+      ? { reason: "title-page", definitive: true }
+      : hidden
+        ? { reason: "excluded-markup", definitive: true }
+        : classifyNonReading(title);
+
     return {
       position,
       title,
-      ignored: Boolean(titlePage || hidden || isNonReading(title)),
+      ignored: discard !== null,
+      ...(discard ? { discard } : {}),
       heading,
+      ...(omit ? { omit } : {}),
       level: heading ? Number(heading.name.slice(1)) : 6,
     };
   }
@@ -536,6 +693,10 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
           .slice(index + 1)
           .map(firstPosition)
           .find((position) => position !== undefined) ?? end;
+      if (!boundary && entry.href) {
+        const label = entry.label || entry.href;
+        if (!unresolvedNavigation.includes(label)) unresolvedNavigation.push(label);
+      }
       if (boundary) {
         if (!boundaries.has(boundary.position)) boundaries.set(boundary.position, boundary);
         if (!boundary.ignored && entry.children.length) {
@@ -610,7 +771,7 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
     for (const heading of document.elements.filter((element) => document.$(element).is(headings))) {
       let position = positions.get(heading)!;
 
-      if (boundaries.has(position) || protectedPosition(position)) continue;
+      if (boundaries.has(position) || protectedPosition(position) || mergedTitleHeadings.has(heading)) continue;
 
       let title = headingText(document.$, heading);
 
@@ -649,12 +810,18 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
         isBookTitle(title, bookTitle) ||
         document.$(effectiveHeading).closest(".title,.title2,[epub\\:type~='titlepage']").length > 0;
 
+      const discard: Classification | null = titlePage
+        ? { reason: "title-page", definitive: true }
+        : classifyNonReading(title);
+
       boundaries.set(position, {
         position,
         title,
         heading: effectiveHeading,
+        ...(mergedHeading.omit ? { omit: mergedHeading.omit } : {}),
         level,
-        ignored: Boolean(titlePage || isNonReading(title)),
+        ignored: discard !== null,
+        ...(discard ? { discard } : {}),
       });
     }
   }
@@ -672,17 +839,104 @@ export function extractEpubSections(documents: EpubDocument[], navigation: EpubN
   }
 
   const ordered = [...boundaries.values()].sort((first, second) => first.position - second.position);
-  return ordered.flatMap((boundary, index) => {
-    if (boundary.ignored || isNonChapterSection(boundary.title)) {
-      return [];
+  const sections: ExtractedSection[] = [];
+  const discarded: DiscardedSection[] = [];
+  const wordsIn = (start: number, end: number) => countWords(textBetween(start, end));
+  const leadingWords = wordsIn(0, ordered[0]?.position ?? cursor);
+  let keptWords = 0;
+  let discardedWords = 0;
+  let mergedSubsections = 0;
+  let closingLines = 0;
+  // The section a lowercase roman subsection ("-ii-", "-iii-") continues; any other discard ends it.
+  let open: ExtractedSection | null = null;
+
+  for (const [index, boundary] of ordered.entries()) {
+    const end = ordered[index + 1]?.position ?? cursor;
+    const words = wordsIn(boundary.position, end);
+    const discard: Classification | null =
+      boundary.discard ??
+      (boundary.ignored ? { reason: "excluded-markup", definitive: true } : null) ??
+      (!textBetween(boundary.position, end, undefined, true) ? { reason: "no-prose", definitive: true } : null);
+
+    // A numbered subsection is part of its chapter, not structure to throw away.
+    if (open && discard?.reason === "roman-subsection") {
+      open.content += `\n\n${textBetween(boundary.position, end)}`;
+      keptWords += words;
+      mergedSubsections++;
+      continue;
     }
 
-    const end = ordered[index + 1]?.position ?? cursor;
+    // The closing lines of a part belong to the last chapter of that part, after its text, never to a title.
+    if (open && discard && words > 0 && isClosingLine(boundary.title)) {
+      open.content += `\n\n${textBetween(boundary.position, end)}`;
+      keptWords += words;
+      closingLines++;
+      continue;
+    }
 
-    if (!textBetween(boundary.position, end, undefined, true)) return [];
+    const content = discard
+      ? ""
+      : textBetween(boundary.position, end, boundary.omit ?? (boundary.heading ? [boundary.heading] : undefined));
 
-    const content = textBetween(boundary.position, end, boundary.heading);
+    if (discard || !content) {
+      const reason = discard ?? { reason: "no-prose" as const, definitive: true };
+      discarded.push({ title: boundary.title, reason: reason.reason, definitive: reason.definitive, words });
+      discardedWords += words;
+      open = null;
+      continue;
+    }
 
-    return content ? [{ title: boundary.title, content }] : [];
-  });
+    keptWords += words;
+    open = { title: boundary.title, content };
+    sections.push(open);
+  }
+
+  const totalWords = countWords(tokens.map((token) => token.text).join(""));
+  const warnings: string[] = [];
+
+  for (const item of discarded) {
+    if (!item.definitive && item.words >= REVIEW_WORDS) {
+      warnings.push(
+        `Section "${item.title}" was discarded as ${item.reason} but holds ~${item.words} words; review before importing, the classification is a heuristic.`,
+      );
+    }
+  }
+  for (const item of discarded) {
+    if (item.definitive && item.words >= LARGE_DISCARD_WORDS && !BULKY_REASONS.includes(item.reason)) {
+      warnings.push(
+        `Section "${item.title}" (${item.reason}) discards ~${item.words} words; confirm it is not literary text.`,
+      );
+    }
+  }
+  if (leadingWords >= REVIEW_WORDS) {
+    warnings.push(`~${leadingWords} words of text before the first section belong to no section.`);
+  }
+  for (const label of unresolvedNavigation) {
+    warnings.push(`Navigation entry "${label}" does not resolve to any spine document or anchor.`);
+  }
+  if (totalWords > 0 && discardedWords / totalWords > MAX_DISCARDED_RATIO) {
+    warnings.push(
+      `${Math.round((discardedWords / totalWords) * 100)}% of the readable text (~${discardedWords} of ${totalWords} words) was discarded.`,
+    );
+  }
+  if (keptWords + discardedWords + leadingWords !== totalWords) {
+    warnings.push(
+      `Word accounting mismatch: kept ${keptWords} + discarded ${discardedWords} + leading ${leadingWords} != total ${totalWords}.`,
+    );
+  }
+
+  return {
+    sections,
+    report: {
+      totalWords,
+      keptWords,
+      discardedWords,
+      leadingWords,
+      mergedSubsections,
+      closingLines,
+      discarded,
+      unresolvedNavigation,
+      warnings,
+    },
+  };
 }
