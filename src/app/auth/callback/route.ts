@@ -11,7 +11,12 @@ export async function GET(request: Request) {
   const locale = destination.pathname.split("/")[1];
 
   if (!code) {
-    return NextResponse.redirect(new URL(`/${locale}/login`, requestUrl.origin));
+    // Supabase reports a failed verification (an expired or already used link, a cancelled consent) with error
+    // parameters instead of a code. Only their presence is used: the login page shows its own message, and the
+    // provider's text is never forwarded.
+    const failed = ["error", "error_code", "error_description"].some((name) => requestUrl.searchParams.has(name));
+
+    return NextResponse.redirect(new URL(`/${locale}/login${failed ? "?error=auth_callback" : ""}`, requestUrl.origin));
   }
 
   const supabase = await createClient();
