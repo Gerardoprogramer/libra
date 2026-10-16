@@ -7,6 +7,7 @@ import ts from "typescript";
 
 import en from "../../../../../messages/en.json";
 import es from "../../../../../messages/es.json";
+import { isSlug } from "../../../../lib/catalog-filters";
 import { createLocalizedMetadata } from "../../../../lib/seo-metadata-core";
 
 type Locale = "en" | "es";
@@ -30,7 +31,7 @@ function translate(locale: Locale) {
 }
 
 // Loads page.tsx with its dependencies replaced, so generateMetadata runs without a database or Next.js runtime.
-function loadPage(book: BookFixture) {
+function loadPage(book: BookFixture, queries: string[] = []) {
   const dependencies: Record<string, unknown> = {
     "react/jsx-runtime": jsxRuntime,
     "next/image": {},
@@ -45,11 +46,15 @@ function loadPage(book: BookFixture) {
     "@/components/books/BookReadingAction": {},
     "@/components/books/EditionDetails": {},
     "@/db/queries/books": {
-      getBookBySlug: async () => book,
-      getBookContentLocales: async () => (book ? ["en"] : []),
+      getBookBySlug: async (slug: string) => (queries.push(`getBookBySlug:${slug}`), book),
+      getBookContentLocales: async (slug: string) => (
+        queries.push(`getBookContentLocales:${slug}`),
+        book ? ["en"] : []
+      ),
       getSitemapContent: async () => ({ books: [], chapters: [] }),
     },
     "@/components/books/LibraryButton": {},
+    "@/lib/catalog-filters": { isSlug },
     "@/lib/seo-metadata": { createLocalizedMetadata },
     "@/components/seo/JsonLd": {},
     "@/lib/site-url": { getAbsolutePublicImageUrl: () => null, getConfiguredSiteUrl: () => null },
@@ -100,4 +105,51 @@ test("a published book keeps its indexable title, description and authors", asyn
   assert.equal(metadata.description, "A real description.");
   assert.equal(metadata.robots, undefined);
   assert.deepEqual(metadata.authors, [{ name: "Bram Stoker" }]);
+});
+
+// Values a URL can carry that no stored slug can match: separators, spaces, punctuation, empty, over 300 characters.
+const invalidSlugs = [
+  "../etc/passwd",
+  "dracula%00",
+  "a b",
+  "dracula;--",
+  "-dracula",
+  "dracula--x",
+  "",
+  "a".repeat(301),
+];
+
+test("F-02: an invalid book slug gets the noindex 404 metadata without querying the database", async () => {
+  process.env.SITE_URL = "https://libra.example";
+
+  for (const slug of invalidSlugs) {
+    const queries: string[] = [];
+    const { generateMetadata } = loadPage(null, queries);
+    const metadata = await generateMetadata({ params: Promise.resolve({ locale: "en", slug }) });
+
+    assert.equal(metadata.title, en.book.notFoundTitle);
+    assert.deepEqual(metadata.robots, { index: false, follow: true });
+    assert.equal(metadata.alternates, undefined);
+    assert.deepEqual(queries, [], slug);
+  }
+});
+
+test("F-02: an invalid book slug raises notFound() without querying the database", async () => {
+  for (const slug of invalidSlugs) {
+    const queries: string[] = [];
+    const { default: BookPage } = loadPage(null, queries);
+
+    await assert.rejects(BookPage({ params: Promise.resolve({ locale: "en", slug }) }), /notFound\(\)/);
+    assert.deepEqual(queries, [], slug);
+  }
+});
+
+test("F-02: valid slugs, including accented ones, still reach the queries", async () => {
+  for (const slug of ["dracula", "the-picture-of-dorian-gray", "cien-años"]) {
+    const queries: string[] = [];
+    const { generateMetadata } = loadPage(null, queries);
+    await generateMetadata({ params: Promise.resolve({ locale: "es", slug }) });
+
+    assert.deepEqual(queries, [`getBookBySlug:${slug}`, `getBookContentLocales:${slug}`]);
+  }
 });

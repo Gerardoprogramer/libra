@@ -9,6 +9,7 @@ import ts from "typescript";
 import * as schema from "../../../db/schema";
 import * as visibility from "../../../db/queries/editorial-visibility";
 import * as validation from "../../../lib/reading-progress-input";
+import * as bodyLimit from "../../../lib/read-limited-body";
 
 const A = "10000000-0000-0000-0000-000000000001";
 const B = "10000000-0000-0000-0000-000000000002";
@@ -38,6 +39,7 @@ function handler(userId: string | null = A, rows: unknown[][] = [[A]]) {
     },
     "@/db/queries/editorial-visibility": visibility,
     "@/lib/reading-progress-input": validation,
+    "@/lib/read-limited-body": bodyLimit,
   };
   const exports = {} as typeof import("./route");
   compileFunction(
@@ -127,6 +129,72 @@ test("L20: timestamps from before the service existed, or far in the future, are
   for (const updatedAt of ["2019-12-31T23:59:59.000Z", new Date(Date.now() + 3_600_000).toISOString()]) {
     const h = handler();
     assert.equal((await h.POST(request({ ...position, updatedAt }))).status, 400);
+    assert.equal(h.statements.length, 0);
+  }
+});
+
+function rawRequest(body: BodyInit, headers: Record<string, string> = {}) {
+  return new Request("https://www.alyvenor.com/api/reading-progress", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "https://www.alyvenor.com", ...headers },
+    body,
+    duplex: "half",
+  } as RequestInit);
+}
+
+// A valid position padded with JSON whitespace to an exact size in bytes.
+function paddedPosition(bytes: number) {
+  const json = JSON.stringify(position);
+  return json + " ".repeat(bytes - Buffer.byteLength(json));
+}
+
+test("F-02: a valid body of exactly 4096 bytes is accepted and saved", async () => {
+  const h = handler();
+  const response = await h.POST(rawRequest(paddedPosition(4096)));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { accepted: true });
+  assert.equal(h.statements.length, 2);
+});
+
+test("F-02: a body over 4096 bytes is refused with 413 before authentication or SQL", async () => {
+  for (const body of [paddedPosition(4097), JSON.stringify({ ...position, pad: "é".repeat(2100) })]) {
+    const h = handler();
+    const response = await h.POST(rawRequest(body));
+    assert.equal(response.status, 413);
+    assert.deepEqual(await response.json(), { error: "Payload too large." });
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+    assert.equal(h.statements.length, 0);
+  }
+});
+
+test("F-02: a streamed body without Content-Length is cut off at the limit with 413", async () => {
+  let pulled = 0;
+  let cancelled = false;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      pulled += 1024;
+      controller.enqueue(new Uint8Array(1024).fill(0x20));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  const request = rawRequest(stream);
+  assert.equal(request.headers.get("content-length"), null);
+
+  const h = handler();
+  assert.equal((await h.POST(request)).status, 413);
+  assert.ok(cancelled);
+  assert.ok(pulled <= 4096 + 3 * 1024, `pulled ${pulled} bytes`);
+  assert.equal(h.statements.length, 0);
+});
+
+test("F-02: empty, invalid JSON and invalid UTF-8 bodies are refused with 400 before SQL", async () => {
+  for (const body of ["", "{", "not json", new Uint8Array([0x7b, 0xff, 0x7d])]) {
+    const h = handler();
+    const response = await h.POST(rawRequest(body));
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: "Invalid progress." });
     assert.equal(h.statements.length, 0);
   }
 });

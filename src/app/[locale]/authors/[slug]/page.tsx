@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { BookCard } from "@/components/books/BookCard";
 
 import { getAuthorBySlug, type ContentLocale } from "@/db/queries/books";
+import { isSlug } from "@/lib/catalog-filters";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getConfiguredSiteUrl } from "@/lib/site-url";
@@ -25,7 +26,11 @@ function getContentLocale(locale: string): ContentLocale {
 export async function generateMetadata({ params }: AuthorPageProps): Promise<Metadata> {
   const { locale, slug } = await params;
 
-  const [author, t] = await Promise.all([getAuthorBySlug(slug, getContentLocale(locale)), getTranslations("author")]);
+  // A value that cannot name a stored author never reaches the database or becomes its own cache entry.
+  const [author, t] = await Promise.all([
+    isSlug(slug) ? getAuthorBySlug(slug, getContentLocale(locale)) : null,
+    getTranslations("author"),
+  ]);
 
   if (!author) {
     return createLocalizedMetadata({
@@ -53,7 +58,10 @@ export async function generateMetadata({ params }: AuthorPageProps): Promise<Met
 export default async function AuthorPage({ params }: AuthorPageProps) {
   const { locale, slug } = await params;
 
-  const [author, t] = await Promise.all([getAuthorBySlug(slug, getContentLocale(locale)), getTranslations("author")]);
+  const [author, t] = await Promise.all([
+    isSlug(slug) ? getAuthorBySlug(slug, getContentLocale(locale)) : null,
+    getTranslations("author"),
+  ]);
 
   if (!author) {
     notFound();

@@ -12,6 +12,7 @@ import { EditionDetails } from "@/components/books/EditionDetails";
 
 import { getBookBySlug, getBookContentLocales, getSitemapContent, type ContentLocale } from "@/db/queries/books";
 import { LibraryButton } from "@/components/books/LibraryButton";
+import { isSlug } from "@/lib/catalog-filters";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getAbsolutePublicImageUrl, getConfiguredSiteUrl } from "@/lib/site-url";
@@ -61,13 +62,16 @@ export async function generateMetadata({ params }: BookPageProps): Promise<Metad
   const { locale, slug } = await params;
   const interfaceLocale = getInterfaceLocale(locale);
 
+  // A value that cannot name a stored book never reaches the database or becomes its own cache entry.
+  const validSlug = isSlug(slug);
+
   const [book, t, contentLocales] = await Promise.all([
-    getBookBySlug(slug, interfaceLocale),
+    validSlug ? getBookBySlug(slug, interfaceLocale) : null,
     getTranslations({
       locale: interfaceLocale,
       namespace: "book",
     }),
-    getBookContentLocales(slug),
+    validSlug ? getBookContentLocales(slug) : [],
   ]);
 
   if (!book) {
@@ -126,7 +130,7 @@ export default async function BookPage({ params }: BookPageProps) {
   const interfaceLocale = getInterfaceLocale(locale);
 
   const [book, t, readerTranslations] = await Promise.all([
-    getBookBySlug(slug, interfaceLocale),
+    isSlug(slug) ? getBookBySlug(slug, interfaceLocale) : null,
     getTranslations("book"),
     getTranslations("reader"),
   ]);
