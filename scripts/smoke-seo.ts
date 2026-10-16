@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { load } from "cheerio";
 
+import en from "../messages/en.json";
+import es from "../messages/es.json";
+
 const input = process.argv.slice(2).find((argument) => argument !== "--") ?? "http://localhost:3000";
 const base = new URL(input);
 assert.ok(
@@ -243,7 +246,7 @@ async function main() {
   assert.equal(missingImage.status, 404, "Missing book images must return 404");
 
   // These are decided before anything streams, so unlike the missing book above they are real 404s: an unmatched
-  // localized URL (rendered inside the locale layout) and a chapter that exists in no public edition of a book.
+  // localized URL (rendered by src/app/global-not-found.tsx) and a chapter that exists in no public edition of a book.
   const unmatched = await fetch(new URL("/es/libra-seo-missing-route-0f7b16", base), {
     signal: AbortSignal.timeout(30_000),
   });
@@ -254,6 +257,56 @@ async function main() {
     signal: AbortSignal.timeout(30_000),
   });
   assert.equal(missingChapter.status, 404, "A chapter that does not exist must return 404");
+
+  // The unmatched-URL 404 must be a complete localized document in the initial response, without waiting for
+  // hydration, and a 404 must not carry a robots directive that contradicts noindex.
+  const robotsTokens = (html: ReturnType<typeof load>) =>
+    html('meta[name="robots"]')
+      .toArray()
+      .flatMap((element) => (html(element).attr("content") ?? "").split(/\s*,\s*/));
+  const notFoundCopy = { es: es.errors, en: en.errors };
+  for (const locale of ["es", "en"] as const) {
+    const copy = notFoundCopy[locale];
+    const response = await fetch(new URL(`/${locale}/libra-seo-missing-route-0f7b16`, base), {
+      signal: AbortSignal.timeout(30_000),
+    });
+    assert.equal(response.status, 404, `/${locale}: an unmatched URL must return 404`);
+    const html = load(await response.text());
+    assert.equal(html("html").attr("lang"), locale, `/${locale}: 404 language`);
+    assert.equal(html("html").attr("id"), undefined, `/${locale}: the generic Next.js error shell must not be served`);
+    assert.equal(html("title").text(), `${copy.notFoundTitle} — Libra`, `/${locale}: 404 title`);
+    assert.equal(html("main h1").text(), copy.notFoundTitle, `/${locale}: 404 heading in the initial HTML`);
+    assert.ok(html("main").text().includes(copy.notFoundDescription), `/${locale}: 404 message in the initial HTML`);
+    assert.ok(robotsTokens(html).includes("noindex"), `/${locale}: 404 must be noindex`);
+    assert.ok(!robotsTokens(html).includes("index"), `/${locale}: 404 robots directives must not contradict noindex`);
+
+    const chapterSample = samples.find((sample) => sample.startsWith(`/${locale}/`));
+    assert.ok(chapterSample, `No ${locale} book sample for the chapter 404`);
+    const chapter = await fetch(new URL(`${chapterSample}/libra-seo-missing-chapter-0f7b16`, base), {
+      signal: AbortSignal.timeout(30_000),
+    });
+    assert.equal(chapter.status, 404, `/${locale}: a missing chapter must return 404`);
+    const chapterHtml = load(await chapter.text());
+    assert.equal(chapterHtml("html").attr("lang"), locale, `/${locale}: missing chapter language`);
+    assert.ok(robotsTokens(chapterHtml).includes("noindex"), `/${locale}: missing chapter must be noindex`);
+    assert.ok(!robotsTokens(chapterHtml).includes("index"), `/${locale}: missing chapter robots must not contradict`);
+  }
+
+  // No route handler owns /api/*: an unknown path is the same HTML 404 as any other unmatched URL, not a JSON API.
+  const unknownApi = await fetch(new URL("/api/libra-seo-missing-route-0f7b16", base), {
+    redirect: "manual",
+    signal: AbortSignal.timeout(30_000),
+  });
+  assert.equal(unknownApi.status, 404, "An unknown /api path must return 404");
+  const unmatchedWithoutLocale = await fetch(new URL("/libra-seo-missing-route-0f7b16", base), {
+    redirect: "manual",
+    signal: AbortSignal.timeout(30_000),
+  });
+  assert.equal(unmatchedWithoutLocale.status, 307, "A URL without a locale redirects to the default locale first");
+  assert.ok(
+    unmatchedWithoutLocale.headers.get("location")?.endsWith("/es/libra-seo-missing-route-0f7b16"),
+    "Unexpected locale redirect",
+  );
   console.log(
     "PASS sitemap, robots, crawler HTML, distinct images, icons, manifest, missing-page noindex, real 404s and image 404",
   );

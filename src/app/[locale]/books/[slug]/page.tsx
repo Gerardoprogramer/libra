@@ -72,7 +72,17 @@ export async function generateMetadata({ params }: BookPageProps): Promise<Metad
 
   if (!book) {
     // Do not advertise book metadata for a missing or unpublished edition.
-    notFound();
+    // The page raises notFound(); here the 404 only gets its title and noindex, as the author and chapter pages do.
+    return createLocalizedMetadata({
+      locale: interfaceLocale,
+      pathname: `/books/${encodeURIComponent(slug)}`,
+      title: t("notFoundTitle"),
+      robots: {
+        index: false,
+        follow: true,
+      },
+      alternateLocales: false,
+    });
   }
 
   const authors = book.authors.map((author) => author.name).join(", ");

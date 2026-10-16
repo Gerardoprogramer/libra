@@ -148,7 +148,8 @@ remote database.
 - `/[locale]/categories`: category index
 - `/[locale]/library`: browser-local saved books
 - `/[locale]/login`, `/register`, `/forgot-password`, `/reset-password`, `/account`: authentication (not indexed)
-- Any other `/[locale]/...` URL renders the localized 404 with a real 404 status
+- Any other URL renders the localized 404 of `src/app/global-not-found.tsx` with a real 404 status (it relies on
+  `experimental.globalNotFound`; see [docs/seo.md](docs/seo.md))
 
 Favorites and reader preferences remain browser-local. Reading progress is local for guests and persistent in
 `reading_progress` for authenticated users, with a separate local cache/outbox per account and edition. Unscoped

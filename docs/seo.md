@@ -56,18 +56,30 @@ Para `https://www.alyvenor.com/en/books/dracula`:
 
 Esto se aplica a cualquier slug publicado, incluidos los incorporados después del build.
 
-Cuando el libro no existe o no tiene una edición pública, `generateMetadata` llama a `notFound()` y no genera
-metadata de un libro inexistente. Con Cache Components, Next.js puede haber enviado el shell estático con estado
-200: añade `noindex` para excluir la URL de búsqueda. La prueba verifica esa instrucción y la ausencia de canonical
-y JSON-LD de libro. La ruta de imagen sí devuelve un 404 HTTP. Es el comportamiento documentado de
+Cuando el libro no existe o no tiene una edición pública, la página llama a `notFound()` y `generateMetadata` no genera
+metadata de un libro inexistente: solo devuelve el título del 404 con `noindex`, sin canonical ni hreflang, como las
+páginas de autor y de capítulo. Con Cache Components, Next.js puede haber enviado el shell estático con estado 200; ese
+`noindex` excluye igualmente la URL de búsqueda. La prueba verifica esa instrucción y la ausencia de canonical y JSON-LD
+de libro. La ruta de imagen sí devuelve un 404 HTTP. Es el comportamiento documentado de
 [notFound con streaming](https://nextjs.org/docs/app/api-reference/functions/not-found), conservando la arquitectura actual.
 
-Dos casos sí devuelven un 404 HTTP real porque se deciden antes de que empiece el streaming: una URL localizada que no
-coincide con ninguna ruta (`src/app/[locale]/[...rest]/page.tsx`, dentro del layout del idioma, con `<html lang>` y
-textos traducidos) y un capítulo que no existe en ninguna edición pública del libro (`chapterExistsInPublicEdition`,
+Dos casos sí devuelven un 404 HTTP real porque se deciden antes de que empiece el streaming: una URL que no coincide con
+ninguna ruta y un capítulo que no existe en ninguna edición pública del libro (`chapterExistsInPublicEdition`,
 comprobado en la página antes del límite de Suspense; `generateStaticParams` prerrenderiza un capítulo por libro e
 idioma y el resto se genera en la primera visita). Un capítulo que existe pero no en la edición pedida con `?edition=`
-sigue siendo un soft 404 con `noindex`. `pnpm smoke:seo` comprueba ambos 404 contra un servidor en ejecución.
+sigue siendo un soft 404 con `noindex`.
+
+Las URL sin ruta (`/es/…`, `/en/…`, y también `/api/…` si no existe un manejador) las atiende
+`src/app/global-not-found.tsx`, activado con `experimental.globalNotFound` en `next.config.ts`. El layout raíz vive bajo
+el segmento dinámico `[locale]`, por lo que Next.js no tiene un layout en el que renderizar esas URL y respondería con su
+carcasa de error sin idioma (`<html id="__next_error__">`); una ruta comodín `[locale]/[...rest]` no lo evita. La página
+global es un documento completo con `<html lang>`, título, cabecera mínima, `<h1>` y mensaje en el HTML inicial, y
+Next.js le añade `noindex`. El idioma sale de la cabecera `x-next-intl-locale` que next-intl fija desde `src/proxy.ts`
+(`src/lib/not-found-locale.ts`); sin ella, por ejemplo en `/api/…`, usa el idioma por defecto. Leer la cabecera hace que
+la ruta se renderice por petición (`export const instant = false`): estas respuestas no se cachean en el CDN. Es una
+opción experimental de Next.js y su layout es reducido (sin la navegación completa). Los 404 de libros y capítulos
+siguen usando `src/app/[locale]/not-found.tsx` dentro del layout del idioma. `pnpm smoke:seo` comprueba ambos idiomas,
+el `<h1>` en la respuesta inicial y que un 404 no tenga directivas `robots` contradictorias.
 
 Las fichas `/es/...` y `/en/...` tienen canonical propio. Se conservó la política editorial: si solo existe una edición
 inglesa, la ficha española puede mostrarla y compartirse, pero mantiene `noindex` y no se anuncia como traducción

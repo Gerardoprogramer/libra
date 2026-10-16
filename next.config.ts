@@ -38,6 +38,9 @@ const nextConfig: NextConfig = {
     // pages from queuing enough concurrent editorial queries to time out.
     cpus: 2,
     staticGenerationMaxConcurrency: 2,
+    // The root layout lives under the dynamic [locale] segment, so Next.js has no root layout to render an
+    // unmatched URL in and falls back to its unlocalized error shell. src/app/global-not-found.tsx replaces it.
+    globalNotFound: true,
   },
   cacheComponents: true,
   cacheLife: {
