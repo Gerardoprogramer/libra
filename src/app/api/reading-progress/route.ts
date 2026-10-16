@@ -6,6 +6,7 @@ import { books, chapters, editions, readingProgress } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import { getPublicEditionVisibilityCondition } from "@/db/queries/editorial-visibility";
 import { parseReadingProgressInput } from "@/lib/reading-progress-input";
+import { readLimitedBody } from "@/lib/read-limited-body";
 
 export async function GET(request: Request) {
   const editionId = new URL(request.url).searchParams.get("edition");
@@ -110,8 +111,9 @@ export async function POST(request: Request) {
   }
   let input;
   try {
-    const body = await request.text();
-    if (body.length > 4096) return reply({ error: "Payload too large." }, 413);
+    // Counted in bytes while reading, so an oversized body is refused before it is held in memory.
+    const body = await readLimitedBody(request, 4096);
+    if (body === null) return reply({ error: "Payload too large." }, 413);
     input = parseReadingProgressInput(JSON.parse(body));
   } catch {
     return reply({ error: "Invalid progress." }, 400);
