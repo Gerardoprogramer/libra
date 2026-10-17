@@ -1,6 +1,7 @@
 import { config } from "dotenv";
 import postgres from "postgres";
 
+import { postgresTls } from "../src/db/tls";
 import { formatImportError } from "./lib/import-errors";
 
 config({
@@ -14,7 +15,7 @@ if (!process.env.DATABASE_URL) {
 const sql = postgres(process.env.DATABASE_URL, {
   max: 1,
   prepare: false,
-  ssl: "require",
+  ssl: postgresTls(process.env.DATABASE_URL, { local: "require" }),
 });
 
 async function main() {

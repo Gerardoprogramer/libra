@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 import { authors, bookAuthors, books, chapters, editions, readingProgress } from "../../src/db/schema";
+import { postgresTls } from "../../src/db/tls";
 
 import { describeDatabaseTarget, type DatabaseTarget, type ImportDiff } from "./import-plan";
 import { remapReadingPosition } from "./reimport-chapters";
@@ -326,7 +327,7 @@ export function createPostgresImportDatabase(connectionString: string): ImportDa
   const client = postgres(connectionString, {
     max: 1,
     prepare: false,
-    ssl: target.isLocal ? false : "require",
+    ssl: postgresTls(connectionString, { local: false }),
   });
   const db = drizzle(client);
 

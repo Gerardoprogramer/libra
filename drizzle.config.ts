@@ -1,6 +1,8 @@
 import { config } from "dotenv";
 import { defineConfig } from "drizzle-kit";
 
+import { drizzleKitCredentials } from "./src/db/tls";
+
 config({
   path: ".env.local",
 });
@@ -14,9 +16,8 @@ export default defineConfig({
   out: "./drizzle",
   dialect: "postgresql",
 
-  dbCredentials: {
-    url: process.env.DIRECT_DATABASE_URL,
-  },
+  // A remote database is reached with a verified certificate (DATABASE_CA_CERT); see src/db/tls.ts.
+  dbCredentials: drizzleKitCredentials(process.env.DIRECT_DATABASE_URL),
 
   verbose: true,
   strict: true,

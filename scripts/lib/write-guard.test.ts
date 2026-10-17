@@ -82,9 +82,15 @@ test("--confirm-database is read only when it has a value", () => {
 });
 
 test("REVIEW: TLS is required for remote databases only, so the local seed can actually connect", () => {
-  assert.equal(sslFor(remote), "require");
-  assert.equal(sslFor("postgres://dev:pw@localhost:5432/libra"), false);
-  assert.equal(sslFor("postgres://dev:pw@127.0.0.1:5432/libra"), false);
+  const ca = "-----BEGIN CERTIFICATE-----\nMIIBtest\n-----END CERTIFICATE-----";
+
+  assert.deepEqual(sslFor(remote, { DATABASE_CA_CERT: ca }), { ca, rejectUnauthorized: true });
+  assert.equal(sslFor("postgres://dev:pw@localhost:5432/libra", {}), false);
+  assert.equal(sslFor("postgres://dev:pw@127.0.0.1:5432/libra", {}), false);
+});
+
+test("F-04: a remote database without DATABASE_CA_CERT is refused before any connection, never left unverified", () => {
+  assert.throws(() => sslFor(remote, {}), /DATABASE_CA_CERT is required/);
 });
 
 test("REVIEW: a missing edition_reviews table is recognized through wrapped driver errors", () => {

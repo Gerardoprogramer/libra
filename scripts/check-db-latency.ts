@@ -3,6 +3,7 @@ import { performance } from "node:perf_hooks";
 import { config } from "dotenv";
 import postgres from "postgres";
 
+import { postgresTls } from "../src/db/tls";
 import { formatImportError } from "./lib/import-errors";
 
 config({
@@ -13,7 +14,7 @@ async function testConnection(name: string, connectionString: string) {
   const sql = postgres(connectionString, {
     max: 1,
     prepare: false,
-    ssl: "require",
+    ssl: postgresTls(connectionString, { local: "require" }),
   });
 
   console.log("");
