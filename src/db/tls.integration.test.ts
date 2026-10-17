@@ -162,7 +162,7 @@ test("F-04: drizzle-kit's remote credentials verify the certificate the same way
   // drizzle-kit 0.31.11 opens `postgres({ ...credentials, max: 1 })` for field-by-field credentials (bin.cjs).
   // Only host and port are pointed at the stand-in; the TLS options are the ones built for the remote URL.
   const credentialsWith = (caFile: string) =>
-    drizzleKitCredentials("postgres://libra:pw@db.example.com:5432/libra", { DATABASE_CA_CERT: read(caFile) });
+    drizzleKitCredentials("postgres://libra@db.example.invalid:5432/libra", { DATABASE_CA_CERT: read(caFile) });
 
   for (const [caFile, accepted] of [
     ["ca.crt", true],
@@ -188,7 +188,7 @@ test(
       ["ca.crt", true],
       ["other-ca.crt", false],
     ] as const) {
-      const credentials = drizzleKitCredentials(`postgres://libra:pw@127.0.0.2:${ipPort}/libra`, {
+      const credentials = drizzleKitCredentials(`postgres://libra@127.0.0.2:${ipPort}/libra`, {
         DATABASE_CA_CERT: read(caFile),
       });
       assert.ok(!("url" in credentials));
