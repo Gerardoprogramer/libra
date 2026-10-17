@@ -6,7 +6,7 @@ import { getTranslations } from "next-intl/server";
 import { PasswordResetForm } from "@/components/auth/PasswordForms";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
-import { isAuthenticated } from "@/lib/auth-state";
+import { hasRecoverySession } from "@/lib/auth-state";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("auth");
@@ -21,11 +21,12 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // The reset link signs the user in through /auth/callback before landing here. Without that session the link
-// was invalid, expired or already used, and there is nothing to change.
+// was invalid, expired or already used, and there is nothing to change. A session from an ordinary sign-in is not
+// enough: whoever holds it (a stolen cookie, a shared computer) must not change the password without the mailbox.
 async function ResetPasswordContent() {
-  const [t, signedIn] = await Promise.all([getTranslations("auth"), isAuthenticated()]);
+  const [t, recovering] = await Promise.all([getTranslations("auth"), hasRecoverySession()]);
 
-  if (signedIn) return <PasswordResetForm />;
+  if (recovering) return <PasswordResetForm />;
 
   return (
     <main id="main-content" className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md items-center px-6 py-12">

@@ -17,9 +17,11 @@ interface AuthFormProps {
   next?: string | null;
   /** The email link or OAuth callback failed before reaching this page. */
   callbackError?: boolean;
+  /** The password was just reset and the recovery session ended: sign in again with the new password. */
+  passwordReset?: boolean;
 }
 
-export function AuthForm({ mode, next = null, callbackError = false }: AuthFormProps) {
+export function AuthForm({ mode, next = null, callbackError = false, passwordReset = false }: AuthFormProps) {
   const t = useTranslations("auth");
   const locale = useLocale();
   const router = useRouter();
@@ -161,6 +163,12 @@ export function AuthForm({ mode, next = null, callbackError = false }: AuthFormP
             {isRegister ? t("registerDescription") : t("loginDescription")}
           </p>
         </div>
+
+        {passwordReset && !error && (
+          <p role="status" className="mb-5 rounded-lg border px-4 py-3 text-sm">
+            {t("passwordResetSignIn")}
+          </p>
+        )}
 
         {error && (
           <div

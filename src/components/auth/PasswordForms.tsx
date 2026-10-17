@@ -6,8 +6,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { FiArrowRight, FiCheckCircle, FiMail } from "react-icons/fi";
 
 import { Button } from "@/components/ui/button";
-import { Link } from "@/i18n/navigation";
-import { passwordUpdateMessageKey } from "@/lib/auth-errors";
+import { Link, useRouter } from "@/i18n/navigation";
+import { resetPasswordAndEndSession } from "@/lib/password-reset";
 import { createClient } from "@/lib/supabase/client";
 
 const inputClass =
@@ -129,14 +129,41 @@ export function PasswordResetRequestForm() {
   );
 }
 
+/**
+ * Shown only when the password changed but the recovery session could not be ended: the change itself succeeded,
+ * so this is a warning, and the account page is where the user can still sign out.
+ */
+export function PasswordUpdatedSessionOpen() {
+  const t = useTranslations("auth");
+
+  return (
+    <Card>
+      <div className="mb-6 flex size-12 items-center justify-center rounded-full border">
+        <FiCheckCircle className="size-5" aria-hidden="true" />
+      </div>
+
+      <h1 className="font-serif text-3xl tracking-tight">{t("passwordUpdatedTitle")}</h1>
+
+      <p role="alert" className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+        {t("passwordUpdatedSessionOpen")}
+      </p>
+
+      <Button asChild className="mt-6">
+        <Link href="/account">{t("goToAccount")}</Link>
+      </Button>
+    </Card>
+  );
+}
+
 /** Chooses the new password. Rendered only for a request that already holds the recovery session. */
 export function PasswordResetForm() {
   const t = useTranslations("auth");
+  const router = useRouter();
 
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [sessionOpen, setSessionOpen] = useState(false);
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -151,40 +178,26 @@ export function PasswordResetForm() {
     setPending(true);
 
     try {
-      const { error: updateError } = await createClient().auth.updateUser({ password });
+      const result = await resetPasswordAndEndSession(createClient().auth, password, confirmation);
 
-      if (updateError) {
-        setError(t(passwordUpdateMessageKey(updateError)));
+      if (result.status === "updated" && result.sessionClosed) {
+        // The session cookies are already gone; refresh so no server output rendered with them is reused. The form
+        // stays disabled until the login page replaces it.
+        router.replace({ pathname: "/login", query: { reset: "done" } });
+        router.refresh();
         return;
       }
 
-      setDone(true);
+      if (result.status === "updated") setSessionOpen(true);
+      else setError(t(result.status === "mismatch" ? "passwordMismatch" : result.messageKey));
+      setPending(false);
     } catch {
       setError(t("genericError"));
-    } finally {
       setPending(false);
     }
   }
 
-  if (done) {
-    return (
-      <Card>
-        <div className="mb-6 flex size-12 items-center justify-center rounded-full border">
-          <FiCheckCircle className="size-5" aria-hidden="true" />
-        </div>
-
-        <h1 className="font-serif text-3xl tracking-tight">{t("passwordUpdatedTitle")}</h1>
-
-        <p role="status" className="text-muted-foreground mt-3 text-sm leading-6">
-          {t("passwordUpdatedDescription")}
-        </p>
-
-        <Button asChild className="mt-6">
-          <Link href="/account">{t("goToAccount")}</Link>
-        </Button>
-      </Card>
-    );
-  }
+  if (sessionOpen) return <PasswordUpdatedSessionOpen />;
 
   return (
     <Card>
