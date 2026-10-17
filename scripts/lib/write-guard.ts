@@ -1,8 +1,10 @@
+import { postgresTls, type PostgresTls } from "../../src/db/tls";
+
 import { describeDatabaseTarget, type DatabaseTarget } from "./import-plan";
 
-/** TLS is required for every remote database; a local development server does not offer it. */
-export function sslFor(connectionString: string): false | "require" {
-  return describeDatabaseTarget(connectionString).isLocal ? false : "require";
+/** A remote database is reached with a verified certificate (see src/db/tls.ts); a local server offers no TLS. */
+export function sslFor(connectionString: string, env?: Record<string, string | undefined>): PostgresTls {
+  return postgresTls(connectionString, { local: false, env });
 }
 
 /** Reads the value of `--confirm-database <id>` from a raw argument list. */

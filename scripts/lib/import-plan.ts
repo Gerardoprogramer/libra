@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import { isLocalDatabase } from "../../src/db/tls";
+
 import { matchChapters } from "./reimport-chapters";
 import type { ChapterRecord, EditionState } from "./import-state";
 
@@ -482,7 +484,7 @@ export function describeDatabaseTarget(connectionString: string): DatabaseTarget
     throw new Error("The PostgreSQL connection string is not a valid URL.");
   }
 
-  const isLocal = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname);
+  const isLocal = isLocalDatabase(connectionString);
   const user = decodeURIComponent(url.username);
   const [role, projectFromUser] = user.split(".");
   const projectFromHost = /^db\.([a-z0-9]+)\.supabase\.co$/i.exec(url.hostname)?.[1];
