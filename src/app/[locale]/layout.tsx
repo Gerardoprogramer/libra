@@ -41,6 +41,9 @@ export async function generateMetadata({ params }: LocaleLayoutProps): Promise<M
     title,
     description,
     applicationName: "Libra",
+    // On the iOS home screen (standalone, from the manifest) the app is titled "Libra"; the default status bar
+    // keeps dark text on the light paper, whereas "black-translucent" would draw it over the page's own bars.
+    appleWebApp: { capable: true, title: "Libra", statusBarStyle: "default" },
     authors: [{ name: "Libra" }],
     creator: "Libra",
     publisher: "Libra",
