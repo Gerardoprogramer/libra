@@ -14,6 +14,7 @@ import {
   type ContentLocale,
 } from "@/db/queries/books";
 import { isSlug, isUuid } from "@/lib/catalog-filters";
+import { readingFont } from "@/lib/fonts/reading";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getAbsolutePublicImageUrl, getConfiguredSiteUrl } from "@/lib/site-url";
@@ -275,7 +276,7 @@ async function ReaderContent({ params, searchParams }: ReaderPageProps) {
           }
         >
           {paragraphs.map((paragraph, index) => (
-            <p key={index} className="mb-7 font-serif leading-[1.95] opacity-90">
+            <p key={index} className={`${readingFont.variable} font-reading mb-7 leading-[1.95] opacity-90`}>
               {paragraph}
             </p>
           ))}

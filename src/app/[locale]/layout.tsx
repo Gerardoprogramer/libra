@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 
 import { Header } from "@/components/layout/Header";
 import { routing } from "@/i18n/routing";
+import { editorialFont } from "@/lib/fonts/editorial";
 import { getConfiguredSiteUrl } from "@/lib/site-url";
 import { getDefaultSocialImage } from "@/lib/social-metadata";
 
@@ -20,7 +21,8 @@ interface LocaleLayoutProps {
   }>;
 }
 
-export const viewport: Viewport = { themeColor: "#ffffff" };
+// The sRGB value of --background in globals.css.
+export const viewport: Viewport = { themeColor: "#fcfaf6" };
 
 export async function generateMetadata({ params }: LocaleLayoutProps): Promise<Metadata> {
   const { locale } = await params;
@@ -71,7 +73,7 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
   const [messages, nav] = await Promise.all([getMessages(), getTranslations({ locale, namespace: "nav" })]);
 
   return (
-    <html lang={locale}>
+    <html lang={locale} className={editorialFont.variable}>
       <body>
         {/* Navigation needs the locale; only the error boundary needs global messages. */}
         <NextIntlClientProvider messages={{ errors: messages.errors, auth: messages.auth }}>
