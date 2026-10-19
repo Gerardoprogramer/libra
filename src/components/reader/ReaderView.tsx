@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useReaderPreferences } from "@/hooks/useReaderPreferences";
+import { clearEarlyReaderPreferences, READER_MEASURES } from "@/lib/reader-preferences";
 import { createReadingSession } from "@/lib/reading-progress-session";
 import { replayPendingReadingProgress } from "@/lib/reading-progress-sync";
 import { useReadingProgressScope } from "@/lib/use-reading-progress-scope";
@@ -64,14 +65,6 @@ interface ReaderViewProps {
   /** Every chapter of the edition being read, in order, for the index. `href` is built like previousHref/nextHref. */
   chapters?: { slug: string; number: number; title: string; href: string }[];
 }
-
-// Measure of each width, in ems of the text size, so a line keeps the same number of characters at every size: the
-// chapter text (Literata) averages about 2.1 characters per em, which gives about 61, 68 and 76 characters per line.
-const readingMeasures: Record<ReaderWidth, number> = {
-  narrow: 29,
-  medium: 32.5,
-  wide: 36.5,
-};
 
 // A previous/next chapter link at the end of a chapter: 44px or more, the destination's title under its direction.
 const chapterLinkClass =
@@ -187,7 +180,8 @@ export function ReaderView({
   const [storageError, setStorageError] = useState(false);
   // The controls of the surface fade their colors on hover and focus. On hydration the stored theme replaces the
   // server's light one in the same task, so the first frame after mounting styles it with transitions off (globals.css,
-  // [data-reader-settled]); they are turned on at the next frame.
+  // [data-reader-settled]); they are turned on at the next frame. By then React has rendered the stored preferences, so
+  // the marks the early script left on <html> for the first paint are removed in the same frame.
   const [settled, setSettled] = useState(false);
   const settingsId = useId();
   const currentChapterRef = useRef<HTMLAnchorElement>(null);
@@ -198,7 +192,10 @@ export function ReaderView({
 
   useEffect(() => {
     let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => setSettled(true));
+      frame = requestAnimationFrame(() => {
+        clearEarlyReaderPreferences();
+        setSettled(true);
+      });
     });
     return () => cancelAnimationFrame(frame);
   }, []);
@@ -603,14 +600,17 @@ export function ReaderView({
           ref={articleRef}
           lang={contentLanguage}
           className="mx-auto"
-          style={{ fontSize, maxWidth: `${readingMeasures[width] * fontSize}px` }}
+          // data-reader-measure: before hydration, the stored size and width replace these (globals.css).
+          data-reader-measure
+          style={{ fontSize, maxWidth: `${READER_MEASURES[width] * fontSize}px` }}
         >
           {children}
         </article>
 
         <footer
           className="mx-auto mt-20 border-t border-current/10 pt-8"
-          style={{ maxWidth: `${readingMeasures[width] * fontSize}px` }}
+          data-reader-measure
+          style={{ maxWidth: `${READER_MEASURES[width] * fontSize}px` }}
         >
           {/* The position counts the chapters in reading order; stored numbers need not start at 1. */}
           <p className="text-muted-foreground text-center text-xs tracking-[0.2em] uppercase">

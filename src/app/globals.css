@@ -150,15 +150,21 @@
    tokens while a reader is shown. The chapter's loading placeholder (data-reader-pending, ReaderPending) carries the
    stored theme too. While a reader or a placeholder is shown (not a page React keeps hidden after a client navigation,
    see the site header rule below), the document takes the theme as well: the background around and past the surface
-   and, in dark, the scrollbars. */
+   and, in dark, the scrollbars. Before hydration the server's HTML carries the light theme; the stored one is then
+   read from data-reader-early-theme on <html> (earlyReaderPreferencesScript, src/lib/reader-preferences.ts), which
+   the reader removes once React renders it. */
 [data-reader-theme="sepia"],
 [data-reader-pending="sepia"],
+html[data-reader-early-theme="sepia"] :is([data-reader-theme], [data-reader-pending]),
 html:has(
   :is([data-reader-theme="sepia"], [data-reader-pending="sepia"]):not(
     [style*="display: none"],
     [style*="display: none"] *
   )
 ),
+html[data-reader-early-theme="sepia"]:has(
+    :is([data-reader-theme], [data-reader-pending]):not([style*="display: none"], [style*="display: none"] *)
+  ),
 body:has([data-reader-theme="sepia"]) [data-radix-popper-content-wrapper],
 body:has([data-reader-theme="sepia"]) [data-slot="sheet-content"] {
   --background: oklch(0.94 0.03 85);
@@ -179,12 +185,16 @@ body:has([data-reader-theme="sepia"]) [data-slot="sheet-content"] {
 
 [data-reader-theme="dark"],
 [data-reader-pending="dark"],
+html[data-reader-early-theme="dark"] :is([data-reader-theme], [data-reader-pending]),
 html:has(
   :is([data-reader-theme="dark"], [data-reader-pending="dark"]):not(
     [style*="display: none"],
     [style*="display: none"] *
   )
 ),
+html[data-reader-early-theme="dark"]:has(
+    :is([data-reader-theme], [data-reader-pending]):not([style*="display: none"], [style*="display: none"] *)
+  ),
 body:has([data-reader-theme="dark"]) [data-radix-popper-content-wrapper],
 body:has([data-reader-theme="dark"]) [data-slot="sheet-content"] {
   color-scheme: dark;
@@ -202,6 +212,17 @@ body:has([data-reader-theme="dark"]) [data-slot="sheet-content"] {
   --primary-foreground: oklch(0.2 0.004 60);
   --ring: oklch(0.68 0.1 25);
   --destructive: oklch(0.72 0.15 25);
+}
+
+/* Before hydration the server's HTML carries the default text size and width, as inline styles. The stored ones,
+   when they differ, come from <html> (earlyReaderPreferencesScript) and take precedence until the reader removes them,
+   once React renders the same values: the text is laid out once, at its final size and measure. */
+html[data-reader-early-measure] [data-reader-measure] {
+  max-width: var(--reader-early-measure) !important;
+}
+
+html[data-reader-early-measure] article[data-reader-measure] {
+  font-size: var(--reader-early-font-size) !important;
 }
 
 /* Until the reader has painted its stored theme once (data-reader-settled, ReaderView), its controls do not fade:
