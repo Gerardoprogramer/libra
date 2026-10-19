@@ -185,12 +185,23 @@ export function ReaderView({
 
   const [progress, setProgress] = useState(0);
   const [storageError, setStorageError] = useState(false);
+  // The controls of the surface fade their colors on hover and focus. On hydration the stored theme replaces the
+  // server's light one in the same task, so the first frame after mounting styles it with transitions off (globals.css,
+  // [data-reader-settled]); they are turned on at the next frame.
+  const [settled, setSettled] = useState(false);
   const settingsId = useId();
   const currentChapterRef = useRef<HTMLAnchorElement>(null);
   // Titles of the neighbouring chapters, from the same ordered list as previousHref/nextHref.
   const position = chapters?.findIndex((item) => item.slug === chapterSlug) ?? -1;
   const previousChapter = position > 0 ? chapters?.[position - 1] : undefined;
   const nextChapter = position >= 0 ? chapters?.[position + 1] : undefined;
+
+  useEffect(() => {
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => setSettled(true));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     const article = articleRef.current;
@@ -354,9 +365,12 @@ export function ReaderView({
 
   return (
     // The theme's colors are the design tokens overridden for this surface (globals.css, [data-reader-theme]).
+    // The colors fade only while a panel of the bar is open (data-state="open" on its trigger), which is where the
+    // reader changes the theme: the stored theme replaces the server's light one on hydration without a fade.
     <div
       data-reader-theme={theme}
-      className="bg-background text-foreground min-h-screen transition-colors duration-300"
+      data-reader-settled={settled ? "" : undefined}
+      className="bg-background text-foreground min-h-screen motion-safe:has-[[data-state=open]]:transition-colors motion-safe:has-[[data-state=open]]:duration-300"
     >
       {/* The reader's own bar replaces the site header on this page (globals.css). It stays in the document flow
           and never changes the article's height, which the progress measurement depends on. */}

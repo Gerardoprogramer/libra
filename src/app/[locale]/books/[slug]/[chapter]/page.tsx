@@ -6,6 +6,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getMessages, getTranslations } from "next-intl/server";
 
 import { LanguageSwitcher } from "@/components/layout/LanguageSwitcher";
+import { ReaderPending } from "@/components/reader/ReaderPending";
 import { ReaderView } from "@/components/reader/ReaderView";
 
 import {
@@ -120,16 +121,7 @@ export default async function ReaderPage(props: ReaderPageProps) {
   }
 
   return (
-    <Suspense
-      fallback={
-        <main
-          id="main-content"
-          data-reader-pending
-          className="mx-auto min-h-screen max-w-3xl px-6 py-12"
-          aria-busy="true"
-        />
-      }
-    >
+    <Suspense fallback={<ReaderPending className="mx-auto min-h-screen max-w-3xl px-6 py-12" aria-busy="true" />}>
       <ReaderContent {...props} />
     </Suspense>
   );
