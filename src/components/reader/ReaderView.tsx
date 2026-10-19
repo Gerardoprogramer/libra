@@ -570,12 +570,13 @@ export function ReaderView({
 
           <h1
             className={cn(
-              "font-serif text-balance",
+              "text-balance",
               // The type scale's own line heights (32/36/40px) keep the header a whole number of pixels tall, so the
-              // paragraph tops the progress restore scrolls to stay on whole pixels at the default size.
+              // paragraph tops the progress restore scrolls to stay on whole pixels at the default size. Capitals get
+              // a fallback sized for capitals, so the title wraps the same before and after Caslon loads.
               isSetInCapitals(chapterTitle)
-                ? "text-2xl tracking-[0.04em] md:text-3xl"
-                : "text-3xl tracking-tight md:text-4xl",
+                ? "font-serif-capitals text-2xl tracking-[0.04em] md:text-3xl"
+                : "font-serif text-3xl tracking-tight md:text-4xl",
             )}
           >
             {chapterTitle}

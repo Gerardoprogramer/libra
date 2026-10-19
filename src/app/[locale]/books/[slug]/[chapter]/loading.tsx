@@ -2,7 +2,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LoadingReaderPage() {
   return (
-    <main id="main-content" className="min-h-screen bg-[#faf9f6] text-[#25231f]">
+    // data-reader-pending: the site header is hidden from the start (globals.css), as it is once the reader renders.
+    <main id="main-content" data-reader-pending className="min-h-screen bg-[#faf9f6] text-[#25231f]">
       {/* Reader toolbar */}
       <header className="sticky top-0 z-20 border-b border-black/10 bg-[#faf9f6]/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-6">
