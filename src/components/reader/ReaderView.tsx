@@ -2,12 +2,34 @@
 
 import { Link } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
-import { FiArrowLeft, FiChevronLeft, FiChevronRight, FiMinus, FiMoon, FiPlus, FiSun } from "react-icons/fi";
+import { useEffect, useId, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import type { IconType } from "react-icons";
+import {
+  FiArrowLeft,
+  FiChevronLeft,
+  FiChevronRight,
+  FiList,
+  FiMinus,
+  FiMoon,
+  FiPlus,
+  FiSun,
+  FiX,
+} from "react-icons/fi";
+import { HiOutlineBookOpen } from "react-icons/hi2";
 import { TbCoffee } from "react-icons/tb";
 
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useReaderPreferences } from "@/hooks/useReaderPreferences";
 import { createReadingSession } from "@/lib/reading-progress-session";
@@ -35,34 +57,49 @@ interface ReaderViewProps {
 
   previousHref?: string;
   nextHref?: string;
+
+  /** The site's language switcher, rendered in the reader's bar (the site header is hidden on this page). */
+  languageSwitcher?: ReactNode;
+
+  /** Every chapter of the edition being read, in order, for the index. `href` is built like previousHref/nextHref. */
+  chapters?: { slug: string; number: number; title: string; href: string }[];
 }
 
-const themeClasses: Record<ReaderTheme, string> = {
-  light: "bg-white text-zinc-900",
-  sepia: "bg-[#f4ecd8] text-[#433422]",
-  dark: "bg-[#161616] text-zinc-200",
+// Measure of each width, in ems of the text size, so a line keeps the same number of characters at every size: the
+// chapter text (Literata) averages about 2.1 characters per em, which gives about 61, 68 and 76 characters per line.
+const readingMeasures: Record<ReaderWidth, number> = {
+  narrow: 29,
+  medium: 32.5,
+  wide: 36.5,
 };
 
-const widthClasses: Record<ReaderWidth, string> = {
-  narrow: "max-w-[560px]",
-  medium: "max-w-[680px]",
-  wide: "max-w-[820px]",
-};
+// A previous/next chapter link at the end of a chapter: 44px or more, the destination's title under its direction.
+const chapterLinkClass =
+  "hover:bg-muted focus-visible:ring-ring/50 flex min-h-16 flex-col justify-center gap-1 rounded-xl border px-4 py-3 transition outline-none focus-visible:ring-[3px]";
 
-const optionThemeStyles: Record<ReaderTheme, CSSProperties> = {
-  light: {
-    backgroundColor: "#ffffff",
-    color: "#18181b",
-  },
-  sepia: {
-    backgroundColor: "#f4ecd8",
-    color: "#433422",
-  },
-  dark: {
-    backgroundColor: "#161616",
-    color: "#e4e4e7",
-  },
-} satisfies Record<ReaderTheme, React.CSSProperties>;
+// Chapter titles stored in capitals ("CHAPTER XXIV DR. SEWARD'S PHONOGRAPH DIARY") are set a step smaller and
+// letter-spaced, as capitals read best. Their letters are never re-cased: they hold proper names and roman numerals.
+function isSetInCapitals(title: string): boolean {
+  const letters = title.match(/\p{L}/gu) ?? [];
+  const capitals = letters.filter((letter) => letter !== letter.toLowerCase());
+
+  return letters.length > 0 && capitals.length / letters.length >= 0.7;
+}
+
+// No swatch carries data-reader-theme: that attribute marks the reading surface and drives globals.css selectors.
+const READER_THEMES = [
+  { value: "light", label: "lightTheme", shortLabel: "lightThemeShort", Icon: FiSun },
+  { value: "sepia", label: "sepiaTheme", shortLabel: "sepiaThemeShort", Icon: TbCoffee },
+  { value: "dark", label: "darkTheme", shortLabel: "darkThemeShort", Icon: FiMoon },
+] as const satisfies readonly { value: ReaderTheme; label: string; shortLabel: string; Icon: IconType }[];
+
+const READER_WIDTHS = ["narrow", "medium", "wide"] as const satisfies readonly ReaderWidth[];
+
+const settingsLabelClass = "text-muted-foreground text-xs font-medium tracking-wide uppercase";
+
+// A choice in the settings panel: 44px tall, its selected state carried by aria-pressed.
+const settingsOptionClass =
+  "hover:bg-muted focus-visible:ring-ring/50 aria-pressed:border-primary aria-pressed:bg-muted aria-pressed:ring-primary flex min-h-11 items-center justify-center gap-2 rounded-xl border px-2 text-sm transition outline-none focus-visible:ring-[3px] aria-pressed:font-medium aria-pressed:ring-1";
 
 function getCurrentParagraphIndex(article: HTMLElement): number {
   const paragraphs = Array.from(article.querySelectorAll<HTMLElement>("p"));
@@ -125,6 +162,8 @@ export function ReaderView({
   children,
   previousHref,
   nextHref,
+  languageSwitcher,
+  chapters,
 }: ReaderViewProps) {
   const articleRef = useRef<HTMLElement>(null);
   const hasRestoredProgress = useRef(false);
@@ -146,6 +185,12 @@ export function ReaderView({
 
   const [progress, setProgress] = useState(0);
   const [storageError, setStorageError] = useState(false);
+  const settingsId = useId();
+  const currentChapterRef = useRef<HTMLAnchorElement>(null);
+  // Titles of the neighbouring chapters, from the same ordered list as previousHref/nextHref.
+  const position = chapters?.findIndex((item) => item.slug === chapterSlug) ?? -1;
+  const previousChapter = position > 0 ? chapters?.[position - 1] : undefined;
+  const nextChapter = position >= 0 ? chapters?.[position + 1] : undefined;
 
   useEffect(() => {
     const article = articleRef.current;
@@ -301,110 +346,221 @@ export function ReaderView({
     }
   }
 
-  function changeWidth(nextWidth: string | undefined) {
-    if (nextWidth !== "narrow" && nextWidth !== "medium" && nextWidth !== "wide") {
-      return;
-    }
-
+  function changeWidth(nextWidth: ReaderWidth) {
     if (!setWidth(nextWidth)) {
       setStorageError(true);
     }
   }
 
   return (
-    <div className={cn("min-h-screen transition-colors duration-300", themeClasses[theme])}>
-      <div aria-hidden="true" className="sticky top-16 z-40 h-1 bg-current/10">
-        <div className="h-full bg-current transition-[width]" style={{ width: `${progress}%` }} />
-      </div>
+    // The theme's colors are the design tokens overridden for this surface (globals.css, [data-reader-theme]).
+    <div
+      data-reader-theme={theme}
+      className="bg-background text-foreground min-h-screen transition-colors duration-300"
+    >
+      {/* The reader's own bar replaces the site header on this page (globals.css). It stays in the document flow
+          and never changes the article's height, which the progress measurement depends on. */}
+      <div className="bg-background/95 sticky top-0 z-40 border-b border-current/10 backdrop-blur">
+        <nav aria-label={t("readerNavigation")} className="mx-auto flex h-14 max-w-6xl items-center gap-1 px-2 sm:px-4">
+          <Button variant="ghost" size="icon-lg" className="size-11" asChild>
+            <Link href="/" aria-label={t("home")}>
+              <HiOutlineBookOpen aria-hidden="true" className="size-5" />
+            </Link>
+          </Button>
 
-      <div className="mx-auto max-w-6xl px-6 py-8">
-        <div className="flex flex-col gap-5 border-b border-current/10 pb-6 lg:flex-row lg:items-center lg:justify-between">
           <Link
             href={`/books/${bookSlug}`}
-            className="inline-flex items-center gap-2 text-sm text-current/75 transition hover:text-current"
+            className="focus-visible:ring-ring/50 flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm text-current/75 transition hover:text-current focus-visible:ring-2 focus-visible:outline-none"
           >
-            <FiArrowLeft aria-hidden="true" />
-            {bookTitle}
+            <FiArrowLeft aria-hidden="true" className="shrink-0" />
+            <span className="sr-only">{t("backToBook")} </span>
+            <span lang={contentLanguage} className="truncate" title={bookTitle}>
+              {bookTitle}
+            </span>
           </Link>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div role="group" aria-label={t("themeGroup")} className="flex rounded-lg border border-current/15 p-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label={t("lightTheme")}
-                aria-pressed={theme === "light"}
-                onClick={() => changeTheme("light")}
-                className={cn(theme === "light" && "bg-current/10")}
+          {chapters && chapters.length > 0 && (
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  className="size-11 data-open:bg-current/10"
+                  aria-label={t("tableOfContents")}
+                >
+                  <FiList aria-hidden="true" className="size-5" />
+                </Button>
+              </SheetTrigger>
+
+              {/* Portaled to <body>, where the sheet takes this theme's tokens (globals.css). It is a modal dialog: the
+                  page keeps its scroll position and layout; focus starts on the current chapter, Escape closes it and
+                  returns focus to the index button, and choosing a chapter closes it while the link navigates. */}
+              <SheetContent
+                side="right"
+                showCloseButton={false}
+                onOpenAutoFocus={(event) => {
+                  event.preventDefault();
+                  currentChapterRef.current?.focus();
+                }}
+                className="gap-0"
               >
-                <FiSun aria-hidden="true" />
-              </Button>
+                <SheetHeader className="flex-row items-start justify-between gap-2 border-b">
+                  <div className="min-w-0 space-y-1">
+                    <SheetTitle className="font-serif text-xl">{t("tableOfContents")}</SheetTitle>
+                    <SheetDescription lang={contentLanguage} className="truncate" title={bookTitle}>
+                      {bookTitle}
+                    </SheetDescription>
+                  </div>
 
+                  <SheetClose asChild>
+                    <Button variant="ghost" size="icon-lg" className="-mt-2 -mr-2 size-11 shrink-0">
+                      <FiX aria-hidden="true" className="size-5" />
+                      <span className="sr-only">{t("closeTableOfContents")}</span>
+                    </Button>
+                  </SheetClose>
+                </SheetHeader>
+
+                <nav aria-label={t("tableOfContents")} className="min-h-0 flex-1 overflow-y-auto p-2">
+                  <ol className="space-y-0.5">
+                    {chapters.map((item) => {
+                      const current = item.slug === chapterSlug;
+
+                      return (
+                        <li key={item.slug}>
+                          <SheetClose asChild>
+                            <Link
+                              ref={current ? currentChapterRef : undefined}
+                              href={item.href}
+                              aria-current={current ? "page" : undefined}
+                              className="hover:bg-muted focus-visible:ring-ring/50 aria-[current=page]:bg-muted aria-[current=page]:border-primary flex min-h-11 items-baseline gap-3 rounded-lg border-l-2 border-transparent px-3 py-2.5 text-sm transition outline-none focus-visible:ring-[3px] aria-[current=page]:font-medium"
+                            >
+                              <span className="text-muted-foreground w-6 shrink-0 text-right tabular-nums">
+                                {item.number}
+                              </span>
+                              <span lang={contentLanguage}>{item.title}</span>
+                            </Link>
+                          </SheetClose>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </nav>
+              </SheetContent>
+            </Sheet>
+          )}
+
+          <Popover>
+            <PopoverTrigger asChild>
               <Button
-                size="icon"
                 variant="ghost"
-                aria-label={t("sepiaTheme")}
-                aria-pressed={theme === "sepia"}
-                onClick={() => changeTheme("sepia")}
-                className={cn(theme === "sepia" && "bg-current/10")}
+                size="icon-lg"
+                className="size-11 font-serif text-base data-open:bg-current/10"
+                aria-label={t("readingSettings")}
               >
-                <TbCoffee aria-hidden="true" />
+                Aa
               </Button>
+            </PopoverTrigger>
 
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label={t("darkTheme")}
-                aria-pressed={theme === "dark"}
-                onClick={() => changeTheme("dark")}
-                className={cn(theme === "dark" && "bg-current/10")}
-              >
-                <FiMoon aria-hidden="true" />
-              </Button>
-            </div>
-
-            <div className="flex items-center rounded-lg border border-current/15 p-1">
-              <Button size="icon" variant="ghost" aria-label={t("decreaseTextSize")} onClick={decreaseFontSize}>
-                <FiMinus aria-hidden="true" />
-              </Button>
-
-              <span aria-live="polite" className="w-10 text-center text-sm">
-                {fontSize}
-              </span>
-
-              <Button size="icon" variant="ghost" aria-label={t("increaseTextSize")} onClick={increaseFontSize}>
-                <FiPlus aria-hidden="true" />
-              </Button>
-            </div>
-
-            <select
-              value={width}
-              onChange={(event) => changeWidth(event.target.value)}
-              aria-label={t("readingWidth")}
-              className="h-9 w-32 rounded-lg border border-current/15 bg-transparent px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-current/30"
-              style={{
-                colorScheme: theme === "dark" ? "dark" : "light",
-              }}
+            {/* Portaled to <body>, where its popper wrapper takes this theme's tokens (globals.css). It opens over the
+                text without moving it; focus moves in, and Escape or a click outside closes it and returns focus
+                to "Aa". Changing a setting keeps it open. */}
+            <PopoverContent
+              align="end"
+              collisionPadding={8}
+              aria-label={t("readingSettings")}
+              className="w-[min(22rem,calc(100vw-1rem))] space-y-5"
             >
-              <option value="narrow" style={optionThemeStyles[theme]}>
-                {t("narrow")}
-              </option>
+              <div className="space-y-2">
+                <p id={`${settingsId}-theme`} className={settingsLabelClass}>
+                  {t("themeGroup")}
+                </p>
 
-              <option value="medium" style={optionThemeStyles[theme]}>
-                {t("medium")}
-              </option>
+                <div role="group" aria-labelledby={`${settingsId}-theme`} className="grid grid-cols-3 gap-2">
+                  {READER_THEMES.map(({ value, label, shortLabel, Icon }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-label={t(label)}
+                      aria-pressed={theme === value}
+                      onClick={() => changeTheme(value)}
+                      className={settingsOptionClass}
+                    >
+                      <Icon aria-hidden="true" className="size-4 shrink-0" />
+                      {t(shortLabel)}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-              <option value="wide" style={optionThemeStyles[theme]}>
-                {t("wide")}
-              </option>
-            </select>
-          </div>
+              <div className="space-y-2">
+                <p id={`${settingsId}-size`} className={settingsLabelClass}>
+                  {t("textSize")}
+                </p>
+
+                <div
+                  role="group"
+                  aria-labelledby={`${settingsId}-size`}
+                  className="flex items-center justify-between rounded-xl border p-1"
+                >
+                  <Button
+                    size="icon-lg"
+                    variant="ghost"
+                    className="size-11"
+                    aria-label={t("decreaseTextSize")}
+                    onClick={decreaseFontSize}
+                  >
+                    <FiMinus aria-hidden="true" />
+                  </Button>
+
+                  <span aria-live="polite" className="text-base tabular-nums">
+                    {fontSize}
+                  </span>
+
+                  <Button
+                    size="icon-lg"
+                    variant="ghost"
+                    className="size-11"
+                    aria-label={t("increaseTextSize")}
+                    onClick={increaseFontSize}
+                  >
+                    <FiPlus aria-hidden="true" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p id={`${settingsId}-width`} className={settingsLabelClass}>
+                  {t("readingWidth")}
+                </p>
+
+                <div role="group" aria-labelledby={`${settingsId}-width`} className="grid grid-cols-3 gap-2">
+                  {READER_WIDTHS.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={width === value}
+                      onClick={() => changeWidth(value)}
+                      className={settingsOptionClass}
+                    >
+                      {t(value)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {languageSwitcher && <div className="flex shrink-0 [&_button]:min-h-11">{languageSwitcher}</div>}
+        </nav>
+
+        <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-1 bg-current/10">
+          <div className="h-full bg-current transition-[width]" style={{ width: `${progress}%` }} />
         </div>
       </div>
 
       <main id="main-content" className="px-6 pb-24">
         {(storageError || !preferencesAvailable) && (
-          <p role="alert" className="mx-auto mt-6 max-w-3xl text-sm text-red-700">
+          <p role="alert" className="text-destructive mx-auto mt-6 max-w-3xl text-sm">
             {t("storageUnavailable")}
           </p>
         )}
@@ -412,7 +568,18 @@ export function ReaderView({
         <header lang={contentLanguage} className="mx-auto max-w-3xl py-12 text-center md:py-16">
           <p className="mb-3 text-xs tracking-[0.25em] text-current/75 uppercase">{bookTitle}</p>
 
-          <h1 className="font-serif text-4xl tracking-tight md:text-5xl">{chapterTitle}</h1>
+          <h1
+            className={cn(
+              "font-serif text-balance",
+              // The type scale's own line heights (32/36/40px) keep the header a whole number of pixels tall, so the
+              // paragraph tops the progress restore scrolls to stay on whole pixels at the default size.
+              isSetInCapitals(chapterTitle)
+                ? "text-2xl tracking-[0.04em] md:text-3xl"
+                : "text-3xl tracking-tight md:text-4xl",
+            )}
+          >
+            {chapterTitle}
+          </h1>
 
           <p className="mt-4 text-sm text-current/75">{author}</p>
         </header>
@@ -420,46 +587,79 @@ export function ReaderView({
         <article
           ref={articleRef}
           lang={contentLanguage}
-          className={cn("mx-auto", widthClasses[width])}
-          style={{ fontSize }}
+          className="mx-auto"
+          style={{ fontSize, maxWidth: `${readingMeasures[width] * fontSize}px` }}
         >
           {children}
         </article>
 
-        <footer className={cn("mx-auto mt-20 border-t border-current/10 pt-8", widthClasses[width])}>
-          <div className="flex items-center justify-between gap-4">
-            {previousHref ? (
-              <Button variant="outline" asChild>
-                <Link href={previousHref}>
+        <footer
+          className="mx-auto mt-20 border-t border-current/10 pt-8"
+          style={{ maxWidth: `${readingMeasures[width] * fontSize}px` }}
+        >
+          {/* The position counts the chapters in reading order; stored numbers need not start at 1. */}
+          <p className="text-muted-foreground text-center text-xs tracking-[0.2em] uppercase">
+            {t("chapterOf", { current: chapterIndex + 1, total: totalChapters })}
+            <span aria-hidden="true"> · </span>
+            {t("progress", { progress })}
+          </p>
+
+          <nav aria-label={t("chapterNavigation")} className="mt-6 grid gap-3 sm:grid-cols-2">
+            {previousHref && (
+              <Link href={previousHref} rel="prev" className={chapterLinkClass}>
+                <span className="text-muted-foreground inline-flex items-center gap-1 text-xs tracking-wide uppercase">
                   <FiChevronLeft aria-hidden="true" />
                   {t("previous")}
-                </Link>
-              </Button>
-            ) : (
-              <div />
+                </span>
+                {previousChapter && (
+                  <span lang={contentLanguage} className="line-clamp-2 font-serif text-base">
+                    {previousChapter.title}
+                  </span>
+                )}
+              </Link>
             )}
-
-            <div className="text-center">
-              <p className="text-xs text-current/75">
-                {t("chapterOf", { current: chapterNumber, total: totalChapters })}
-              </p>
-
-              <p className="mt-1 text-xs text-current/75">{t("progress", { progress })}</p>
-            </div>
 
             {nextHref ? (
-              <Button asChild>
-                <Link href={nextHref}>
+              <Link
+                href={nextHref}
+                rel="next"
+                className={cn(chapterLinkClass, "border-primary text-right sm:col-start-2")}
+              >
+                <span className="text-primary inline-flex items-center justify-end gap-1 text-xs tracking-wide uppercase">
                   {t("next")}
                   <FiChevronRight aria-hidden="true" />
-                </Link>
-              </Button>
+                </span>
+                {nextChapter && (
+                  <span lang={contentLanguage} className="line-clamp-2 font-serif text-base">
+                    {nextChapter.title}
+                  </span>
+                )}
+              </Link>
             ) : (
-              <Button variant="outline" asChild>
-                <Link href={`/books/${bookSlug}`}>{t("finish")}</Link>
-              </Button>
+              // The last chapter: its way forward is the book page.
+              <Link
+                href={`/books/${bookSlug}`}
+                className={cn(chapterLinkClass, "border-primary text-right sm:col-start-2")}
+              >
+                <span className="text-primary text-xs tracking-wide uppercase">{t("finish")}</span>
+                <span lang={contentLanguage} className="line-clamp-2 font-serif text-base">
+                  {bookTitle}
+                </span>
+              </Link>
             )}
-          </div>
+          </nav>
+
+          {nextHref && (
+            <p className="mt-6 text-center">
+              <Link
+                href={`/books/${bookSlug}`}
+                className="focus-visible:ring-ring/50 inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm text-current/75 transition outline-none hover:text-current focus-visible:ring-[3px]"
+              >
+                <FiArrowLeft aria-hidden="true" />
+                {t("bookPage")}
+              </Link>
+            </p>
+          )}
         </footer>
       </main>
     </div>

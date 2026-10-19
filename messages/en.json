@@ -81,7 +81,19 @@
     "storageUnavailable": "Reading settings or progress could not be saved. Check that your browser allows site storage.",
     "chapterNotFoundTitle": "Chapter not found — Libra",
     "chapterMetadataDescription": "Read {chapter} from {book} by {authors} on Libra.",
-    "themeGroup": "Reading theme"
+    "themeGroup": "Reading theme",
+    "readerNavigation": "Reader navigation",
+    "home": "Libra home",
+    "backToBook": "Back to the book:",
+    "tableOfContents": "Table of contents",
+    "readingSettings": "Reading settings",
+    "textSize": "Text size",
+    "lightThemeShort": "Light",
+    "sepiaThemeShort": "Sepia",
+    "darkThemeShort": "Dark",
+    "closeTableOfContents": "Close table of contents",
+    "chapterNavigation": "Previous and next chapter",
+    "bookPage": "Back to the book page"
   },
   "catalog": {
     "booksMetadataTitle": "Explore the library — Libra",

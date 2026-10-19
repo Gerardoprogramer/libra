@@ -81,7 +81,19 @@
     "storageUnavailable": "No se pudieron guardar las preferencias o el progreso de lectura. Comprueba que el navegador permita guardar datos.",
     "chapterNotFoundTitle": "Capítulo no encontrado — Libra",
     "chapterMetadataDescription": "Lee {chapter} de {book}, de {authors}, en Libra.",
-    "themeGroup": "Tema de lectura"
+    "themeGroup": "Tema de lectura",
+    "readerNavigation": "Navegación del lector",
+    "home": "Inicio de Libra",
+    "backToBook": "Volver al libro:",
+    "tableOfContents": "Índice de capítulos",
+    "readingSettings": "Ajustes de lectura",
+    "textSize": "Tamaño del texto",
+    "lightThemeShort": "Claro",
+    "sepiaThemeShort": "Sepia",
+    "darkThemeShort": "Oscuro",
+    "closeTableOfContents": "Cerrar índice",
+    "chapterNavigation": "Capítulo anterior y siguiente",
+    "bookPage": "Volver a la ficha del libro"
   },
   "catalog": {
     "booksMetadataTitle": "Explora la biblioteca — Libra",

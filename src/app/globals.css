@@ -126,6 +126,59 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Reader themes (src/components/reader/ReaderView.tsx): the same tokens, overridden only on the reading surface, so
+   its text, controls, borders and alerts follow the theme the reader chose. "light" keeps the paper of :root. Only
+   the tokens the reader uses are set; every pair used for text meets WCAG AA. Menus and the chapter index opened from
+   the reader's bar are portaled to <body>, outside the surface, so their popper wrapper or sheet takes the same
+   tokens while a reader is shown. */
+[data-reader-theme="sepia"],
+body:has([data-reader-theme="sepia"]) [data-radix-popper-content-wrapper],
+body:has([data-reader-theme="sepia"]) [data-slot="sheet-content"] {
+  --background: oklch(0.94 0.03 85);
+  --foreground: oklch(0.34 0.04 65);
+  --popover: oklch(0.94 0.03 85);
+  --popover-foreground: oklch(0.34 0.04 65);
+  --accent: oklch(0.905 0.035 85);
+  --accent-foreground: oklch(0.34 0.04 65);
+  --muted: oklch(0.905 0.035 85);
+  --muted-foreground: oklch(0.47 0.04 65);
+  --border: oklch(0.84 0.04 82);
+  --input: oklch(0.84 0.04 82);
+  --primary: oklch(0.43 0.12 27);
+  --primary-foreground: oklch(0.94 0.03 85);
+  --ring: oklch(0.5 0.11 27);
+  --destructive: oklch(0.48 0.17 29);
+}
+
+[data-reader-theme="dark"],
+body:has([data-reader-theme="dark"]) [data-radix-popper-content-wrapper],
+body:has([data-reader-theme="dark"]) [data-slot="sheet-content"] {
+  color-scheme: dark;
+  --background: oklch(0.2 0.004 60);
+  --foreground: oklch(0.91 0.006 80);
+  --popover: oklch(0.24 0.005 60);
+  --popover-foreground: oklch(0.91 0.006 80);
+  --accent: oklch(0.3 0.007 60);
+  --accent-foreground: oklch(0.91 0.006 80);
+  --muted: oklch(0.26 0.006 60);
+  --muted-foreground: oklch(0.72 0.008 70);
+  --border: oklch(0.33 0.008 60);
+  --input: oklch(0.33 0.008 60);
+  --primary: oklch(0.74 0.1 25);
+  --primary-foreground: oklch(0.2 0.004 60);
+  --ring: oklch(0.68 0.1 25);
+  --destructive: oklch(0.72 0.15 25);
+}
+
+/* The chapter reader has its own compact bar with the way out (home, book, language); the site header is hidden
+   only while a reader surface, or the chapter page's streaming placeholder (data-reader-pending), is shown: hiding it
+   only when the reader arrives would move the text up. After a client navigation away, React keeps the previous page
+   in the DOM, hidden with an inline `display: none !important` on it or an ancestor; such an element does not count. */
+body:has(:is([data-reader-theme], [data-reader-pending]):not([style*="display: none"], [style*="display: none"] *))
+  > [data-site-header] {
+  display: none;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
