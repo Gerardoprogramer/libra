@@ -16,7 +16,8 @@ export default function manifest(): MetadataRoute.Manifest {
     icons: [
       { src: "/icons/libra-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icons/libra-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/icons/libra-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      // Its own file, with the glyph inside the maskable safe zone (scripts/generate-maskable-icon.mjs).
+      { src: "/icons/libra-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }
