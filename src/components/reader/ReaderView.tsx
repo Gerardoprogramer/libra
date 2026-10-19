@@ -33,6 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import { usePrefetchNextChapter } from "@/hooks/usePrefetchNextChapter";
 import { useReaderPreferences } from "@/hooks/useReaderPreferences";
+import { readerPanelThemeProps, ReaderPanelThemeProvider } from "@/lib/reader-panel-theme";
 import { clearEarlyReaderPreferences, READER_MEASURES } from "@/lib/reader-preferences";
 import { createReadingSession } from "@/lib/reading-progress-session";
 import { replayPendingReadingProgress } from "@/lib/reading-progress-sync";
@@ -338,8 +339,8 @@ export function ReaderView({
     contentLanguage,
   ]);
 
-  // The "Next" link alone prefetches only up to the loading placeholder.
-  usePrefetchNextChapter(nextHref, progress, footerRef);
+  // A link's default prefetch stops at the loading placeholder; the "Next" link's is set by this hook.
+  const nextChapterPrefetch = usePrefetchNextChapter(nextHref, footerRef);
 
   function decreaseFontSize() {
     if (!setFontSize(fontSize - 2)) {
@@ -408,10 +409,12 @@ export function ReaderView({
                 </Button>
               </SheetTrigger>
 
-              {/* Portaled to <body>, where the sheet takes this theme's tokens (globals.css). It is a modal dialog: the
-                  page keeps its scroll position and layout; focus starts on the current chapter, Escape closes it and
-                  returns focus to the index button, and choosing a chapter closes it while the link navigates. */}
+              {/* Portaled to <body>; data-reader-panel-theme gives it this theme's tokens (globals.css). It is a modal
+                  dialog: the page keeps its scroll position and layout; focus starts on the current chapter, Escape
+                  closes it and returns focus to the index button, and choosing a chapter closes it while the link
+                  navigates. */}
               <SheetContent
+                {...readerPanelThemeProps(theme)}
                 side="right"
                 showCloseButton={false}
                 onOpenAutoFocus={(event) => {
@@ -477,10 +480,11 @@ export function ReaderView({
               </Button>
             </PopoverTrigger>
 
-            {/* Portaled to <body>, where its popper wrapper takes this theme's tokens (globals.css). It opens over the
-                text without moving it; focus moves in, and Escape or a click outside closes it and returns focus
+            {/* Portaled to <body>; data-reader-panel-theme gives it this theme's tokens (globals.css). It opens over
+                the text without moving it; focus moves in, and Escape or a click outside closes it and returns focus
                 to "Aa". Changing a setting keeps it open. */}
             <PopoverContent
+              {...readerPanelThemeProps(theme)}
               align="end"
               collisionPadding={8}
               aria-label={t("readingSettings")}
@@ -566,7 +570,12 @@ export function ReaderView({
             </PopoverContent>
           </Popover>
 
-          {languageSwitcher && <div className="flex shrink-0 [&_button]:min-h-11">{languageSwitcher}</div>}
+          {/* The language menu is portaled as well; it reads this theme from the provider. */}
+          {languageSwitcher && (
+            <ReaderPanelThemeProvider value={theme}>
+              <div className="flex shrink-0 [&_button]:min-h-11">{languageSwitcher}</div>
+            </ReaderPanelThemeProvider>
+          )}
         </nav>
 
         <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-1 bg-current/10">
@@ -644,6 +653,8 @@ export function ReaderView({
               <Link
                 href={nextHref}
                 rel="next"
+                prefetch={nextChapterPrefetch.linkPrefetch}
+                onFocus={nextChapterPrefetch.onLinkFocus}
                 className={cn(chapterLinkClass, "border-primary text-right sm:col-start-2")}
               >
                 <span className="text-primary inline-flex items-center justify-end gap-1 text-xs tracking-wide uppercase">

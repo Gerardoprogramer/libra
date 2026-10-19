@@ -1,9 +1,8 @@
 // When the reader prefetches the whole next chapter (text included), so that following "Next" renders it without the
-// chapter's loading placeholder. Only near the end of a chapter, where a click is likely soon, and never on a
-// connection the reader has asked to spare or that could not finish it in time.
-
-/** Chapter progress (0–100) from which the next chapter is prefetched. */
-export const NEXT_CHAPTER_PREFETCH_PROGRESS = 75;
+// chapter's loading placeholder. Next.js keeps such a prefetch for about 30 seconds and does not renew it on its own,
+// so it starts only near the end of a chapter, close to the click: when the chapter's footer is within a screen of the
+// viewport. The "Next" link then renews it itself on hover and touch. Never on a connection the reader has asked to
+// spare or that could not finish it in time.
 
 /** IntersectionObserver margin: the chapter's footer counts as near within one screen below the viewport. */
 export const NEXT_CHAPTER_FOOTER_MARGIN = "0px 0px 100% 0px";
@@ -21,25 +20,25 @@ export interface NetworkConditions {
 export interface NextChapterPrefetchInput extends NetworkConditions {
   /** The next chapter's URL, exactly as its link navigates to it; undefined in the last chapter. */
   nextHref: string | undefined;
-  progress: number;
   footerNear: boolean;
   /** The URL this chapter already prefetched, if any. */
   prefetchedHref: string | null;
 }
 
+/** Whether the connection allows prefetching a whole chapter: online, no data saver, faster than 2g. */
+export function canPrefetchOnConnection({ online, saveData, effectiveType }: NetworkConditions): boolean {
+  return online && !saveData && (effectiveType === undefined || !SLOW_CONNECTIONS.has(effectiveType));
+}
+
 export function shouldPrefetchNextChapter({
   nextHref,
-  progress,
   footerNear,
   prefetchedHref,
-  online,
-  saveData,
-  effectiveType,
+  ...network
 }: NextChapterPrefetchInput): boolean {
   if (!nextHref || nextHref === prefetchedHref) return false;
-  if (!online || saveData || (effectiveType !== undefined && SLOW_CONNECTIONS.has(effectiveType))) return false;
 
-  return footerNear || progress >= NEXT_CHAPTER_PREFETCH_PROGRESS;
+  return footerNear && canPrefetchOnConnection(network);
 }
 
 interface NavigatorLike {

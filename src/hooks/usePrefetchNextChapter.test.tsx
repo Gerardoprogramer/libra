@@ -9,7 +9,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { getPathname, Link } from "@/i18n/navigation";
 import { readingProgressHref } from "@/lib/reading-progress";
 
-import { usePrefetchNextChapter } from "./usePrefetchNextChapter";
+import { hasKeyboardFocus, usePrefetchNextChapter } from "./usePrefetchNextChapter";
 
 const nextHref = readingProgressHref({
   bookSlug: "dracula",
@@ -17,20 +17,20 @@ const nextHref = readingProgressHref({
   editionId: "7b1f1d2c-3d4e-4f50-8a6b-7c8d9e0f1a2b",
 });
 
-function Reader({ progress }: { progress: number }) {
+function Reader() {
   const footerRef = useRef<HTMLElement>(null);
-  usePrefetchNextChapter(nextHref, progress, footerRef);
+  const { linkPrefetch, onLinkFocus } = usePrefetchNextChapter(nextHref, footerRef);
 
   return (
-    <footer ref={footerRef}>
-      <Link href={nextHref} rel="next">
+    <footer ref={footerRef} data-link-prefetch={String(linkPrefetch)}>
+      <Link href={nextHref} rel="next" prefetch={linkPrefetch} onFocus={onLinkFocus}>
         Next
       </Link>
     </footer>
   );
 }
 
-function render(locale: "en" | "es", progress: number) {
+function render(locale: "en" | "es") {
   const prefetched: string[] = [];
   const router: AppRouterInstance = {
     bfcacheId: "reader",
@@ -47,7 +47,7 @@ function render(locale: "en" | "es", progress: number) {
   const html = renderToStaticMarkup(
     <AppRouterContext.Provider value={router}>
       <NextIntlClientProvider locale={locale} messages={{}} timeZone="UTC">
-        <Reader progress={progress} />
+        <Reader />
       </NextIntlClientProvider>
     </AppRouterContext.Provider>,
   );
@@ -55,18 +55,44 @@ function render(locale: "en" | "es", progress: number) {
   return { html, prefetched };
 }
 
-test("rendering a chapter on the server never prefetches the next one, even at the end", () => {
+test("on the server the next chapter is not prefetched and its link keeps the default prefetch", () => {
   for (const locale of ["es", "en"] as const) {
-    assert.deepEqual(render(locale, 100).prefetched, []);
+    const { html, prefetched } = render(locale);
+
+    assert.deepEqual(prefetched, []);
+    // The full prefetch is enabled only after mounting, once the connection is known, so hydration matches.
+    assert.ok(html.includes('data-link-prefetch="auto"'), html);
   }
 });
 
 test("the prefetched URL is the one the Next link navigates to: language, slug and edition", () => {
   for (const locale of ["es", "en"] as const) {
     const target = getPathname({ href: nextHref, locale });
-    const { html } = render(locale, 0);
+    const { html } = render(locale);
 
     assert.equal(target, `/${locale}/books/dracula/chapter-2?edition=7b1f1d2c-3d4e-4f50-8a6b-7c8d9e0f1a2b`);
     assert.ok(html.includes(`href="${target}"`), html);
   }
+});
+
+test("only keyboard focus counts, and a browser without :focus-visible never breaks the focus handler", () => {
+  const selectors: string[] = [];
+  const element = (focusVisible: boolean) => ({
+    matches(selector: string) {
+      selectors.push(selector);
+      return focusVisible;
+    },
+  });
+
+  assert.equal(hasKeyboardFocus(element(true)), true);
+  assert.equal(hasKeyboardFocus(element(false)), false);
+  assert.deepEqual(selectors, [":focus-visible", ":focus-visible"]);
+
+  const unsupported = {
+    matches(): boolean {
+      throw new SyntaxError("':focus-visible' is not a valid selector");
+    },
+  };
+  assert.doesNotThrow(() => hasKeyboardFocus(unsupported));
+  assert.equal(hasKeyboardFocus(unsupported), false);
 });

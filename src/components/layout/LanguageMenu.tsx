@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
+import { useReaderPanelThemeProps } from "@/lib/reader-panel-theme";
 
 export interface LanguageMenuProps {
   locale: Locale;
@@ -21,6 +22,8 @@ export interface LanguageMenuProps {
 export function LanguageMenu({ locale, open, onOpenChange, trigger }: LanguageMenuProps) {
   const pathname = usePathname();
   const router = useRouter();
+  // In the reader's bar the menu takes the reader's theme; elsewhere it has none.
+  const panelThemeProps = useReaderPanelThemeProps();
 
   async function changeLocale(nextLocale: Locale) {
     if (locale === nextLocale) return;
@@ -81,6 +84,7 @@ export function LanguageMenu({ locale, open, onOpenChange, trigger }: LanguageMe
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent
+        {...panelThemeProps}
         align="end"
         onFocus={(event) => {
           // The first key/click can precede this chunk loading. Focus the menu
