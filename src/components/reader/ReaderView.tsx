@@ -31,6 +31,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { usePrefetchNextChapter } from "@/hooks/usePrefetchNextChapter";
 import { useReaderPreferences } from "@/hooks/useReaderPreferences";
 import { clearEarlyReaderPreferences, READER_MEASURES } from "@/lib/reader-preferences";
 import { createReadingSession } from "@/lib/reading-progress-session";
@@ -185,6 +186,7 @@ export function ReaderView({
   const [settled, setSettled] = useState(false);
   const settingsId = useId();
   const currentChapterRef = useRef<HTMLAnchorElement>(null);
+  const footerRef = useRef<HTMLElement>(null);
   // Titles of the neighbouring chapters, from the same ordered list as previousHref/nextHref.
   const position = chapters?.findIndex((item) => item.slug === chapterSlug) ?? -1;
   const previousChapter = position > 0 ? chapters?.[position - 1] : undefined;
@@ -335,6 +337,9 @@ export function ReaderView({
     totalChapters,
     contentLanguage,
   ]);
+
+  // The "Next" link alone prefetches only up to the loading placeholder.
+  usePrefetchNextChapter(nextHref, progress, footerRef);
 
   function decreaseFontSize() {
     if (!setFontSize(fontSize - 2)) {
@@ -608,6 +613,7 @@ export function ReaderView({
         </article>
 
         <footer
+          ref={footerRef}
           className="mx-auto mt-20 border-t border-current/10 pt-8"
           data-reader-measure
           style={{ maxWidth: `${READER_MEASURES[width] * fontSize}px` }}
