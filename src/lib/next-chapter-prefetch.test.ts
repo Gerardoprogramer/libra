@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  canPrefetchOnConnection,
   createNextChapterPrefetcher,
-  NEXT_CHAPTER_PREFETCH_PROGRESS,
   readNetworkConditions,
   shouldPrefetchNextChapter,
   type NextChapterPrefetchState,
@@ -13,33 +13,29 @@ const nextHref = "/es/books/dracula/chapter-2?edition=7b1f1d2c-3d4e-4f50-8a6b-7c
 
 const nearTheEnd: NextChapterPrefetchState = {
   nextHref,
-  progress: 0,
   footerNear: true,
   online: true,
   saveData: false,
   effectiveType: "4g",
 };
 
-test("the next chapter is prefetched near the end of a chapter: footer close or progress past the threshold", () => {
+test("the next chapter is prefetched only once the chapter's footer is near, however far the reader is", () => {
   assert.equal(shouldPrefetchNextChapter({ ...nearTheEnd, prefetchedHref: null }), true);
-  assert.equal(
-    shouldPrefetchNextChapter({
-      ...nearTheEnd,
-      footerNear: false,
-      progress: NEXT_CHAPTER_PREFETCH_PROGRESS,
-      prefetchedHref: null,
-    }),
-    true,
-  );
-  assert.equal(
-    shouldPrefetchNextChapter({
-      ...nearTheEnd,
-      footerNear: false,
-      progress: NEXT_CHAPTER_PREFETCH_PROGRESS - 1,
-      prefetchedHref: null,
-    }),
-    false,
-  );
+  // Next.js keeps a prefetch about 30 seconds: one made far from the footer would expire before the click.
+  assert.equal(shouldPrefetchNextChapter({ ...nearTheEnd, footerNear: false, prefetchedHref: null }), false);
+});
+
+test("the connection allows a whole chapter only online, without data saver and faster than 2g", () => {
+  const fast = { online: true, saveData: false, effectiveType: "4g" };
+
+  assert.equal(canPrefetchOnConnection(fast), true);
+  assert.equal(canPrefetchOnConnection({ ...fast, effectiveType: "3g" }), true);
+  // Where the Network Information API is missing (Safari, Firefox), only the online state decides.
+  assert.equal(canPrefetchOnConnection({ online: true, saveData: false }), true);
+
+  for (const state of [{ online: false }, { saveData: true }, { effectiveType: "2g" }, { effectiveType: "slow-2g" }]) {
+    assert.equal(canPrefetchOnConnection({ ...fast, ...state }), false, JSON.stringify(state));
+  }
 });
 
 test("nothing is prefetched without a next chapter, offline, with data saver or on a 2g connection", () => {
@@ -85,14 +81,14 @@ function spy() {
   return { invalidations, prefetch };
 }
 
-test("a chapter prefetches its next chapter once, however many scroll, footer and network events follow", () => {
+test("a chapter prefetches its next chapter once, however many footer and network events follow", () => {
   const prefetcher = createNextChapterPrefetcher();
   const { invalidations, prefetch } = spy();
 
-  assert.equal(prefetcher.update({ ...nearTheEnd, footerNear: false, progress: 10 }, prefetch), false);
+  assert.equal(prefetcher.update({ ...nearTheEnd, footerNear: false }, prefetch), false);
   assert.equal(prefetcher.update(nearTheEnd, prefetch), true);
-  for (let progress = 76; progress <= 100; progress++) prefetcher.update({ ...nearTheEnd, progress }, prefetch);
-  prefetcher.update({ ...nearTheEnd, footerNear: false }, prefetch);
+  for (let event = 0; event < 20; event++) prefetcher.update({ ...nearTheEnd, footerNear: event % 2 === 0 }, prefetch);
+  prefetcher.update({ ...nearTheEnd, effectiveType: "3g" }, prefetch);
 
   assert.equal(invalidations.length, 1);
 });
@@ -159,7 +155,7 @@ test("a prefetch that throws is not retried and does not break the reader", () =
   };
 
   assert.doesNotThrow(() => prefetcher.update(nearTheEnd, failing));
-  prefetcher.update({ ...nearTheEnd, progress: 100 }, failing);
+  prefetcher.update({ ...nearTheEnd, footerNear: true }, failing);
 
   assert.equal(calls, 1);
 });
