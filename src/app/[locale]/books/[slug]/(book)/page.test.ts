@@ -5,10 +5,10 @@ import { compileFunction } from "node:vm";
 import * as jsxRuntime from "react/jsx-runtime";
 import ts from "typescript";
 
-import en from "../../../../../messages/en.json";
-import es from "../../../../../messages/es.json";
-import { isSlug } from "../../../../lib/catalog-filters";
-import { createLocalizedMetadata } from "../../../../lib/seo-metadata-core";
+import en from "../../../../../../messages/en.json";
+import es from "../../../../../../messages/es.json";
+import { isSlug } from "../../../../../lib/catalog-filters";
+import { createLocalizedMetadata } from "../../../../../lib/seo-metadata-core";
 
 type Locale = "en" | "es";
 type BookFixture = {

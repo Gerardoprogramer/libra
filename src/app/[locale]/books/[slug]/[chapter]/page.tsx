@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages, getTranslations } from "next-intl/server";
 
+import { LanguageSwitcher } from "@/components/layout/LanguageSwitcher";
+import { ReaderPending } from "@/components/reader/ReaderPending";
 import { ReaderView } from "@/components/reader/ReaderView";
 
 import {
@@ -14,6 +16,7 @@ import {
   type ContentLocale,
 } from "@/db/queries/books";
 import { isSlug, isUuid } from "@/lib/catalog-filters";
+import { readingFont } from "@/lib/fonts/reading";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getAbsolutePublicImageUrl, getConfiguredSiteUrl } from "@/lib/site-url";
@@ -118,9 +121,7 @@ export default async function ReaderPage(props: ReaderPageProps) {
   }
 
   return (
-    <Suspense
-      fallback={<main id="main-content" className="mx-auto min-h-screen max-w-3xl px-6 py-12" aria-busy="true" />}
-    >
+    <Suspense fallback={<ReaderPending className="mx-auto min-h-screen max-w-3xl px-6 py-12" aria-busy="true" />}>
       <ReaderContent {...props} />
     </Suspense>
   );
@@ -132,10 +133,11 @@ async function ReaderContent({ params, searchParams }: ReaderPageProps) {
   if (requestedEdition !== undefined && !isUuid(requestedEdition)) notFound();
   const interfaceLocale = getInterfaceLocale(locale);
 
-  const [result, messages, bookT] = await Promise.all([
+  const [result, messages, bookT, navT] = await Promise.all([
     getChapterBySlug(slug, chapter, interfaceLocale, requestedEdition),
     getMessages(),
     getTranslations({ locale: interfaceLocale, namespace: "book" }),
+    getTranslations({ locale: interfaceLocale, namespace: "nav" }),
   ]);
 
   if (!result) {
@@ -273,9 +275,24 @@ async function ReaderContent({ params, searchParams }: ReaderPageProps) {
               ? readingProgressHref({ bookSlug: book.slug, chapterSlug: next.slug, editionId: book.edition.id })
               : undefined
           }
+          languageSwitcher={
+            <LanguageSwitcher
+              locale={interfaceLocale}
+              label={navT("language", { locale: interfaceLocale })}
+              errorLabel={navT("languageLoadError")}
+            />
+          }
+          chapters={book.chapters.map((item) => ({
+            slug: item.slug,
+            number: item.number,
+            title: item.title,
+            href: readingProgressHref({ bookSlug: book.slug, chapterSlug: item.slug, editionId: book.edition.id }),
+          }))}
         >
           {paragraphs.map((paragraph, index) => (
-            <p key={index} className="mb-7 font-serif leading-[1.95] opacity-90">
+            // Line height 1.65 for long prose; paragraphs about half a line apart (0.8em), so the gap follows the size.
+            // At the default 20px both are whole pixels (33 and 16), like the paragraph tops the progress restores to.
+            <p key={index} className={`${readingFont.variable} font-reading mb-[0.8em] leading-[1.65]`}>
               {paragraph}
             </p>
           ))}

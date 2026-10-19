@@ -4,6 +4,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* The generated fallback of Libre Caslon ("editorialFont Fallback": Times New Roman, size-adjust 117.57%) is sized on
+   mixed-case text, where both fonts measure alike. Times capitals are about 5% wider than Caslon's (measured on the
+   chapter titles: median width ratio 0.949), so titles in capitals wrapped differently before the font arrived and
+   the text moved when it did. Same metrics as the generated face, size-adjust x 0.94. */
+@font-face {
+  font-family: "editorialFont Capitals Fallback";
+  src: local("Times New Roman");
+  ascent-override: 82.51%;
+  descent-override: 22.12%;
+  line-gap-override: 0%;
+  size-adjust: 110.52%;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -12,6 +25,14 @@
   --font-sans:
     ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  /* The next/font variables are set by the class that loads each font (src/lib/fonts). The fallback inside var()
+     keeps the stack valid on any element outside that class. */
+  --font-serif: var(--font-caslon, ui-serif), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-reading: var(--font-literata, ui-serif), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  /* Chapter titles set in capitals: Libre Caslon ("editorialFont", the name next/font gives src/lib/fonts/editorial.ts)
+     with a fallback sized for capitals while it loads (see "editorialFont Capitals Fallback" below). */
+  --font-serif-capitals:
+    "editorialFont", "editorialFont Capitals Fallback", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -51,23 +72,25 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Warm paper, dark ink and a single burgundy accent. --background is mirrored by themeColor in
+   src/app/[locale]/layout.tsx. */
 :root {
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --card: oklch(0.993 0.004 85);
+  --card-foreground: oklch(0.22 0.012 60);
+  --popover: oklch(0.993 0.004 85);
+  --popover-foreground: oklch(0.22 0.012 60);
+  --primary: oklch(0.45 0.13 25);
+  --primary-foreground: oklch(0.985 0.006 85);
+  --secondary: oklch(0.955 0.01 80);
+  --secondary-foreground: oklch(0.27 0.012 60);
+  --muted: oklch(0.955 0.01 80);
+  --muted-foreground: oklch(0.5 0.012 60);
+  --accent: oklch(0.955 0.01 80);
+  --accent-foreground: oklch(0.27 0.012 60);
+  --destructive: oklch(0.52 0.19 27);
+  --border: oklch(0.9 0.012 80);
+  --input: oklch(0.9 0.012 80);
+  --ring: oklch(0.55 0.12 25);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -82,8 +105,8 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.985 0.006 85);
+  --foreground: oklch(0.22 0.012 60);
 }
 
 .dark {
@@ -118,6 +141,113 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* Reader themes (src/components/reader/ReaderView.tsx): the same tokens, overridden only on the reading surface, so
+   its text, controls, borders and alerts follow the theme the reader chose. "light" keeps the paper of :root. Only
+   the tokens the reader uses are set; every pair used for text meets WCAG AA. Menus and the chapter index opened from
+   the reader's bar are portaled to <body>, outside the surface, so their popper wrapper or sheet takes the same
+   tokens while a reader is shown. The chapter's loading placeholder (data-reader-pending, ReaderPending) carries the
+   stored theme too. While a reader or a placeholder is shown (not a page React keeps hidden after a client navigation,
+   see the site header rule below), the document takes the theme as well: the background around and past the surface
+   and, in dark, the scrollbars. Before hydration the server's HTML carries the light theme; the stored one is then
+   read from data-reader-early-theme on <html> (earlyReaderPreferencesScript, src/lib/reader-preferences.ts), which
+   the reader removes once React renders it. */
+[data-reader-theme="sepia"],
+[data-reader-pending="sepia"],
+html[data-reader-early-theme="sepia"] :is([data-reader-theme], [data-reader-pending]),
+html:has(
+  :is([data-reader-theme="sepia"], [data-reader-pending="sepia"]):not(
+    [style*="display: none"],
+    [style*="display: none"] *
+  )
+),
+html[data-reader-early-theme="sepia"]:has(
+    :is([data-reader-theme], [data-reader-pending]):not([style*="display: none"], [style*="display: none"] *)
+  ),
+body:has([data-reader-theme="sepia"]) [data-radix-popper-content-wrapper],
+body:has([data-reader-theme="sepia"]) [data-slot="sheet-content"] {
+  --background: oklch(0.94 0.03 85);
+  --foreground: oklch(0.34 0.04 65);
+  --popover: oklch(0.94 0.03 85);
+  --popover-foreground: oklch(0.34 0.04 65);
+  --accent: oklch(0.905 0.035 85);
+  --accent-foreground: oklch(0.34 0.04 65);
+  --muted: oklch(0.905 0.035 85);
+  --muted-foreground: oklch(0.47 0.04 65);
+  --border: oklch(0.84 0.04 82);
+  --input: oklch(0.84 0.04 82);
+  --primary: oklch(0.43 0.12 27);
+  --primary-foreground: oklch(0.94 0.03 85);
+  --ring: oklch(0.5 0.11 27);
+  --destructive: oklch(0.48 0.17 29);
+}
+
+[data-reader-theme="dark"],
+[data-reader-pending="dark"],
+html[data-reader-early-theme="dark"] :is([data-reader-theme], [data-reader-pending]),
+html:has(
+  :is([data-reader-theme="dark"], [data-reader-pending="dark"]):not(
+    [style*="display: none"],
+    [style*="display: none"] *
+  )
+),
+html[data-reader-early-theme="dark"]:has(
+    :is([data-reader-theme], [data-reader-pending]):not([style*="display: none"], [style*="display: none"] *)
+  ),
+body:has([data-reader-theme="dark"]) [data-radix-popper-content-wrapper],
+body:has([data-reader-theme="dark"]) [data-slot="sheet-content"] {
+  color-scheme: dark;
+  --background: oklch(0.2 0.004 60);
+  --foreground: oklch(0.91 0.006 80);
+  --popover: oklch(0.24 0.005 60);
+  --popover-foreground: oklch(0.91 0.006 80);
+  --accent: oklch(0.3 0.007 60);
+  --accent-foreground: oklch(0.91 0.006 80);
+  --muted: oklch(0.26 0.006 60);
+  --muted-foreground: oklch(0.72 0.008 70);
+  --border: oklch(0.33 0.008 60);
+  --input: oklch(0.33 0.008 60);
+  --primary: oklch(0.74 0.1 25);
+  --primary-foreground: oklch(0.2 0.004 60);
+  --ring: oklch(0.68 0.1 25);
+  --destructive: oklch(0.72 0.15 25);
+}
+
+/* Before hydration the server's HTML carries the default text size and width, as inline styles. The stored ones,
+   when they differ, come from <html> (earlyReaderPreferencesScript) and take precedence until the reader removes them,
+   once React renders the same values: the text is laid out once, at its final size and measure. */
+html[data-reader-early-measure] [data-reader-measure] {
+  max-width: var(--reader-early-measure) !important;
+}
+
+html[data-reader-early-measure] article[data-reader-measure] {
+  font-size: var(--reader-early-font-size) !important;
+}
+
+/* Until the reader has painted its stored theme once (data-reader-settled, ReaderView), its controls do not fade:
+   the theme that replaces the server's light one on hydration is not a hover or a focus. */
+[data-reader-theme]:not([data-reader-settled]) * {
+  transition: none;
+}
+
+/* With reduced motion the reader, its placeholder and the menus and index opened from its bar change colors at once,
+   whether the theme changes or a control is hovered. The fade of the theme itself is already motion-safe
+   (ReaderView). */
+@media (prefers-reduced-motion: reduce) {
+  :is([data-reader-theme], [data-reader-pending]) *,
+  body:has([data-reader-theme]) :is([data-radix-popper-content-wrapper], [data-slot="sheet-content"]) * {
+    transition: none;
+  }
+}
+
+/* The chapter reader has its own compact bar with the way out (home, book, language); the site header is hidden
+   only while a reader surface, or the chapter page's streaming placeholder (data-reader-pending), is shown: hiding it
+   only when the reader arrives would move the text up. After a client navigation away, React keeps the previous page
+   in the DOM, hidden with an inline `display: none !important` on it or an ancestor; such an element does not count. */
+body:has(:is([data-reader-theme], [data-reader-pending]):not([style*="display: none"], [style*="display: none"] *))
+  > [data-site-header] {
+  display: none;
 }
 
 @layer base {

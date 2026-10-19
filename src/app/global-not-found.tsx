@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 
 import en from "../../messages/en.json";
 import es from "../../messages/es.json";
+import { editorialFont } from "../lib/fonts/editorial";
 import { LOCALE_HEADER, resolveNotFoundLocale } from "../lib/not-found-locale";
 
 // Any URL that matches no route is rendered here. The root layout lives under the dynamic [locale] segment, so
@@ -31,8 +32,9 @@ export default async function GlobalNotFound() {
   const locale = await getLocale();
   const { errors, catalog } = messages[locale];
 
+  // This page bypasses the [locale] layout, so it applies the editorial font itself.
   return (
-    <html lang={locale}>
+    <html lang={locale} className={editorialFont.variable}>
       <body>
         <header className="bg-background border-b">
           <div className="mx-auto flex h-16 max-w-7xl items-center px-6">

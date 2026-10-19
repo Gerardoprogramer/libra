@@ -3,8 +3,11 @@ import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getMessages, getTranslations, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 
+import { InlineScript } from "@/components/InlineScript";
 import { Header } from "@/components/layout/Header";
 import { routing } from "@/i18n/routing";
+import { editorialFont } from "@/lib/fonts/editorial";
+import { earlyReaderPreferencesScript } from "@/lib/reader-preferences";
 import { getConfiguredSiteUrl } from "@/lib/site-url";
 import { getDefaultSocialImage } from "@/lib/social-metadata";
 
@@ -20,7 +23,8 @@ interface LocaleLayoutProps {
   }>;
 }
 
-export const viewport: Viewport = { themeColor: "#ffffff" };
+// The sRGB value of --background in globals.css.
+export const viewport: Viewport = { themeColor: "#fcfaf6" };
 
 export async function generateMetadata({ params }: LocaleLayoutProps): Promise<Metadata> {
   const { locale } = await params;
@@ -71,7 +75,16 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
   const [messages, nav] = await Promise.all([getMessages(), getTranslations({ locale, namespace: "nav" })]);
 
   return (
-    <html lang={locale}>
+    // suppressHydrationWarning: the early script may add its marks to <html> before React hydrates (it applies to this
+    // element's own attributes only).
+    <html lang={locale} className={editorialFont.variable} suppressHydrationWarning>
+      <head>
+        {/* Runs while the browser parses <head>, before the first paint: the stored reader preferences, which the
+            server cannot read, are applied to the reader from the start (src/lib/reader-preferences.ts). A fixed
+            script, the same in every page, so the layout stays static. A locale switch renders the layout again in
+            the browser, where InlineScript renders nothing: the script runs once, from the server's HTML. */}
+        <InlineScript html={earlyReaderPreferencesScript} />
+      </head>
       <body>
         {/* Navigation needs the locale; only the error boundary needs global messages. */}
         <NextIntlClientProvider messages={{ errors: messages.errors, auth: messages.auth }}>

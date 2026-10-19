@@ -89,14 +89,6 @@ export default async function Home() {
           </div>
         </div>
       </section>
-      <ContinueReading
-        books={readingBooks}
-        title={continueReading("title")}
-        chapterLabel={continueReading("chapter")}
-        continueLabel={continueReading("continue")}
-        storageUnavailableLabel={continueReading("storageUnavailable")}
-      />
-      <RecentlyRead books={readingBooks} title={recentlyRead("title")} continueLabel={recentlyRead("continue")} />
       {books.length > 0 && (
         <section className="mx-auto max-w-7xl px-6 py-14 md:py-16">
           <div className="mb-8 flex items-end justify-between gap-4">
@@ -125,6 +117,16 @@ export default async function Home() {
           </div>
         </section>
       )}
+      {/* The reading history exists only in the browser (and the cloud), so these blocks appear after hydration.
+          Below the catalog they add to the end of the page instead of pushing the catalog down. */}
+      <ContinueReading
+        books={readingBooks}
+        title={continueReading("title")}
+        chapterLabel={continueReading("chapter")}
+        continueLabel={continueReading("continue")}
+        storageUnavailableLabel={continueReading("storageUnavailable")}
+      />
+      <RecentlyRead books={readingBooks} title={recentlyRead("title")} continueLabel={recentlyRead("continue")} />
     </main>
   );
 }

@@ -1,10 +1,13 @@
+import { ReaderPending } from "@/components/reader/ReaderPending";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LoadingReaderPage() {
   return (
-    <main id="main-content" className="min-h-screen bg-[#faf9f6] text-[#25231f]">
+    // ReaderPending: the site header is hidden from the start (globals.css), as it is once the reader renders, and
+    // the placeholder takes the stored reader theme's tokens.
+    <ReaderPending className="bg-background text-foreground min-h-screen">
       {/* Reader toolbar */}
-      <header className="sticky top-0 z-20 border-b border-black/10 bg-[#faf9f6]/95 backdrop-blur">
+      <header className="bg-background/95 sticky top-0 z-20 border-b border-current/10 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-6">
           <div className="flex min-w-0 items-center gap-4">
             <Skeleton className="size-9 rounded-md" />
@@ -29,8 +32,8 @@ export default function LoadingReaderPage() {
       </header>
 
       {/* Progress */}
-      <div className="h-px w-full bg-black/10">
-        <div className="h-px w-1/4 animate-pulse bg-black/30" />
+      <div className="h-px w-full bg-current/10">
+        <div className="h-px w-1/4 animate-pulse bg-current/30" />
       </div>
 
       {/* Reading area */}
@@ -58,7 +61,7 @@ export default function LoadingReaderPage() {
       </article>
 
       {/* Bottom navigation */}
-      <footer className="border-t border-black/10">
+      <footer className="border-t border-current/10">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-6 py-8">
           <Skeleton className="h-10 w-32 rounded-md" />
 
@@ -67,6 +70,6 @@ export default function LoadingReaderPage() {
           <Skeleton className="h-10 w-32 rounded-md" />
         </div>
       </footer>
-    </main>
+    </ReaderPending>
   );
 }
