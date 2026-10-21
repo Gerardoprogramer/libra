@@ -10,6 +10,10 @@
     "languageLoadError": "The language selector could not be loaded. Please try again.",
     "skipToContent": "Skip to main content"
   },
+  "connection": {
+    "offline": "You're offline. New pages may not load until the connection returns.",
+    "restored": "Back online."
+  },
   "home": {
     "metadataTitle": "Libra — A library without walls",
     "metadataDescription": "Discover timeless books, beautifully presented and free to read.",

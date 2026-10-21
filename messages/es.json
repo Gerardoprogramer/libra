@@ -10,6 +10,10 @@
     "languageLoadError": "No se pudo cargar el selector de idioma. Inténtalo de nuevo.",
     "skipToContent": "Saltar al contenido principal"
   },
+  "connection": {
+    "offline": "Sin conexión. Las páginas nuevas pueden no cargarse hasta que vuelva la conexión.",
+    "restored": "Conexión restablecida."
+  },
   "home": {
     "metadataTitle": "Libra — Una biblioteca sin fronteras",
     "metadataDescription": "Descubre libros atemporales, presentados con elegancia y completamente gratis.",
