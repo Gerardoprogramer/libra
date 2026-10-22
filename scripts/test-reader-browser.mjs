@@ -23,8 +23,9 @@ export const state = window.fixture = {
 };
 export function usePathname(){return useSyncExternalStore(fn=>{state.route.add(fn);return()=>state.route.delete(fn)},()=>state.path,()=>null)}
 export const Link=React.forwardRef(function Link({href,children,onClick,...props},ref){return <a {...props} ref={ref} href={href} onClick={event=>{onClick?.(event);event.preventDefault();state.navigate(href)}}>{children}</a>});
-export const router={replace(to){state.replacements.push(to);state.navigate(to)},push(to){state.navigate(to)},refresh(){}};
+export const router={replace(to){state.replacements.push(to);state.navigate(to)},push(to){state.navigate(to)},refresh(){},prefetch(){}};
 export function useRouter(){return router}
+export function getPathname({href}){return href}
 `;
 const cloudModule = `
 import {state} from "fixture:state";
