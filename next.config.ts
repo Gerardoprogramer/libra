@@ -75,6 +75,16 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // The offline fallback's worker (docs/offline-fallback.md): never cached, so every update check gets the deployed
+      // version, including the one that turns it off.
+      {
+        source: "/sw.js",
+        headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }],
+      },
+      ...["/offline-es.html", "/offline-en.html"].map((source) => ({
+        source,
+        headers: [{ key: "X-Robots-Tag", value: "noindex" }],
+      })),
     ];
   },
 };
