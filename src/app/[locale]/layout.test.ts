@@ -10,6 +10,22 @@ import es from "../../../messages/es.json";
 import { routing } from "../../i18n/routing";
 import manifest from "../manifest";
 
+// Stands in for the client component, so the layout's element tree can be searched for it.
+function ConnectionStatus() {
+  return null;
+}
+
+// Every element in a rendered tree, depth first.
+function* elements(node: unknown): Generator<{ type: unknown; props: Record<string, unknown> }> {
+  if (Array.isArray(node)) {
+    for (const child of node) yield* elements(child);
+  } else if (typeof node === "object" && node !== null && "props" in node) {
+    const element = node as { type: unknown; props: Record<string, unknown> };
+    yield element;
+    yield* elements(element.props.children);
+  }
+}
+
 // Loads layout.tsx with its dependencies replaced, so its metadata runs without the Next.js runtime.
 function loadLayout() {
   const messages = { en, es } as const;
@@ -33,6 +49,7 @@ function loadLayout() {
       },
     },
     "@/components/InlineScript": {},
+    "@/components/layout/ConnectionStatus": { ConnectionStatus },
     "@/components/layout/Header": {},
     "@/i18n/routing": { routing },
     "@/lib/fonts/editorial": { editorialFont: { variable: "" } },
@@ -88,6 +105,23 @@ test("an unknown locale is still a 404", async () => {
     loadLayout().generateMetadata({ children: null, params: Promise.resolve({ locale: "fr" }) }),
     /notFound/,
   );
+});
+
+test("every page carries the connection notice, worded in its locale", async () => {
+  for (const [locale, messages] of [
+    ["es", es],
+    ["en", en],
+  ] as const) {
+    const tree = await loadLayout().default({ children: null, params: Promise.resolve({ locale }) });
+    const notices = [...elements(tree)].filter((element) => element.type === ConnectionStatus);
+
+    assert.equal(notices.length, 1, locale);
+    assert.deepEqual(
+      notices[0].props,
+      { offlineLabel: messages.connection.offline, restoredLabel: messages.connection.restored },
+      locale,
+    );
+  }
 });
 
 test("the browser theme color and the installed app's colors are the same paper", () => {

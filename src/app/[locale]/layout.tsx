@@ -4,6 +4,7 @@ import { getMessages, getTranslations, setRequestLocale } from "next-intl/server
 import { notFound } from "next/navigation";
 
 import { InlineScript } from "@/components/InlineScript";
+import { ConnectionStatus } from "@/components/layout/ConnectionStatus";
 import { Header } from "@/components/layout/Header";
 import { routing } from "@/i18n/routing";
 import { editorialFont } from "@/lib/fonts/editorial";
@@ -75,7 +76,11 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
   }
 
   setRequestLocale(locale);
-  const [messages, nav] = await Promise.all([getMessages(), getTranslations({ locale, namespace: "nav" })]);
+  const [messages, nav, connection] = await Promise.all([
+    getMessages(),
+    getTranslations({ locale, namespace: "nav" }),
+    getTranslations({ locale, namespace: "connection" }),
+  ]);
 
   return (
     // suppressHydrationWarning: the early script may add its marks to <html> before React hydrates (it applies to this
@@ -99,6 +104,8 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
           </a>
           <Header />
           {children}
+          {/* Labels are passed as props, so the client messages keep only the namespaces listed above. */}
+          <ConnectionStatus offlineLabel={connection("offline")} restoredLabel={connection("restored")} />
         </NextIntlClientProvider>
       </body>
     </html>
