@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#fcfaf6" />
+    <title>Sin conexión · Libra</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 16px;
+        background: #fcfaf6;
+        color: #211d1a;
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        line-height: 1.5;
+      }
+      main {
+        width: 100%;
+        max-width: 28rem;
+        text-align: center;
+      }
+      .brand {
+        margin: 0 0 32px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 1.25rem;
+        letter-spacing: 0.02em;
+        color: #5c544d;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 1.75rem;
+        font-weight: 600;
+        line-height: 1.25;
+      }
+      p {
+        margin: 0 0 24px;
+        color: #4a433d;
+      }
+      a {
+        display: inline-block;
+        min-height: 44px;
+        padding: 10px 24px;
+        border-radius: 999px;
+        background: #8f2f26;
+        color: #fcfaf6;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      a:focus-visible {
+        outline: 3px solid #211d1a;
+        outline-offset: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="brand">Libra</p>
+      <h1>Sin conexión</h1>
+      <p>
+        No se pudo cargar esta página porque no hay conexión a internet. Comprueba la conexión y vuelve a intentarlo.
+      </p>
+      <!-- An empty href is this same URL: following it loads the requested page again, without a script. -->
+      <a href="">Reintentar</a>
+    </main>
+  </body>
+</html>

@@ -10,8 +10,12 @@ import es from "../../../messages/es.json";
 import { routing } from "../../i18n/routing";
 import manifest from "../manifest";
 
-// Stands in for the client component, so the layout's element tree can be searched for it.
+// Stand in for the client components, so the layout's element tree can be searched for them.
 function ConnectionStatus() {
+  return null;
+}
+
+function ServiceWorkerRegistration() {
   return null;
 }
 
@@ -51,6 +55,7 @@ function loadLayout() {
     "@/components/InlineScript": {},
     "@/components/layout/ConnectionStatus": { ConnectionStatus },
     "@/components/layout/Header": {},
+    "@/components/layout/ServiceWorkerRegistration": { ServiceWorkerRegistration },
     "@/i18n/routing": { routing },
     "@/lib/fonts/editorial": { editorialFont: { variable: "" } },
     "@/lib/reader-preferences": { earlyReaderPreferencesScript: "" },
@@ -121,6 +126,15 @@ test("every page carries the connection notice, worded in its locale", async () 
       { offlineLabel: messages.connection.offline, restoredLabel: messages.connection.restored },
       locale,
     );
+  }
+});
+
+test("every page registers the offline fallback worker once", async () => {
+  for (const locale of routing.locales) {
+    const tree = await loadLayout().default({ children: null, params: Promise.resolve({ locale }) });
+    const registrations = [...elements(tree)].filter((element) => element.type === ServiceWorkerRegistration);
+
+    assert.equal(registrations.length, 1, locale);
   }
 });
 

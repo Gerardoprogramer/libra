@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { InlineScript } from "@/components/InlineScript";
 import { ConnectionStatus } from "@/components/layout/ConnectionStatus";
 import { Header } from "@/components/layout/Header";
+import { ServiceWorkerRegistration } from "@/components/layout/ServiceWorkerRegistration";
 import { routing } from "@/i18n/routing";
 import { editorialFont } from "@/lib/fonts/editorial";
 import { earlyReaderPreferencesScript } from "@/lib/reader-preferences";
@@ -106,6 +107,7 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
           {children}
           {/* Labels are passed as props, so the client messages keep only the namespaces listed above. */}
           <ConnectionStatus offlineLabel={connection("offline")} restoredLabel={connection("restored")} />
+          <ServiceWorkerRegistration />
         </NextIntlClientProvider>
       </body>
     </html>
