@@ -279,6 +279,112 @@ try {
     assert.equal(await evaluate("document.querySelector('#continue').textContent"), "");
     assert.doesNotMatch(await evaluate("document.querySelector('#action').textContent"), /40%/);
     console.log("PASS stale history responses and server logout cookie changes cannot retain the previous account.");
+
+    // Theme and settings panel, by keyboard: the surface (data-reader-theme), the pressed swatch and the portaled
+    // panel (data-reader-panel-theme) follow the choice, the panel stays open until Escape returns focus to "Aa", and
+    // the theme is restored after another chapter, a remount of the reader and a reload. No CSS is loaded here, so
+    // only the attributes are checked, not the colors.
+    const keys = {
+      Enter: { code: "Enter", windowsVirtualKeyCode: 13, text: "\r" },
+      " ": { code: "Space", windowsVirtualKeyCode: 32, text: " " },
+      Escape: { code: "Escape", windowsVirtualKeyCode: 27 },
+      Tab: { code: "Tab", windowsVirtualKeyCode: 9 },
+    };
+    const press = async (key) => {
+      const { text, ...rest } = keys[key];
+      await call("Input.dispatchKeyEvent", { type: "keyDown", key, text, ...rest });
+      await call("Input.dispatchKeyEvent", { type: "keyUp", key, ...rest });
+      await settle();
+    };
+    const trigger = "document.querySelector('button[aria-label=readingSettings]')";
+    const panel = "document.querySelector('[data-slot=popover-content]')";
+    const themeState = () =>
+      evaluate(
+        `(()=>{const panel=${panel};return {surface:document.querySelector('[data-reader-theme]').dataset.readerTheme,expanded:${trigger}.getAttribute('aria-expanded'),panel:panel?.getAttribute('data-reader-panel-theme')??null,pressed:panel?[...panel.querySelectorAll('button[aria-pressed][aria-label$=Theme]')].map(b=>b.getAttribute('aria-label')+'='+b.getAttribute('aria-pressed')):null,focus:document.activeElement.getAttribute('aria-label')}})()`,
+      );
+    const storedTheme = async () =>
+      JSON.parse(await evaluate("localStorage.getItem('libra:reader-preferences')"))?.theme;
+
+    await evaluate(
+      "localStorage.clear();fixture.user=null;fixture.mode='reader';fixture.navigate('/en/books/dracula/chapter-1')",
+    );
+    await settle();
+    assert.deepEqual(await themeState(), {
+      surface: "light",
+      expanded: "false",
+      panel: null,
+      pressed: null,
+      focus: null,
+    });
+    await evaluate(`${trigger}.focus()`);
+    await press("Enter");
+    assert.deepEqual(await themeState(), {
+      surface: "light",
+      expanded: "true",
+      panel: "light",
+      pressed: ["lightTheme=true", "sepiaTheme=false", "darkTheme=false"],
+      // Focus moves into the panel, onto its first control.
+      focus: "lightTheme",
+    });
+    await press("Tab");
+    await press("Enter");
+    assert.deepEqual(await themeState(), {
+      surface: "sepia",
+      expanded: "true",
+      panel: "sepia",
+      pressed: ["lightTheme=false", "sepiaTheme=true", "darkTheme=false"],
+      focus: "sepiaTheme",
+    });
+    assert.equal(await storedTheme(), "sepia");
+    await press("Tab");
+    await press(" ");
+    assert.deepEqual(await themeState(), {
+      surface: "dark",
+      expanded: "true",
+      panel: "dark",
+      pressed: ["lightTheme=false", "sepiaTheme=false", "darkTheme=true"],
+      focus: "darkTheme",
+    });
+    assert.equal(await storedTheme(), "dark");
+    await press("Escape");
+    assert.deepEqual(await themeState(), {
+      surface: "dark",
+      expanded: "false",
+      panel: null,
+      pressed: null,
+      focus: "readingSettings",
+    });
+    assert.equal(await evaluate(`document.activeElement===${trigger}`), true);
+
+    // Another chapter keeps the same reader mounted with new props; leaving for the home page and coming back mounts a
+    // new one, which reads the stored theme; a reload starts the page again from storage alone.
+    await evaluate("[...document.querySelectorAll('a')].find(a=>a.getAttribute('href').endsWith('chapter-2')).click()");
+    await settle();
+    assert.equal(await evaluate("document.querySelector('h1')?.textContent"), "Chapter 2");
+    assert.equal((await themeState()).surface, "dark");
+    await evaluate("fixture.mode='home';fixture.navigate('/en')");
+    await settle();
+    assert.equal(await evaluate("document.querySelector('[data-reader-theme]')"), null);
+    await evaluate("fixture.mode='reader';fixture.navigate('/en/books/dracula/chapter-1')");
+    await settle();
+    assert.equal((await themeState()).surface, "dark");
+    await evaluate("window.ready=false;location.reload()");
+    for (let attempt = 0; attempt < 100 && !(await evaluate("window.ready===true")); attempt++) await wait(25);
+    await settle();
+    assert.equal(await evaluate("document.querySelector('h1')?.textContent"), "Chapter 1");
+    await evaluate(`${trigger}.focus()`);
+    await press("Enter");
+    assert.deepEqual(await themeState(), {
+      surface: "dark",
+      expanded: "true",
+      panel: "dark",
+      pressed: ["lightTheme=false", "sepiaTheme=false", "darkTheme=true"],
+      focus: "lightTheme",
+    });
+    await press("Escape");
+    assert.equal(await evaluate(`document.activeElement===${trigger}`), true);
+    console.log("PASS theme by keyboard: surface, pressed swatch and panel follow it; panel stays open until Escape.");
+    console.log("PASS theme restored after another chapter, a remount of the reader and a reload.");
   }
   assert.deepEqual(errors, [], "Browser runtime errors");
   await call("Browser.close");
