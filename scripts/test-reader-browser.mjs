@@ -399,6 +399,61 @@ try {
     console.log("PASS theme by keyboard: surface, pressed swatch and panel follow it; panel stays open until Escape.");
     console.log("PASS theme restored after another chapter, a remount of the reader and a reload.");
 
+    // Typeface: chosen from the settings panel by keyboard, applied to the article, kept with the other preferences
+    // across chapters and a reload. The reader is left and mounted again with these preferences set, so nothing the
+    // theme scenario left (its theme, its open panel) carries over.
+    await evaluate("fixture.mode='home';fixture.navigate('/en')");
+    await settle();
+    await evaluate(
+      "localStorage.setItem('libra:reader-preferences',JSON.stringify({theme:'sepia',width:'wide',fontSize:24}));fixture.user=null;fixture.mode='reader';fixture.navigate('/en/books/dracula/chapter-1')",
+    );
+    await settle();
+    assert.equal(await evaluate("document.querySelector('[data-reader-theme]').dataset.readerTheme"), "sepia");
+    assert.equal(await evaluate("document.querySelector('article').dataset.readerFont"), "literata");
+    await evaluate(`${trigger}.click()`);
+    await settle();
+    assert.deepEqual(
+      await evaluate(
+        "(()=>{const label=[...document.querySelectorAll('p')].find(p=>p.textContent==='typefaceGroup');const group=document.querySelector('[role=group][aria-labelledby=\"'+label.id+'\"]');return [...group.querySelectorAll('button')].map(b=>[b.textContent,b.getAttribute('aria-pressed')])})()",
+      ),
+      [
+        ["Literata", "true"],
+        ["Georgia", "false"],
+        ["Merriweather", "false"],
+        ["Lexend", "false"],
+      ],
+    );
+    await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent==='Lexend').focus()");
+    await press("Enter");
+    assert.deepEqual(
+      await evaluate(
+        "(()=>{const b=document.activeElement;return [b.textContent,b.getAttribute('aria-pressed'),b.matches(':focus-visible'),document.querySelector('article').dataset.readerFont]})()",
+      ),
+      ["Lexend", "true", true, "lexend"],
+    );
+    assert.deepEqual(JSON.parse(await evaluate("localStorage.getItem('libra:reader-preferences')")), {
+      theme: "sepia",
+      width: "wide",
+      fontSize: 24,
+      font: "lexend",
+    });
+    assert.equal(await evaluate("document.querySelector('[data-reader-theme]').dataset.readerTheme"), "sepia");
+    assert.equal(await evaluate("document.querySelector('article').style.fontSize"), "24px");
+    await press("Escape");
+    await evaluate("[...document.querySelectorAll('a')].find(a=>a.getAttribute('href').endsWith('chapter-2')).click()");
+    await settle();
+    assert.equal(await evaluate("document.querySelector('h1')?.textContent"), "Chapter 2");
+    assert.equal(await evaluate("document.querySelector('article').dataset.readerFont"), "lexend");
+    await evaluate("[...document.querySelectorAll('a')].find(a=>a.getAttribute('href').endsWith('chapter-1')).click()");
+    await settle();
+    assert.equal(await evaluate("document.querySelector('article').dataset.readerFont"), "lexend");
+    await evaluate("window.ready=false;location.reload()");
+    for (let attempt = 0; attempt < 100 && !(await evaluate("window.ready===true")); attempt++) await wait(25);
+    await settle();
+    assert.equal(await evaluate("document.querySelector('article').dataset.readerFont"), "lexend");
+    assert.equal(await evaluate("document.querySelector('[data-reader-theme]').dataset.readerTheme"), "sepia");
+    console.log("PASS typeface: keyboard choice, kept with the other preferences across chapters and a reload.");
+
     // Reading progress on a real layout: a guest reads a 40-paragraph chapter in an 800x600 viewport, with the reader's
     // scrollTo scrolling for real. The checks use what the page shows and stores (the guest's saved position, the
     // progress bar, where the saved paragraph sits on screen), never the reader's own measuring rule. They depend on the

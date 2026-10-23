@@ -86,6 +86,7 @@
     "chapterNotFoundTitle": "Chapter not found — Libra",
     "chapterMetadataDescription": "Read {chapter} from {book} by {authors} on Libra.",
     "themeGroup": "Reading theme",
+    "typefaceGroup": "Typeface",
     "readerNavigation": "Reader navigation",
     "home": "Libra home",
     "backToBook": "Back to the book:",

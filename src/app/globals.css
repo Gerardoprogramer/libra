@@ -28,7 +28,6 @@
   /* The next/font variables are set by the class that loads each font (src/lib/fonts). The fallback inside var()
      keeps the stack valid on any element outside that class. */
   --font-serif: var(--font-caslon, ui-serif), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-reading: var(--font-literata, ui-serif), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   /* Chapter titles set in capitals: Libre Caslon ("editorialFont", the name next/font gives src/lib/fonts/editorial.ts)
      with a fallback sized for capitals while it loads (see "editorialFont Capitals Fallback" below). */
   --font-serif-capitals:
@@ -221,6 +220,31 @@ html[data-reader-early-measure] [data-reader-measure] {
 
 html[data-reader-early-measure] article[data-reader-measure] {
   font-size: var(--reader-early-font-size) !important;
+}
+
+/* The typeface of the chapter text, chosen in the reader's settings (READER_FONTS, src/lib/reader-preferences.ts). Only
+   the article's text takes it: the chapter title, the bar and the panels keep their own. The next/font variables are
+   set on the article (src/lib/fonts/reading.ts); a file is fetched only once text is set in it. Georgia is the
+   system's: where it is missing (Android, most Linux) the device's serif stands in. Before hydration the server's HTML
+   carries Literata; a stored typeface comes from <html> (data-reader-early-font, earlyReaderPreferencesScript), whose
+   more specific selector applies it until the reader removes the mark, once React renders the same typeface. */
+article[data-reader-font="literata"] {
+  font-family: var(--font-literata, ui-serif), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+}
+
+article[data-reader-font="georgia"],
+html[data-reader-early-font="georgia"] article[data-reader-font] {
+  font-family: Georgia, "Times New Roman", Times, serif;
+}
+
+article[data-reader-font="merriweather"],
+html[data-reader-early-font="merriweather"] article[data-reader-font] {
+  font-family: var(--font-merriweather, ui-serif), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+}
+
+article[data-reader-font="lexend"],
+html[data-reader-early-font="lexend"] article[data-reader-font] {
+  font-family: var(--font-lexend, ui-sans-serif), ui-sans-serif, system-ui, sans-serif;
 }
 
 /* Until the reader has painted its stored theme once (data-reader-settled, ReaderView), its controls do not fade:

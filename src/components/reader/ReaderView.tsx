@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 import { usePrefetchNextChapter } from "@/hooks/usePrefetchNextChapter";
 import { useReaderPreferences } from "@/hooks/useReaderPreferences";
 import { readerPanelThemeProps, ReaderPanelThemeProvider } from "@/lib/reader-panel-theme";
-import { clearEarlyReaderPreferences, READER_MEASURES } from "@/lib/reader-preferences";
+import { clearEarlyReaderPreferences, READER_FONTS, READER_MEASURES, type ReaderFont } from "@/lib/reader-preferences";
 import { createReadingSession } from "@/lib/reading-progress-session";
 import { replayPendingReadingProgress } from "@/lib/reading-progress-sync";
 import { useReadingProgressScope } from "@/lib/use-reading-progress-scope";
@@ -57,6 +57,9 @@ interface ReaderViewProps {
 
   totalChapters: number;
   children: ReactNode;
+
+  /** The classes that define the typefaces' font variables (src/lib/fonts/reading.ts), set on the article. */
+  fontVariables?: string;
 
   previousHref?: string;
   nextHref?: string;
@@ -89,6 +92,15 @@ const READER_THEMES = [
 ] as const satisfies readonly { value: ReaderTheme; label: string; shortLabel: string; Icon: IconType }[];
 
 const READER_WIDTHS = ["narrow", "medium", "wide"] as const satisfies readonly ReaderWidth[];
+
+// Proper names, the same in every language. Each is shown in the panel's own font: setting it in its typeface would
+// fetch typefaces the reader never chose.
+const READER_FONT_NAMES: Record<ReaderFont, string> = {
+  literata: "Literata",
+  georgia: "Georgia",
+  merriweather: "Merriweather",
+  lexend: "Lexend",
+};
 
 const settingsLabelClass = "text-muted-foreground text-xs font-medium tracking-wide uppercase";
 
@@ -155,6 +167,7 @@ export function ReaderView({
   chapterIndex,
   totalChapters,
   children,
+  fontVariables,
   previousHref,
   nextHref,
   languageSwitcher,
@@ -170,10 +183,12 @@ export function ReaderView({
     theme,
     width,
     fontSize,
+    font,
     isAvailable: preferencesAvailable,
     setTheme,
     setWidth,
     setFontSize,
+    setFont,
   } = useReaderPreferences();
   const t = useTranslations("reader");
   const scope = useReadingProgressScope();
@@ -366,6 +381,12 @@ export function ReaderView({
     }
   }
 
+  function changeFont(nextFont: ReaderFont) {
+    if (!setFont(nextFont)) {
+      setStorageError(true);
+    }
+  }
+
   return (
     // The theme's colors are the design tokens overridden for this surface (globals.css, [data-reader-theme]).
     // The colors fade only while a panel of the bar is open (data-state="open" on its trigger), which is where the
@@ -482,13 +503,14 @@ export function ReaderView({
 
             {/* Portaled to <body>; data-reader-panel-theme gives it this theme's tokens (globals.css). It opens over
                 the text without moving it; focus moves in, and Escape or a click outside closes it and returns focus
-                to "Aa". Changing a setting keeps it open. */}
+                to "Aa". Changing a setting keeps it open. On a short screen it scrolls within the space left below
+                the bar instead of running off it. */}
             <PopoverContent
               {...readerPanelThemeProps(theme)}
               align="end"
               collisionPadding={8}
               aria-label={t("readingSettings")}
-              className="w-[min(22rem,calc(100vw-1rem))] space-y-5"
+              className="max-h-(--radix-popover-content-available-height) w-[min(22rem,calc(100vw-1rem))] space-y-5 overflow-y-auto"
             >
               <div className="space-y-2">
                 <p id={`${settingsId}-theme`} className={settingsLabelClass}>
@@ -507,6 +529,26 @@ export function ReaderView({
                     >
                       <Icon aria-hidden="true" className="size-4 shrink-0" />
                       {t(shortLabel)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p id={`${settingsId}-font`} className={settingsLabelClass}>
+                  {t("typefaceGroup")}
+                </p>
+
+                <div role="group" aria-labelledby={`${settingsId}-font`} className="grid grid-cols-2 gap-2">
+                  {READER_FONTS.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={font === value}
+                      onClick={() => changeFont(value)}
+                      className={settingsOptionClass}
+                    >
+                      {READER_FONT_NAMES[value]}
                     </button>
                   ))}
                 </div>
@@ -613,9 +655,11 @@ export function ReaderView({
         <article
           ref={articleRef}
           lang={contentLanguage}
-          className="mx-auto"
+          className={cn("mx-auto", fontVariables)}
           // data-reader-measure: before hydration, the stored size and width replace these (globals.css).
           data-reader-measure
+          // The typeface of the chapter text (globals.css); before hydration a stored one comes from <html>.
+          data-reader-font={font}
           style={{ fontSize, maxWidth: `${READER_MEASURES[width] * fontSize}px` }}
         >
           {children}
