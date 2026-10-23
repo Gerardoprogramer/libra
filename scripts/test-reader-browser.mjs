@@ -436,6 +436,7 @@ try {
       width: "wide",
       fontSize: 24,
       font: "lexend",
+      lineSpacing: "normal",
     });
     assert.equal(await evaluate("document.querySelector('[data-reader-theme]').dataset.readerTheme"), "sepia");
     assert.equal(await evaluate("document.querySelector('article').style.fontSize"), "24px");
@@ -453,6 +454,111 @@ try {
     assert.equal(await evaluate("document.querySelector('article').dataset.readerFont"), "lexend");
     assert.equal(await evaluate("document.querySelector('[data-reader-theme]').dataset.readerTheme"), "sepia");
     console.log("PASS typeface: keyboard choice, kept with the other preferences across chapters and a reload.");
+
+    // Line spacing: chosen from the settings panel by keyboard, set on the article and kept with the other preferences
+    // across chapters and a reload, then back to normal. The page loads no CSS, so the line-spacing rules are taken
+    // from src/app/globals.css (plain CSS, no Tailwind) and added to the page, to measure the line height the
+    // paragraphs really get. The reader is left and mounted again with the other preferences set explicitly.
+    const lineSpacingCss = [
+      ...(await readFile(path.resolve("src/app/globals.css"), "utf8")).matchAll(
+        /^(?:article|html)\[data-reader[^{]*line-spacing[^{]*\{[^}]*\}/gm,
+      ),
+    ]
+      .map((match) => match[0])
+      .join("\n");
+    assert.equal(lineSpacingCss.match(/line-height:/g)?.length, 3, "one rule per line spacing in globals.css");
+    const addLineSpacingCss = () =>
+      evaluate(
+        `(()=>{const style=document.createElement('style');style.textContent=${JSON.stringify(lineSpacingCss)};document.head.append(style)})()`,
+      );
+    const lineSpacingState = () =>
+      evaluate(
+        "(()=>{const article=document.querySelector('article');const p=article.querySelector('p');return {spacing:article.dataset.readerLineSpacing,lineHeight:Math.round(parseFloat(getComputedStyle(p).lineHeight)*10)/10,fontSize:article.style.fontSize,font:article.dataset.readerFont,theme:document.querySelector('[data-reader-theme]').dataset.readerTheme,early:document.documentElement.getAttribute('data-reader-early-line-spacing')}})()",
+      );
+    const lineSpacingButtons = () =>
+      evaluate(
+        "(()=>{const label=[...document.querySelectorAll('p')].find(p=>p.textContent==='lineSpacingGroup');const group=document.querySelector('[role=group][aria-labelledby=\"'+label.id+'\"]');return [...group.querySelectorAll('button')].map(b=>[b.textContent,b.getAttribute('aria-pressed')])})()",
+      );
+    const focusLineSpacing = (label) =>
+      evaluate(`[...document.querySelectorAll('button')].find(b=>b.textContent===${JSON.stringify(label)}).focus()`);
+    const focused = () =>
+      evaluate("[document.activeElement.textContent,document.activeElement.matches(':focus-visible')]");
+    const savedPreferences = async () => JSON.parse(await evaluate("localStorage.getItem('libra:reader-preferences')"));
+    // 22px text: normal 1.65 = 36.3px, compact 1.5 = 33px, relaxed 1.8 = 39.6px.
+    const others = { fontSize: "22px", font: "merriweather", theme: "dark", early: null };
+
+    await evaluate("fixture.mode='home';fixture.navigate('/en')");
+    await settle();
+    await evaluate(
+      "localStorage.setItem('libra:reader-preferences',JSON.stringify({theme:'dark',width:'narrow',fontSize:22,font:'merriweather'}));fixture.user=null;fixture.mode='reader';fixture.navigate('/en/books/dracula/chapter-1')",
+    );
+    await settle();
+    await addLineSpacingCss();
+    assert.deepEqual(await lineSpacingState(), { spacing: "normal", lineHeight: 36.3, ...others });
+    await evaluate(`${trigger}.click()`);
+    await settle();
+    assert.deepEqual(await lineSpacingButtons(), [
+      ["lineSpacingCompact", "false"],
+      ["lineSpacingNormal", "true"],
+      ["lineSpacingRelaxed", "false"],
+    ]);
+    await focusLineSpacing("lineSpacingCompact");
+    await press("Enter");
+    assert.deepEqual(await focused(), ["lineSpacingCompact", true]);
+    assert.deepEqual(await lineSpacingButtons(), [
+      ["lineSpacingCompact", "true"],
+      ["lineSpacingNormal", "false"],
+      ["lineSpacingRelaxed", "false"],
+    ]);
+    assert.deepEqual(await lineSpacingState(), { spacing: "compact", lineHeight: 33, ...others });
+    await focusLineSpacing("lineSpacingRelaxed");
+    await press(" ");
+    assert.deepEqual(await focused(), ["lineSpacingRelaxed", true]);
+    assert.deepEqual(await lineSpacingButtons(), [
+      ["lineSpacingCompact", "false"],
+      ["lineSpacingNormal", "false"],
+      ["lineSpacingRelaxed", "true"],
+    ]);
+    assert.deepEqual(await lineSpacingState(), { spacing: "relaxed", lineHeight: 39.6, ...others });
+    assert.deepEqual(await savedPreferences(), {
+      theme: "dark",
+      width: "narrow",
+      fontSize: 22,
+      font: "merriweather",
+      lineSpacing: "relaxed",
+    });
+    await press("Escape");
+    await evaluate("[...document.querySelectorAll('a')].find(a=>a.getAttribute('href').endsWith('chapter-2')).click()");
+    await settle();
+    assert.equal(await evaluate("document.querySelector('h1')?.textContent"), "Chapter 2");
+    assert.deepEqual(await lineSpacingState(), { spacing: "relaxed", lineHeight: 39.6, ...others });
+    await evaluate("[...document.querySelectorAll('a')].find(a=>a.getAttribute('href').endsWith('chapter-1')).click()");
+    await settle();
+    assert.deepEqual(await lineSpacingState(), { spacing: "relaxed", lineHeight: 39.6, ...others });
+    await evaluate("window.ready=false;location.reload()");
+    for (let attempt = 0; attempt < 100 && !(await evaluate("window.ready===true")); attempt++) await wait(25);
+    await settle();
+    await addLineSpacingCss();
+    assert.equal(await evaluate("document.querySelector('h1')?.textContent"), "Chapter 1");
+    assert.deepEqual(await lineSpacingState(), { spacing: "relaxed", lineHeight: 39.6, ...others });
+
+    // Back to normal: the stored spacing, the article and the line height return to the defaults.
+    await evaluate(`${trigger}.click()`);
+    await settle();
+    await focusLineSpacing("lineSpacingNormal");
+    await press("Enter");
+    assert.deepEqual(await lineSpacingButtons(), [
+      ["lineSpacingCompact", "false"],
+      ["lineSpacingNormal", "true"],
+      ["lineSpacingRelaxed", "false"],
+    ]);
+    assert.deepEqual(await lineSpacingState(), { spacing: "normal", lineHeight: 36.3, ...others });
+    assert.equal((await savedPreferences()).lineSpacing, "normal");
+    await press("Escape");
+    assert.equal(await evaluate(`document.activeElement===${trigger}`), true);
+    console.log(
+      "PASS line spacing: keyboard choice, applied to the text, kept across chapters and a reload, then normal.",
+    );
 
     // Reading progress on a real layout: a guest reads a 40-paragraph chapter in an 800x600 viewport, with the reader's
     // scrollTo scrolling for real. The checks use what the page shows and stores (the guest's saved position, the

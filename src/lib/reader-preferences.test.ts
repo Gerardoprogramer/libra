@@ -6,6 +6,8 @@ import { runInNewContext } from "node:vm";
 import {
   DEFAULT_READER_PREFERENCES,
   READER_FONTS,
+  READER_LINE_HEIGHTS,
+  READER_LINE_SPACINGS,
   READER_MEASURES,
   READER_PREFERENCES_CHANGE_EVENT,
   READER_PREFERENCES_STORAGE_KEY,
@@ -43,7 +45,13 @@ function createBrowser() {
   return { browser, values };
 }
 
-const defaults: ReaderPreferences = { theme: "light", width: "medium", fontSize: 20, font: "literata" };
+const defaults: ReaderPreferences = {
+  theme: "light",
+  width: "medium",
+  fontSize: 20,
+  font: "literata",
+  lineSpacing: "normal",
+};
 
 test("reader preferences default safely without browser storage and during SSR", () => {
   Reflect.deleteProperty(globalThis, "window");
@@ -55,8 +63,10 @@ test("reader preferences default safely without browser storage and during SSR",
 
 test("valid stored preferences are restored and font size is clamped to supported limits", () => {
   assert.deepEqual(
-    parseReaderPreferences(JSON.stringify({ theme: "sepia", width: "wide", fontSize: 24, font: "merriweather" })),
-    { theme: "sepia", width: "wide", fontSize: 24, font: "merriweather" },
+    parseReaderPreferences(
+      JSON.stringify({ theme: "sepia", width: "wide", fontSize: 24, font: "merriweather", lineSpacing: "relaxed" }),
+    ),
+    { theme: "sepia", width: "wide", fontSize: 24, font: "merriweather", lineSpacing: "relaxed" },
   );
   assert.equal(parseReaderPreferences(JSON.stringify({ ...defaults, fontSize: 1 })).fontSize, 16);
   assert.equal(parseReaderPreferences(JSON.stringify({ ...defaults, fontSize: 100 })).fontSize, 30);
@@ -65,7 +75,9 @@ test("valid stored preferences are restored and font size is clamped to supporte
 test("corrupt JSON and unsupported preference values recover field-by-field", () => {
   assert.deepEqual(parseReaderPreferences("{"), defaults);
   assert.deepEqual(
-    parseReaderPreferences(JSON.stringify({ theme: "neon", width: "full", fontSize: "large", font: "comic" })),
+    parseReaderPreferences(
+      JSON.stringify({ theme: "neon", width: "full", fontSize: "large", font: "comic", lineSpacing: "double" }),
+    ),
     defaults,
   );
   assert.deepEqual(parseReaderPreferences(JSON.stringify({ theme: "dark", width: "invalid", fontSize: 22 })), {
@@ -73,6 +85,7 @@ test("corrupt JSON and unsupported preference values recover field-by-field", ()
     width: "medium",
     fontSize: 22,
     font: "literata",
+    lineSpacing: "normal",
   });
 });
 
@@ -86,6 +99,7 @@ test("each listed typeface is restored, independently of the other preferences",
       width: "narrow",
       fontSize: 18,
       font,
+      lineSpacing: "normal",
     });
     // An unsupported value elsewhere does not reset the typeface.
     assert.equal(parseReaderPreferences(JSON.stringify({ theme: "neon", fontSize: "big", font })).font, font);
@@ -98,6 +112,7 @@ test("preferences stored before typefaces existed keep their values and read Lit
     width: "wide",
     fontSize: 26,
     font: "literata",
+    lineSpacing: "normal",
   });
 });
 
@@ -105,8 +120,57 @@ test("an unsupported typeface falls back to Literata and keeps the other prefere
   for (const font of ["Lexend", "LEXEND", "comic-sans", "", null, 1, ["lexend"], { name: "lexend" }, "literata "]) {
     assert.deepEqual(
       parseReaderPreferences(JSON.stringify({ theme: "sepia", width: "wide", fontSize: 24, font })),
-      { theme: "sepia", width: "wide", fontSize: 24, font: "literata" },
+      { theme: "sepia", width: "wide", fontSize: 24, font: "literata", lineSpacing: "normal" },
       JSON.stringify(font),
+    );
+  }
+});
+
+test("each line spacing is restored, independently of the other preferences", () => {
+  assert.deepEqual(READER_LINE_SPACINGS, ["compact", "normal", "relaxed"]);
+  assert.deepEqual(READER_LINE_HEIGHTS, { compact: 1.5, normal: 1.65, relaxed: 1.8 });
+  assert.equal(DEFAULT_READER_PREFERENCES.lineSpacing, "normal");
+
+  for (const lineSpacing of READER_LINE_SPACINGS) {
+    assert.deepEqual(
+      parseReaderPreferences(
+        JSON.stringify({ theme: "dark", width: "wide", fontSize: 22, font: "lexend", lineSpacing }),
+      ),
+      { theme: "dark", width: "wide", fontSize: 22, font: "lexend", lineSpacing },
+    );
+    // An unsupported value elsewhere does not reset the spacing.
+    assert.equal(
+      parseReaderPreferences(JSON.stringify({ theme: "neon", font: "comic", lineSpacing })).lineSpacing,
+      lineSpacing,
+    );
+  }
+});
+
+test("preferences stored before line spacing existed keep their values and read normal", () => {
+  assert.deepEqual(
+    parseReaderPreferences(JSON.stringify({ theme: "sepia", width: "narrow", fontSize: 18, font: "georgia" })),
+    { theme: "sepia", width: "narrow", fontSize: 18, font: "georgia", lineSpacing: "normal" },
+  );
+});
+
+test("an unsupported line spacing falls back to normal and keeps the other preferences", () => {
+  for (const lineSpacing of [
+    "Relaxed",
+    "COMPACT",
+    "double",
+    "",
+    null,
+    1.8,
+    ["relaxed"],
+    { value: "compact" },
+    " compact",
+  ]) {
+    assert.deepEqual(
+      parseReaderPreferences(
+        JSON.stringify({ theme: "dark", width: "wide", fontSize: 24, font: "merriweather", lineSpacing }),
+      ),
+      { theme: "dark", width: "wide", fontSize: 24, font: "merriweather", lineSpacing: "normal" },
+      JSON.stringify(lineSpacing),
     );
   }
 });
@@ -128,7 +192,7 @@ test("storage snapshots distinguish empty storage from blocked storage", () => {
 
 test("saving preferences persists before notifying same-tab subscribers and preserves other keys", () => {
   const { browser, values } = createBrowser();
-  const preferences = { theme: "sepia", width: "wide", fontSize: 24, font: "lexend" } as const;
+  const preferences = { theme: "sepia", width: "wide", fontSize: 24, font: "lexend", lineSpacing: "relaxed" } as const;
   let savedSnapshot: string | null = null;
 
   values.set("libra:progress:dracula", "existing progress");
@@ -231,6 +295,7 @@ function earlyMarks(root: ReturnType<typeof createRoot>) {
   return {
     theme: root.getAttribute("data-reader-early-theme"),
     font: root.getAttribute("data-reader-early-font"),
+    lineSpacing: root.getAttribute("data-reader-early-line-spacing"),
     measured: root.getAttribute("data-reader-early-measure") !== null,
     fontSize: root.properties.get("--reader-early-font-size") ?? null,
     measure: root.properties.get("--reader-early-measure") ?? null,
@@ -240,7 +305,7 @@ function earlyMarks(root: ReturnType<typeof createRoot>) {
 // What React renders for a stored value (useReaderPreferences: the snapshot, or the defaults when there is none or
 // storage is blocked), expressed as the marks the early script should leave: none for a default.
 function marksFor(stored: string | null) {
-  const { theme, width, fontSize, font } =
+  const { theme, width, fontSize, font, lineSpacing } =
     stored === null ? DEFAULT_READER_PREFERENCES : parseReaderPreferences(stored);
   const measured = fontSize !== DEFAULT_READER_PREFERENCES.fontSize || width !== DEFAULT_READER_PREFERENCES.width;
 
@@ -248,6 +313,8 @@ function marksFor(stored: string | null) {
     theme: theme === DEFAULT_READER_PREFERENCES.theme ? null : theme,
     // The article's data-reader-font in ReaderView.
     font: font === DEFAULT_READER_PREFERENCES.font ? null : font,
+    // The article's data-reader-line-spacing in ReaderView.
+    lineSpacing: lineSpacing === DEFAULT_READER_PREFERENCES.lineSpacing ? null : lineSpacing,
     measured,
     // The same expressions as the article's inline style in ReaderView.
     fontSize: measured ? `${fontSize}px` : null,
@@ -288,6 +355,17 @@ const storedValues: (string | null)[] = [
   JSON.stringify({ font: ["georgia"] }),
   JSON.stringify({ font: null, theme: "sepia" }),
   JSON.stringify({ font: { toString: "lexend" } }),
+  JSON.stringify({ lineSpacing: "normal" }),
+  JSON.stringify({ lineSpacing: "compact" }),
+  JSON.stringify({ lineSpacing: "relaxed", theme: "dark" }),
+  JSON.stringify({ lineSpacing: "relaxed", font: "lexend", width: "wide", fontSize: 24 }),
+  JSON.stringify({ theme: "sepia", width: "narrow", fontSize: 18, font: "georgia", lineSpacing: "compact" }),
+  JSON.stringify({ lineSpacing: "Relaxed", theme: "dark" }),
+  JSON.stringify({ lineSpacing: "double", fontSize: 22 }),
+  JSON.stringify({ lineSpacing: 1.8 }),
+  JSON.stringify({ lineSpacing: ["compact"] }),
+  JSON.stringify({ lineSpacing: null, font: "merriweather" }),
+  JSON.stringify({ lineSpacing: { toString: "relaxed" } }),
 ];
 
 test("the early script leaves the marks of the preferences React renders, for every stored value", () => {
@@ -306,7 +384,9 @@ test("the early script leaves no marks and throws nothing when storage is blocke
 
 test("the early script is a fixed string that never carries stored data", () => {
   const marker = "</script><script>alert(1)</script>";
-  const { root } = runEarlyScript(JSON.stringify({ theme: marker, width: marker, fontSize: marker, font: marker }));
+  const { root } = runEarlyScript(
+    JSON.stringify({ theme: marker, width: marker, fontSize: marker, font: marker, lineSpacing: marker }),
+  );
 
   assert.equal(typeof earlyReaderPreferencesScript, "string");
   assert.ok(!earlyReaderPreferencesScript.includes("<"), "the inline script cannot close its own tag");
@@ -318,6 +398,7 @@ test("the early script is a fixed string that never carries stored data", () => 
     const marks = earlyMarks(runEarlyScript(stored).root);
     assert.ok(marks.theme === null || marks.theme === "sepia" || marks.theme === "dark", String(stored));
     assert.ok(marks.font === null || ["georgia", "merriweather", "lexend"].includes(marks.font), String(stored));
+    assert.ok(marks.lineSpacing === null || ["compact", "relaxed"].includes(marks.lineSpacing), String(stored));
     for (const value of [marks.fontSize, marks.measure]) {
       assert.ok(value === null || /^\d+(\.\d+)?px$/.test(value), `${stored}: ${value}`);
     }
@@ -326,13 +407,14 @@ test("the early script is a fixed string that never carries stored data", () => 
 
 test("a change of the stored preferences in another tab removes the early marks", () => {
   const { root, listeners } = runEarlyScript(
-    JSON.stringify({ theme: "dark", width: "wide", fontSize: 26, font: "merriweather" }),
+    JSON.stringify({ theme: "dark", width: "wide", fontSize: 26, font: "merriweather", lineSpacing: "relaxed" }),
   );
   assert.equal(listeners.length, 1);
 
   listeners[0]({ key: "libra:reading-progress:v2:guest:dracula" });
   assert.equal(earlyMarks(root).theme, "dark");
   assert.equal(earlyMarks(root).font, "merriweather");
+  assert.equal(earlyMarks(root).lineSpacing, "relaxed");
 
   listeners[0]({ key: READER_PREFERENCES_STORAGE_KEY });
   assert.deepEqual(earlyMarks(root), marksFor(null));
@@ -344,8 +426,11 @@ test("a change of the stored preferences in another tab removes the early marks"
 });
 
 test("clearing the early marks is idempotent and leaves everything else on <html>", () => {
-  const { root } = runEarlyScript(JSON.stringify({ theme: "sepia", width: "narrow", fontSize: 16, font: "lexend" }));
+  const { root } = runEarlyScript(
+    JSON.stringify({ theme: "sepia", width: "narrow", fontSize: 16, font: "lexend", lineSpacing: "compact" }),
+  );
   assert.equal(earlyMarks(root).font, "lexend");
+  assert.equal(earlyMarks(root).lineSpacing, "compact");
   root.setAttribute("lang", "es");
   root.setAttribute("class", "editorial");
 
@@ -385,4 +470,26 @@ test("globals.css sets every listed typeface on the article, and every stored on
   }
   // The chapter text is the only text that takes a typeface from these rules.
   assert.doesNotMatch(css, /\[data-reader-font[^\]]*\]\s+(h1|header|nav|button)/);
+});
+
+test("globals.css sets each spacing's line height on the article, and every stored one before hydration", () => {
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  for (const lineSpacing of READER_LINE_SPACINGS) {
+    const lineHeight = String(READER_LINE_HEIGHTS[lineSpacing]).replace(".", "\\.");
+    assert.match(
+      css,
+      new RegExp(`article\\[data-reader-line-spacing="${lineSpacing}"\\][^{]*\\{\\s*line-height:\\s*${lineHeight};`),
+      lineSpacing,
+    );
+    // The default is what the server renders, so it needs no early rule.
+    const early = new RegExp(
+      `html\\[data-reader-early-line-spacing="${lineSpacing}"\\] article\\[data-reader-line-spacing\\][^{]*\\{\\s*line-height:\\s*${lineHeight};`,
+    );
+    if (lineSpacing === DEFAULT_READER_PREFERENCES.lineSpacing) assert.doesNotMatch(css, early, lineSpacing);
+    else assert.match(css, early, lineSpacing);
+  }
+  // The paragraphs inherit the article's line height instead of fixing their own.
+  const chapterPage = readFileSync(new URL("../app/[locale]/books/[slug]/[chapter]/page.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(chapterPage, /<p key=\{index\}[^>]*leading-/);
 });
