@@ -48,7 +48,14 @@ import {ContinueReading} from "@/components/home/ContinueReading";
 import {RecentlyRead} from "@/components/home/RecentlyRead";
 import {BookReadingAction} from "@/components/books/BookReadingAction";
 import {saveScopedReadingProgress} from "@/lib/reading-progress";
-window.scrollTo=()=>{};
+// Options of the reading-progress scenarios, kept in sessionStorage so they survive a reload; without them the fixture
+// is unchanged. realScroll: the reader's scrollTo scrolls (otherwise a no-op); long: a chapter long enough to scroll;
+// guest: the page starts signed out.
+const options=JSON.parse(sessionStorage.getItem("fixture:options")||"{}");
+const realScrollTo=window.scrollTo.bind(window);
+window.scrollTo=(...args)=>{if(options.realScroll)realScrollTo(...args)};
+if(options.guest)state.user=null;
+const longText=" The narrow road climbed through the pines while the coach swayed and the driver urged the horses on into the dusk.".repeat(6);
 const routes=[{id:"chapter-1",slug:"chapter-1"},{id:"chapter-2",slug:"chapter-2"}];
 const books=[{slug:"dracula",title:"Dracula",author:"Stoker",coverUrl:null},{slug:"frankenstein",title:"Frankenstein",author:"Shelley",coverUrl:null}];
 function position(book,percentage){return {bookSlug:book,editionId:book+"-en",chapterId:"chapter-1",chapterSlug:"chapter-1",chapterTitle:"Chapter 1",chapterNumber:1,chapterIndex:0,totalChapters:1,contentLanguage:"en",percentage,paragraphIndex:0,updatedAt:"2026-01-01T00:00:00.000Z"}}
@@ -58,7 +65,7 @@ function App(){
  useSyncExternalStore(fn=>{state.route.add(fn);return()=>state.route.delete(fn)},()=>state.mode+state.path);
  const n=state.path.includes("chapter-2")?2:1;
  if(state.mode==="home")return <><div id="continue"><ContinueReading books={books} title="Continue" chapterLabel="Chapter" continueLabel="Read" storageUnavailableLabel="Storage unavailable"/></div><div id="recent"><RecentlyRead books={books} title="Recent" continueLabel="Read"/></div><div id="action"><BookReadingAction bookSlug="dracula" editionId="dracula-en" chapterSlugs={["chapter-1","chapter-2"]} firstChapterSlug="chapter-1" startLabel="Start" continueLabel="Continue" readAgainLabel="Again" progressLabel="{progress}%"/></div></>;
- return <ReaderView bookSlug="dracula" bookTitle="Dracula" author="Stoker" contentLanguage="en" editionId="dracula-en" chapterSlug={"chapter-"+n} chapterId={"chapter-"+n} chapterTitle={"Chapter "+n} chapterRoutes={routes} chapterNumber={n} chapterIndex={n-1} totalChapters={2} previousHref={n===2?"/en/books/dracula/chapter-1":undefined} nextHref={n===1?"/en/books/dracula/chapter-2":undefined}><p>First paragraph.</p><p>Second paragraph.</p></ReaderView>
+ return <ReaderView bookSlug="dracula" bookTitle="Dracula" author="Stoker" contentLanguage="en" editionId="dracula-en" chapterSlug={"chapter-"+n} chapterId={"chapter-"+n} chapterTitle={"Chapter "+n} chapterRoutes={routes} chapterNumber={n} chapterIndex={n-1} totalChapters={2} previousHref={n===2?"/en/books/dracula/chapter-1":undefined} nextHref={n===1?"/en/books/dracula/chapter-2":undefined}>{options.long?Array.from({length:40},(_,index)=><p key={index}>{"Paragraph "+(index+1)+"."+longText}</p>):<><p>First paragraph.</p><p>Second paragraph.</p></>}</ReaderView>
 }
 createRoot(document.getElementById("root")).render(<App/>);
 window.ready=true;
@@ -385,6 +392,186 @@ try {
     assert.equal(await evaluate(`document.activeElement===${trigger}`), true);
     console.log("PASS theme by keyboard: surface, pressed swatch and panel follow it; panel stays open until Escape.");
     console.log("PASS theme restored after another chapter, a remount of the reader and a reload.");
+
+    // Reading progress on a real layout: a guest reads a 40-paragraph chapter in an 800x600 viewport, with the reader's
+    // scrollTo scrolling for real. The checks use what the page shows and stores (the guest's saved position, the
+    // progress bar, where the saved paragraph sits on screen), never the reader's own measuring rule. They depend on the
+    // guest storage key below and on the progress bar's classes (h-1, aria-hidden, in ReaderView): renaming either
+    // breaks these checks without a fault in the reader.
+    const progressKey = "libra:reading-progress:v2:guest:dracula:edition:dracula-en";
+    const saved = async () => {
+      const progress = JSON.parse(await evaluate(`localStorage.getItem(${JSON.stringify(progressKey)})`));
+      return progress && { percentage: progress.percentage, paragraphIndex: progress.paragraphIndex };
+    };
+    // Polls an expression until it is truthy. A failed evaluation (a page being reloaded) counts as not yet.
+    const waitFor = async (expression, label, timeout = 5000) => {
+      const deadline = Date.now() + timeout;
+      let last;
+      while (Date.now() < deadline) {
+        try {
+          last = await evaluate(expression);
+          if (last) return last;
+        } catch (error) {
+          last = error.message;
+        }
+        await wait(25);
+      }
+      throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(last)}`);
+    };
+    // Resolves with scrollY once it has not changed for five frames (a wheel scroll may animate).
+    const stableScroll = () =>
+      evaluate(
+        "new Promise(resolve=>{let last=-1,same=0,frames=0;const frame=()=>{frames++;same=scrollY===last?same+1:0;last=scrollY;if(same>=5||frames>300)resolve(scrollY);else requestAnimationFrame(frame)};requestAnimationFrame(frame)})",
+      );
+    const wheel = async (deltaY) => {
+      await call("Input.dispatchMouseEvent", { type: "mouseWheel", x: 400, y: 300, deltaX: 0, deltaY });
+      return stableScroll();
+    };
+    const bar = () => evaluate("document.querySelector('div.h-1[aria-hidden=true] > div').style.width");
+    // Where paragraph `index` sits in the viewport.
+    const paragraphTop = (index) =>
+      evaluate(`document.querySelectorAll('article p')[${index}].getBoundingClientRect().top`);
+    // The paragraph being read is on screen and starts in the upper half of the viewport, or above it when the reader
+    // is partway through it.
+    const assertReading = async (index, label) => {
+      const { top, bottom } = await evaluate(
+        `(()=>{const r=document.querySelectorAll('article p')[${index}].getBoundingClientRect();return {top:r.top,bottom:r.bottom}})()`,
+      );
+      assert.ok(top < 300 && bottom > 0, `${label}: paragraph ${index} from ${top}px to ${bottom}px`);
+      return top;
+    };
+    const loadReader = async () => {
+      await call("Page.reload");
+      await waitFor("window.ready===true&&document.querySelectorAll('article p').length===40", "the long chapter");
+      await settle();
+      return stableScroll();
+    };
+
+    await call("Emulation.setDeviceMetricsOverride", { width: 800, height: 600, deviceScaleFactor: 1, mobile: false });
+    await evaluate(
+      "localStorage.clear();sessionStorage.setItem('fixture:options',JSON.stringify({realScroll:true,long:true,guest:true}));window.ready=false",
+    );
+    await loadReader();
+    assert.equal(await evaluate("innerWidth+'x'+innerHeight"), "800x600");
+    assert.equal(await evaluate("document.querySelector('h1')?.textContent"), "Chapter 1");
+
+    // 1. A scroll the reader did not cause (a script, a restored position) saves nothing before the reader interacts.
+    assert.deepEqual(await saved(), { percentage: 0, paragraphIndex: 0 });
+    await evaluate("window.scrollTo(0,1500)");
+    assert.ok((await stableScroll()) >= 1000, "the programmatic scroll moved the page");
+    await settle();
+    assert.deepEqual(await saved(), { percentage: 0, paragraphIndex: 0 });
+    assert.equal(await bar(), "0%");
+    await evaluate("window.scrollTo(0,0)");
+    await stableScroll();
+    console.log("PASS progress: a scroll without reader interaction saves nothing.");
+
+    // 2. Wheel scrolling saves a position that grows with the scroll, and the bar shows the saved percentage.
+    const positions = [];
+    for (let step = 0; step < 3; step++) {
+      const before = positions.at(-1) ?? { percentage: 0, paragraphIndex: 0 };
+      await wheel(900);
+      const after = await waitFor(
+        `(()=>{const p=JSON.parse(localStorage.getItem(${JSON.stringify(progressKey)}));return p.paragraphIndex>${before.paragraphIndex}&&p.percentage>${before.percentage}&&{percentage:p.percentage,paragraphIndex:p.paragraphIndex}})()`,
+        `progress beyond ${JSON.stringify(before)}`,
+      );
+      assert.ok(after.percentage > 0 && after.percentage < 100, JSON.stringify(after));
+      assert.equal(await bar(), `${after.percentage}%`);
+      positions.push(after);
+    }
+    const reading = positions.at(-1);
+    // The saved paragraph is the one being read: on screen, in the upper half of the viewport.
+    await assertReading(reading.paragraphIndex, "saved");
+    console.log("PASS progress: wheel scrolling saves a growing position and the bar shows it.");
+
+    // 3. Leaving the reader and coming back mounts a new one, which scrolls the saved paragraph back into view.
+    await evaluate("fixture.mode='home';fixture.navigate('/en')");
+    await settle();
+    assert.equal(await evaluate("document.querySelector('article')"), null);
+    assert.deepEqual(await saved(), reading);
+    await evaluate("fixture.mode='reader';fixture.navigate('/en/books/dracula/chapter-1')");
+    await waitFor("scrollY>0", "the restored scroll");
+    await stableScroll();
+    const restoredTop = await assertReading(reading.paragraphIndex, "restored");
+    // Restored to the start of the paragraph, not partway through it.
+    assert.ok(restoredTop >= -1, `restored paragraph ${reading.paragraphIndex} starts at ${restoredTop}px`);
+    // Restoring is not reading: the saved position is not rewritten, and the bar shows it.
+    await settle();
+    assert.deepEqual(await saved(), reading);
+    assert.equal(await bar(), `${reading.percentage}%`);
+    console.log("PASS progress: a remounted reader restores the saved paragraph.");
+
+    // 4. A reload restores the same paragraph to the same place.
+    await evaluate("window.ready=false");
+    await loadReader();
+    await waitFor("scrollY>0", "the restored scroll after a reload");
+    await stableScroll();
+    const reloadedTop = await paragraphTop(reading.paragraphIndex);
+    assert.ok(
+      Math.abs(reloadedTop - restoredTop) <= 2,
+      `after reload ${reloadedTop}px, after remount ${restoredTop}px`,
+    );
+    assert.deepEqual(await saved(), reading);
+    console.log("PASS progress: a reload restores the same paragraph to the same place.");
+
+    // 5. Leaving right after a scroll, before the frame that would save it, still saves that latest position. The
+    // page is scrolled for real; the scroll event is dispatched in the same task so the reader's frame cannot run first.
+    // It is a synthetic event: with wheel events the browser decides when the scroll event fires, so that order could
+    // not be guaranteed.
+    await wheel(300);
+    const beforeLeaving = await waitFor(
+      `(()=>{const p=JSON.parse(localStorage.getItem(${JSON.stringify(progressKey)}));return p.paragraphIndex>${reading.paragraphIndex}&&{percentage:p.percentage,paragraphIndex:p.paragraphIndex}})()`,
+      "the position after an interaction",
+    );
+    const leaving = await evaluate(`(async()=>{
+      await new Promise(resolve=>requestAnimationFrame(resolve));
+      const paragraphs=document.querySelectorAll('article p');
+      window.scrollTo(0,paragraphs[${beforeLeaving.paragraphIndex}+10].getBoundingClientRect().top+scrollY);
+      window.dispatchEvent(new Event('scroll'));
+      let frameRan=false;
+      requestAnimationFrame(()=>{frameRan=true});
+      fixture.mode='home';fixture.navigate('/en');
+      await new Promise(resolve=>setTimeout(resolve,0));
+      const p=JSON.parse(localStorage.getItem(${JSON.stringify(progressKey)}));
+      return {frameRan,unmounted:!document.querySelector('article'),percentage:p.percentage,paragraphIndex:p.paragraphIndex};
+    })()`);
+    assert.equal(leaving.frameRan, false, "the check ran before the next frame");
+    assert.equal(leaving.unmounted, true, "the reader unmounted");
+    assert.ok(
+      leaving.paragraphIndex > beforeLeaving.paragraphIndex && leaving.percentage > beforeLeaving.percentage,
+      `${JSON.stringify(leaving)} after ${JSON.stringify(beforeLeaving)}`,
+    );
+    console.log("PASS progress: leaving right after a scroll saves the latest position.");
+
+    // 6. At the bottom of the chapter the saved position is 100% and the last paragraph.
+    await evaluate("fixture.mode='reader';fixture.navigate('/en/books/dracula/chapter-1')");
+    await waitFor("scrollY>0", "the restored scroll before reading to the end");
+    await stableScroll();
+    for (
+      let attempt = 0;
+      attempt < 20 && !(await evaluate("scrollY+innerHeight>=document.documentElement.scrollHeight-1"));
+      attempt++
+    )
+      await wheel(1200);
+    assert.equal(await evaluate("scrollY+innerHeight>=document.documentElement.scrollHeight-1"), true);
+    const end = await waitFor(
+      `(()=>{const p=JSON.parse(localStorage.getItem(${JSON.stringify(progressKey)}));return p.percentage===100&&{percentage:p.percentage,paragraphIndex:p.paragraphIndex}})()`,
+      "100% at the bottom",
+    );
+    assert.equal(await bar(), "100%");
+    // Known limitation of the reader: the saved paragraph need not be the last one. A last paragraph shorter than the
+    // space below the reading point never reaches it, so 100% can come with the one before (here 38 of 0-39). What
+    // holds is that the saved paragraph and every one after it, to the end, are on screen; no index is expected.
+    const unseen = await evaluate(
+      `[...document.querySelectorAll('article p')].slice(${end.paragraphIndex}).map((p,i)=>[${end.paragraphIndex}+i,p.getBoundingClientRect()]).filter(([,r])=>r.bottom<=0||r.top>=innerHeight).map(([i])=>i)`,
+    );
+    assert.deepEqual(unseen, [], `saved paragraph ${end.paragraphIndex}: paragraphs after it off screen`);
+    console.log(
+      `PASS progress: the bottom of the chapter saves 100% with paragraph ${end.paragraphIndex} of 0-39 and the rest of the chapter on screen.`,
+    );
+
+    await evaluate("sessionStorage.removeItem('fixture:options')");
+    await call("Emulation.clearDeviceMetricsOverride");
   }
   assert.deepEqual(errors, [], "Browser runtime errors");
   await call("Browser.close");
