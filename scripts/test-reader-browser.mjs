@@ -560,6 +560,118 @@ try {
       "PASS line spacing: keyboard choice, applied to the text, kept across chapters and a reload, then normal.",
     );
 
+    // Reading width on a phone: the measure of every width is wider than a 360px screen, so the side margin of the
+    // width (32, 24 or 12px) is what sets the column. The page loads no CSS, so the width rules are taken from
+    // src/app/globals.css (plain CSS, no Tailwind) and added to the page. Chosen by keyboard from the settings panel,
+    // at two screen heights; kept with the other preferences across chapters, a remount and a reload.
+    const widthCss = [
+      ...(await readFile(path.resolve("src/app/globals.css"), "utf8")).matchAll(
+        /^(?:main|html)\[data-reader[^{]*width[^{]*\{[^}]*\}/gm,
+      ),
+    ]
+      .map((match) => match[0])
+      .join("\n");
+    assert.equal(widthCss.match(/padding-inline:/g)?.length, 3, "one rule per width in globals.css");
+    const addWidthCss = () =>
+      evaluate(
+        `(()=>{const style=document.createElement('style');style.textContent=${JSON.stringify(widthCss)};document.head.append(style)})()`,
+      );
+    const column = () =>
+      evaluate(
+        "(()=>{const a=document.querySelector('article').getBoundingClientRect(),main=document.querySelector('main#main-content'),cs=getComputedStyle(main),root=document.documentElement;return {width:Math.round(a.width*100)/100,left:Math.round(a.left*100)/100,right:Math.round((root.clientWidth-a.right)*100)/100,margin:cs.paddingLeft+'/'+cs.paddingRight,overflow:root.scrollWidth>root.clientWidth||main.scrollWidth>main.clientWidth}})()",
+      );
+    const kept = () =>
+      evaluate(
+        "(()=>{const a=document.querySelector('article');return {width:document.querySelector('main#main-content').dataset.readerWidth,theme:document.querySelector('[data-reader-theme]').dataset.readerTheme,font:a.dataset.readerFont,lineSpacing:a.dataset.readerLineSpacing,fontSize:a.style.fontSize}})()",
+      );
+    const chooseWidth = async (width) => {
+      await evaluate(`${trigger}.click()`);
+      await settle();
+      await evaluate(
+        `(()=>{const label=[...document.querySelectorAll('p')].find(p=>p.textContent==='readingWidth');const group=document.querySelector('[role=group][aria-labelledby="'+label.id+'"]');[...group.querySelectorAll('button')].find(b=>b.textContent===${JSON.stringify(width)}).focus()})()`,
+      );
+      await press("Enter");
+      const pressed = await evaluate(
+        "(()=>{const label=[...document.querySelectorAll('p')].find(p=>p.textContent==='readingWidth');const group=document.querySelector('[role=group][aria-labelledby=\"'+label.id+'\"]');return [...group.querySelectorAll('button')].map(b=>b.textContent+'='+b.getAttribute('aria-pressed'))})()",
+      );
+      const focus = await evaluate(
+        "[document.activeElement.textContent,document.activeElement.matches(':focus-visible')]",
+      );
+      await press("Escape");
+      return { pressed, focus };
+    };
+    const otherPreferences = { theme: "sepia", font: "georgia", lineSpacing: "compact", fontSize: "20px" };
+    const margins = { narrow: "32px/32px", medium: "24px/24px", wide: "12px/12px" };
+
+    for (const [width, height] of [
+      [360, 740],
+      [360, 480],
+    ]) {
+      // Not mobile emulation: this page has no viewport meta (the app has), so a mobile one would lay it out 980px wide.
+      await call("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
+      await evaluate("fixture.mode='home';fixture.navigate('/en')");
+      await settle();
+      await evaluate(
+        "localStorage.setItem('libra:reader-preferences',JSON.stringify({theme:'sepia',width:'medium',fontSize:20,font:'georgia',lineSpacing:'compact'}));fixture.user=null;fixture.mode='reader';fixture.navigate('/en/books/dracula/chapter-1')",
+      );
+      await settle();
+      await addWidthCss();
+      const columns = {};
+      for (const choice of ["narrow", "medium", "wide"]) {
+        const { pressed, focus } = await chooseWidth(choice);
+        assert.deepEqual(
+          pressed,
+          ["narrow", "medium", "wide"].map((value) => `${value}=${value === choice}`),
+          `${width}x${height} ${choice}`,
+        );
+        assert.deepEqual(focus, [choice, true], `${width}x${height} ${choice}`);
+        const measured = await column();
+        assert.equal(measured.margin, margins[choice], `${width}x${height} ${choice}`);
+        assert.ok(
+          Math.abs(measured.left - measured.right) <= 0.5,
+          `${width}x${height} ${choice}: ${JSON.stringify(measured)}`,
+        );
+        assert.equal(measured.overflow, false, `${width}x${height} ${choice}: no sideways scroll`);
+        assert.deepEqual(await kept(), { width: choice, ...otherPreferences });
+        columns[choice] = measured.width;
+      }
+      assert.ok(
+        columns.narrow < columns.medium && columns.medium < columns.wide,
+        `${width}x${height}: ${JSON.stringify(columns)}`,
+      );
+    }
+
+    // Wide is kept across another chapter, a remount of the reader and a reload, with the other preferences.
+    assert.deepEqual(await savedPreferences(), {
+      theme: "sepia",
+      width: "wide",
+      fontSize: 20,
+      font: "georgia",
+      lineSpacing: "compact",
+    });
+    const wideColumn = (await column()).width;
+    await evaluate("[...document.querySelectorAll('a')].find(a=>a.getAttribute('href').endsWith('chapter-2')).click()");
+    await settle();
+    assert.equal(await evaluate("document.querySelector('h1')?.textContent"), "Chapter 2");
+    assert.deepEqual(await kept(), { width: "wide", ...otherPreferences });
+    assert.equal((await column()).width, wideColumn);
+    await evaluate("fixture.mode='home';fixture.navigate('/en')");
+    await settle();
+    await evaluate("fixture.mode='reader';fixture.navigate('/en/books/dracula/chapter-1')");
+    await settle();
+    assert.deepEqual(await kept(), { width: "wide", ...otherPreferences });
+    assert.equal((await column()).width, wideColumn);
+    await evaluate("window.ready=false;location.reload()");
+    for (let attempt = 0; attempt < 100 && !(await evaluate("window.ready===true")); attempt++) await wait(25);
+    await settle();
+    await addWidthCss();
+    assert.deepEqual(await kept(), { width: "wide", ...otherPreferences });
+    assert.equal((await column()).width, wideColumn);
+    await call("Emulation.clearDeviceMetricsOverride");
+    console.log(
+      "PASS reading width on a phone: narrow < medium < wide by side margin, kept across chapters and a reload.",
+    );
+
     // Reading progress on a real layout: a guest reads a 40-paragraph chapter in an 800x600 viewport, with the reader's
     // scrollTo scrolling for real. The checks use what the page shows and stores (the guest's saved position, the
     // progress bar, where the saved paragraph sits on screen), never the reader's own measuring rule. They depend on the

@@ -666,7 +666,9 @@ export function ReaderView({
         </div>
       </div>
 
-      <main id="main-content" className="px-6 pb-24">
+      {/* data-reader-width: the side margin of the chosen width (globals.css), which is what sets the column wherever
+          the screen is narrower than its measure; before hydration a stored width comes from <html>. */}
+      <main id="main-content" data-reader-width={width} className="pb-24">
         {(storageError || !preferencesAvailable) && (
           <p role="alert" className="text-destructive mx-auto mt-6 max-w-3xl text-sm">
             {t("storageUnavailable")}

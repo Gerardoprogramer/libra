@@ -8,6 +8,7 @@ import {
   READER_FONTS,
   READER_LINE_HEIGHTS,
   READER_LINE_SPACINGS,
+  READER_SIDE_MARGINS,
   READER_MEASURES,
   READER_PREFERENCES_CHANGE_EVENT,
   READER_PREFERENCES_STORAGE_KEY,
@@ -296,6 +297,7 @@ function earlyMarks(root: ReturnType<typeof createRoot>) {
     theme: root.getAttribute("data-reader-early-theme"),
     font: root.getAttribute("data-reader-early-font"),
     lineSpacing: root.getAttribute("data-reader-early-line-spacing"),
+    width: root.getAttribute("data-reader-early-width"),
     measured: root.getAttribute("data-reader-early-measure") !== null,
     fontSize: root.properties.get("--reader-early-font-size") ?? null,
     measure: root.properties.get("--reader-early-measure") ?? null,
@@ -315,6 +317,8 @@ function marksFor(stored: string | null) {
     font: font === DEFAULT_READER_PREFERENCES.font ? null : font,
     // The article's data-reader-line-spacing in ReaderView.
     lineSpacing: lineSpacing === DEFAULT_READER_PREFERENCES.lineSpacing ? null : lineSpacing,
+    // The reader main's data-reader-width in ReaderView, which sets the side margin.
+    width: width === DEFAULT_READER_PREFERENCES.width ? null : width,
     measured,
     // The same expressions as the article's inline style in ReaderView.
     fontSize: measured ? `${fontSize}px` : null,
@@ -399,6 +403,7 @@ test("the early script is a fixed string that never carries stored data", () => 
     assert.ok(marks.theme === null || marks.theme === "sepia" || marks.theme === "dark", String(stored));
     assert.ok(marks.font === null || ["georgia", "merriweather", "lexend"].includes(marks.font), String(stored));
     assert.ok(marks.lineSpacing === null || ["compact", "relaxed"].includes(marks.lineSpacing), String(stored));
+    assert.ok(marks.width === null || ["narrow", "wide"].includes(marks.width), String(stored));
     for (const value of [marks.fontSize, marks.measure]) {
       assert.ok(value === null || /^\d+(\.\d+)?px$/.test(value), `${stored}: ${value}`);
     }
@@ -415,6 +420,7 @@ test("a change of the stored preferences in another tab removes the early marks"
   assert.equal(earlyMarks(root).theme, "dark");
   assert.equal(earlyMarks(root).font, "merriweather");
   assert.equal(earlyMarks(root).lineSpacing, "relaxed");
+  assert.equal(earlyMarks(root).width, "wide");
 
   listeners[0]({ key: READER_PREFERENCES_STORAGE_KEY });
   assert.deepEqual(earlyMarks(root), marksFor(null));
@@ -431,6 +437,7 @@ test("clearing the early marks is idempotent and leaves everything else on <html
   );
   assert.equal(earlyMarks(root).font, "lexend");
   assert.equal(earlyMarks(root).lineSpacing, "compact");
+  assert.equal(earlyMarks(root).width, "narrow");
   root.setAttribute("lang", "es");
   root.setAttribute("class", "editorial");
 
@@ -492,4 +499,56 @@ test("globals.css sets each spacing's line height on the article, and every stor
   // The paragraphs inherit the article's line height instead of fixing their own.
   const chapterPage = readFileSync(new URL("../app/[locale]/books/[slug]/[chapter]/page.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(chapterPage, /<p key=\{index\}[^>]*leading-/);
+});
+
+test("each width has its own side margin, medium the reader's original one, with the measures unchanged", () => {
+  assert.deepEqual(READER_SIDE_MARGINS, { narrow: 2, medium: 1.5, wide: 0.75 });
+  // 32, 24 and 12px at the default root size: narrower margins leave a wider column.
+  assert.ok(READER_SIDE_MARGINS.narrow > READER_SIDE_MARGINS.medium);
+  assert.ok(READER_SIDE_MARGINS.medium > READER_SIDE_MARGINS.wide);
+  assert.deepEqual(READER_MEASURES, { narrow: 29, medium: 32.5, wide: 36.5 });
+  assert.deepEqual(Object.keys(READER_SIDE_MARGINS), Object.keys(READER_MEASURES));
+});
+
+test("globals.css sets each width's side margin on the reader's main, and every stored one before hydration", () => {
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  for (const [width, margin] of Object.entries(READER_SIDE_MARGINS)) {
+    const value = `${String(margin).replace(".", "\\.")}rem`;
+    assert.match(
+      css,
+      new RegExp(`main\\[data-reader-width="${width}"\\][^{]*\\{\\s*padding-inline:\\s*${value};`),
+      width,
+    );
+    // The default is what the server renders, so it needs no early rule.
+    const early = new RegExp(
+      `html\\[data-reader-early-width="${width}"\\] main\\[data-reader-width\\][^{]*\\{\\s*padding-inline:\\s*${value};`,
+    );
+    if (width === DEFAULT_READER_PREFERENCES.width) assert.doesNotMatch(css, early, width);
+    else assert.match(css, early, width);
+  }
+  // The reader's main takes its side margin from these rules, not from a fixed utility.
+  const reader = readFileSync(new URL("../components/reader/ReaderView.tsx", import.meta.url), "utf8");
+  assert.match(reader, /<main id="main-content" data-reader-width=\{width\}/);
+  assert.doesNotMatch(reader, /<main id="main-content"[^>]*\bpx-\d/);
+});
+
+test("stored widths are restored and an unsupported one falls back to medium, keeping the other preferences", () => {
+  for (const width of ["narrow", "medium", "wide"] as const) {
+    assert.equal(
+      parseReaderPreferences(
+        JSON.stringify({ theme: "dark", width, fontSize: 22, font: "lexend", lineSpacing: "relaxed" }),
+      ).width,
+      width,
+    );
+  }
+  for (const width of ["Wide", "full", "", null, 1, ["wide"], { value: "narrow" }]) {
+    assert.deepEqual(
+      parseReaderPreferences(
+        JSON.stringify({ theme: "dark", width, fontSize: 22, font: "lexend", lineSpacing: "relaxed" }),
+      ),
+      { theme: "dark", width: "medium", fontSize: 22, font: "lexend", lineSpacing: "relaxed" },
+      JSON.stringify(width),
+    );
+  }
 });
