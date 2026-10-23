@@ -291,10 +291,10 @@ async function ReaderContent({ params, searchParams }: ReaderPageProps) {
           }))}
         >
           {paragraphs.map((paragraph, index) => (
-            // Line height 1.65 for long prose; paragraphs about half a line apart (0.8em), so the gap follows the size.
-            // At the default 20px both are whole pixels (33 and 16), like the paragraph tops the progress restores to.
-            // The typeface comes from the article (ReaderView, data-reader-font).
-            <p key={index} className="mb-[0.8em] leading-[1.65]">
+            // Paragraphs about half a line apart (0.8em), so the gap follows the size. The typeface and the line height
+            // come from the article (ReaderView, data-reader-font and data-reader-line-spacing): 1.65 by default, which
+            // at the default 20px makes both whole pixels (33 and 16), like the paragraph tops the progress restores to.
+            <p key={index} className="mb-[0.8em]">
               {paragraph}
             </p>
           ))}

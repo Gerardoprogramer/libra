@@ -10,12 +10,13 @@ import {
   parseReaderPreferences,
   saveReaderPreferences,
   type ReaderFont,
+  type ReaderLineSpacing,
   type ReaderPreferences,
   type ReaderTheme,
   type ReaderWidth,
 } from "@/lib/reader-preferences";
 
-export type { ReaderFont, ReaderTheme, ReaderWidth } from "@/lib/reader-preferences";
+export type { ReaderFont, ReaderLineSpacing, ReaderTheme, ReaderWidth } from "@/lib/reader-preferences";
 
 function subscribe(callback: () => void) {
   const handleStorage = (event: StorageEvent) => {
@@ -65,5 +66,7 @@ export function useReaderPreferences() {
     setFontSize: (fontSize: number) => updatePreferences({ fontSize }),
 
     setFont: (font: ReaderFont) => updatePreferences({ font }),
+
+    setLineSpacing: (lineSpacing: ReaderLineSpacing) => updatePreferences({ lineSpacing }),
   };
 }

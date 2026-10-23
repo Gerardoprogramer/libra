@@ -12,7 +12,7 @@ function ReaderPreferencesSnapshot() {
   return React.createElement(
     "output",
     null,
-    `${preferences.theme}|${preferences.width}|${preferences.fontSize}|${preferences.font}|${preferences.isAvailable}`,
+    `${preferences.theme}|${preferences.width}|${preferences.fontSize}|${preferences.font}|${preferences.lineSpacing}|${preferences.isAvailable}`,
   );
 }
 
@@ -21,7 +21,7 @@ test("reader preferences render deterministic defaults during server rendering",
 
   assert.equal(
     renderToStaticMarkup(React.createElement(ReaderPreferencesSnapshot)),
-    "<output>light|medium|20|literata|true</output>",
+    "<output>light|medium|20|literata|normal|true</output>",
   );
 });
 
@@ -60,6 +60,7 @@ test("setFont stores the typeface with the other preferences and reports a faile
       width: "medium",
       fontSize: 20,
       font: "lexend",
+      lineSpacing: "normal",
     });
     assert.equal(notifications, 1);
 
@@ -68,6 +69,41 @@ test("setFont stores the typeface with the other preferences and reports a faile
     };
     assert.equal(setFont("georgia"), false);
     assert.equal(JSON.parse(values.get("libra:reader-preferences")!).font, "lexend");
+    assert.equal(notifications, 1);
+  } finally {
+    Reflect.deleteProperty(globalThis, "window");
+  }
+});
+
+test("setLineSpacing stores the spacing with the other preferences and reports a failed save", () => {
+  const { setLineSpacing } = renderedSetters();
+  const values = new Map<string, string>();
+  let notifications = 0;
+  const browser = Object.assign(new EventTarget(), {
+    localStorage: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => void values.set(key, value),
+    },
+  });
+  browser.addEventListener("libra:reader-preferences-change", () => notifications++);
+  Object.defineProperty(globalThis, "window", { configurable: true, value: browser });
+
+  try {
+    assert.equal(setLineSpacing("relaxed"), true);
+    assert.deepEqual(JSON.parse(values.get("libra:reader-preferences")!), {
+      theme: "light",
+      width: "medium",
+      fontSize: 20,
+      font: "literata",
+      lineSpacing: "relaxed",
+    });
+    assert.equal(notifications, 1);
+
+    browser.localStorage.setItem = () => {
+      throw new Error("Storage quota exceeded");
+    };
+    assert.equal(setLineSpacing("compact"), false);
+    assert.equal(JSON.parse(values.get("libra:reader-preferences")!).lineSpacing, "relaxed");
     assert.equal(notifications, 1);
   } finally {
     Reflect.deleteProperty(globalThis, "window");

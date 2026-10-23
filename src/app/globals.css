@@ -247,6 +247,24 @@ html[data-reader-early-font="lexend"] article[data-reader-font] {
   font-family: var(--font-lexend, ui-sans-serif), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* The line height of the chapter text, chosen in the reader's settings (READER_LINE_HEIGHTS,
+   src/lib/reader-preferences.ts), set on the article and inherited by its paragraphs. Normal is the 1.65 the chapter
+   text has always had. Before hydration a stored spacing comes from <html> (data-reader-early-line-spacing), as the
+   typeface does above. */
+article[data-reader-line-spacing="normal"] {
+  line-height: 1.65;
+}
+
+article[data-reader-line-spacing="compact"],
+html[data-reader-early-line-spacing="compact"] article[data-reader-line-spacing] {
+  line-height: 1.5;
+}
+
+article[data-reader-line-spacing="relaxed"],
+html[data-reader-early-line-spacing="relaxed"] article[data-reader-line-spacing] {
+  line-height: 1.8;
+}
+
 /* Until the reader has painted its stored theme once (data-reader-settled, ReaderView), its controls do not fade:
    the theme that replaces the server's light one on hydration is not a hover or a focus. */
 [data-reader-theme]:not([data-reader-settled]) * {

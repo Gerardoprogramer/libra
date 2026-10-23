@@ -34,7 +34,14 @@ import { cn } from "@/lib/utils";
 import { usePrefetchNextChapter } from "@/hooks/usePrefetchNextChapter";
 import { useReaderPreferences } from "@/hooks/useReaderPreferences";
 import { readerPanelThemeProps, ReaderPanelThemeProvider } from "@/lib/reader-panel-theme";
-import { clearEarlyReaderPreferences, READER_FONTS, READER_MEASURES, type ReaderFont } from "@/lib/reader-preferences";
+import {
+  clearEarlyReaderPreferences,
+  READER_FONTS,
+  READER_LINE_SPACINGS,
+  READER_MEASURES,
+  type ReaderFont,
+  type ReaderLineSpacing,
+} from "@/lib/reader-preferences";
 import { createReadingSession } from "@/lib/reading-progress-session";
 import { replayPendingReadingProgress } from "@/lib/reading-progress-sync";
 import { useReadingProgressScope } from "@/lib/use-reading-progress-scope";
@@ -92,6 +99,12 @@ const READER_THEMES = [
 ] as const satisfies readonly { value: ReaderTheme; label: string; shortLabel: string; Icon: IconType }[];
 
 const READER_WIDTHS = ["narrow", "medium", "wide"] as const satisfies readonly ReaderWidth[];
+
+const READER_LINE_SPACING_LABELS = {
+  compact: "lineSpacingCompact",
+  normal: "lineSpacingNormal",
+  relaxed: "lineSpacingRelaxed",
+} as const satisfies Record<ReaderLineSpacing, string>;
 
 // Proper names, the same in every language. Each is shown in the panel's own font: setting it in its typeface would
 // fetch typefaces the reader never chose.
@@ -184,11 +197,13 @@ export function ReaderView({
     width,
     fontSize,
     font,
+    lineSpacing,
     isAvailable: preferencesAvailable,
     setTheme,
     setWidth,
     setFontSize,
     setFont,
+    setLineSpacing,
   } = useReaderPreferences();
   const t = useTranslations("reader");
   const scope = useReadingProgressScope();
@@ -383,6 +398,12 @@ export function ReaderView({
 
   function changeFont(nextFont: ReaderFont) {
     if (!setFont(nextFont)) {
+      setStorageError(true);
+    }
+  }
+
+  function changeLineSpacing(nextLineSpacing: ReaderLineSpacing) {
+    if (!setLineSpacing(nextLineSpacing)) {
       setStorageError(true);
     }
   }
@@ -609,6 +630,26 @@ export function ReaderView({
                   ))}
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <p id={`${settingsId}-line-spacing`} className={settingsLabelClass}>
+                  {t("lineSpacingGroup")}
+                </p>
+
+                <div role="group" aria-labelledby={`${settingsId}-line-spacing`} className="grid grid-cols-3 gap-2">
+                  {READER_LINE_SPACINGS.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={lineSpacing === value}
+                      onClick={() => changeLineSpacing(value)}
+                      className={settingsOptionClass}
+                    >
+                      {t(READER_LINE_SPACING_LABELS[value])}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </PopoverContent>
           </Popover>
 
@@ -660,6 +701,8 @@ export function ReaderView({
           data-reader-measure
           // The typeface of the chapter text (globals.css); before hydration a stored one comes from <html>.
           data-reader-font={font}
+          // Its line height (globals.css), inherited by the paragraphs; before hydration a stored one comes from <html>.
+          data-reader-line-spacing={lineSpacing}
           style={{ fontSize, maxWidth: `${READER_MEASURES[width] * fontSize}px` }}
         >
           {children}
