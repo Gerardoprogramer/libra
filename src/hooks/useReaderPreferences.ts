@@ -9,12 +9,13 @@ import {
   getReaderPreferencesSnapshot,
   parseReaderPreferences,
   saveReaderPreferences,
+  type ReaderFont,
   type ReaderPreferences,
   type ReaderTheme,
   type ReaderWidth,
 } from "@/lib/reader-preferences";
 
-export type { ReaderTheme, ReaderWidth } from "@/lib/reader-preferences";
+export type { ReaderFont, ReaderTheme, ReaderWidth } from "@/lib/reader-preferences";
 
 function subscribe(callback: () => void) {
   const handleStorage = (event: StorageEvent) => {
@@ -62,5 +63,7 @@ export function useReaderPreferences() {
     setWidth: (width: ReaderWidth) => updatePreferences({ width }),
 
     setFontSize: (fontSize: number) => updatePreferences({ fontSize }),
+
+    setFont: (font: ReaderFont) => updatePreferences({ font }),
   };
 }

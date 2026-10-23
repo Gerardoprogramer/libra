@@ -16,7 +16,7 @@ import {
   type ContentLocale,
 } from "@/db/queries/books";
 import { isSlug, isUuid } from "@/lib/catalog-filters";
-import { readingFont } from "@/lib/fonts/reading";
+import { readingFontVariables } from "@/lib/fonts/reading";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getAbsolutePublicImageUrl, getConfiguredSiteUrl } from "@/lib/site-url";
@@ -265,6 +265,7 @@ async function ReaderContent({ params, searchParams }: ReaderPageProps) {
           chapterNumber={currentChapter.number}
           chapterIndex={chapterIndex}
           totalChapters={book.chapters.length}
+          fontVariables={readingFontVariables}
           previousHref={
             previous
               ? readingProgressHref({ bookSlug: book.slug, chapterSlug: previous.slug, editionId: book.edition.id })
@@ -292,7 +293,8 @@ async function ReaderContent({ params, searchParams }: ReaderPageProps) {
           {paragraphs.map((paragraph, index) => (
             // Line height 1.65 for long prose; paragraphs about half a line apart (0.8em), so the gap follows the size.
             // At the default 20px both are whole pixels (33 and 16), like the paragraph tops the progress restores to.
-            <p key={index} className={`${readingFont.variable} font-reading mb-[0.8em] leading-[1.65]`}>
+            // The typeface comes from the article (ReaderView, data-reader-font).
+            <p key={index} className="mb-[0.8em] leading-[1.65]">
               {paragraph}
             </p>
           ))}
