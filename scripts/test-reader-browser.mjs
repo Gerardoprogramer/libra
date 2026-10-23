@@ -16,14 +16,16 @@ const stateModule = `
 import React, {useSyncExternalStore} from "react";
 export const state = window.fixture = {
  user:"A", path:"/en/books/dracula/chapter-1", mode:"reader", auth:new Set(), route:new Set(),
- cloud:new Map(), held:[], hold:false, heldHistory:[], holdHistory:false, writes:[], replacements:[],
+ cloud:new Map(), held:[], hold:false, heldHistory:[], holdHistory:false, writes:[], replacements:[], prefetches:[],
  setUser(id){this.user=id; for(const fn of this.auth) fn("SIGNED_IN", id?{user:{id}}:null);},
  navigate(to){this.path=to;for(const fn of this.route)fn();},
  notify(){for(const fn of this.route)fn();}
 };
 export function usePathname(){return useSyncExternalStore(fn=>{state.route.add(fn);return()=>state.route.delete(fn)},()=>state.path,()=>null)}
-export const Link=React.forwardRef(function Link({href,children,onClick,...props},ref){return <a {...props} ref={ref} href={href} onClick={event=>{onClick?.(event);event.preventDefault();state.navigate(href)}}>{children}</a>});
-export const router={replace(to){state.replacements.push(to);state.navigate(to)},push(to){state.navigate(to)},refresh(){},prefetch(){}};
+// prefetch is Next's Link prop, not a DOM attribute: it is shown as data-prefetch. router.prefetch fetches nothing; it
+// records each call, with the callback passed to it.
+export const Link=React.forwardRef(function Link({href,children,onClick,prefetch,...props},ref){return <a {...props} data-prefetch={prefetch===undefined?undefined:String(prefetch)} ref={ref} href={href} onClick={event=>{onClick?.(event);event.preventDefault();state.navigate(href)}}>{children}</a>});
+export const router={replace(to){state.replacements.push(to);state.navigate(to)},push(to){state.navigate(to)},refresh(){},prefetch(href,options){state.prefetches.push({href,kind:options?.kind,onInvalidate:options?.onInvalidate})}};
 export function useRouter(){return router}
 export function getPathname({href}){return href}
 `;
@@ -50,11 +52,15 @@ import {BookReadingAction} from "@/components/books/BookReadingAction";
 import {saveScopedReadingProgress} from "@/lib/reading-progress";
 // Options of the reading-progress scenarios, kept in sessionStorage so they survive a reload; without them the fixture
 // is unchanged. realScroll: the reader's scrollTo scrolls (otherwise a no-op); long: a chapter long enough to scroll;
-// guest: the page starts signed out.
+// guest: the page starts signed out. For the next-chapter prefetch: noIntersectionObserver removes the API before the
+// reader mounts; fakeConnection replaces navigator.connection with one the test sets (fixtureConnection), as the
+// browser's own Network Information API cannot be set to data saver or 2g from here.
 const options=JSON.parse(sessionStorage.getItem("fixture:options")||"{}");
 const realScrollTo=window.scrollTo.bind(window);
 window.scrollTo=(...args)=>{if(options.realScroll)realScrollTo(...args)};
 if(options.guest)state.user=null;
+if(options.noIntersectionObserver)delete window.IntersectionObserver;
+if(options.fakeConnection){const connection=Object.assign(new EventTarget(),{saveData:false,effectiveType:"4g"});Object.defineProperty(navigator,"connection",{configurable:true,get:()=>connection});window.fixtureConnection=connection}
 const longText=" The narrow road climbed through the pines while the coach swayed and the driver urged the horses on into the dusk.".repeat(6);
 const routes=[{id:"chapter-1",slug:"chapter-1"},{id:"chapter-2",slug:"chapter-2"}];
 const books=[{slug:"dracula",title:"Dracula",author:"Stoker",coverUrl:null},{slug:"frankenstein",title:"Frankenstein",author:"Shelley",coverUrl:null}];
@@ -568,6 +574,186 @@ try {
     assert.deepEqual(unseen, [], `saved paragraph ${end.paragraphIndex}: paragraphs after it off screen`);
     console.log(
       `PASS progress: the bottom of the chapter saves 100% with paragraph ${end.paragraphIndex} of 0-39 and the rest of the chapter on screen.`,
+    );
+
+    await evaluate("sessionStorage.removeItem('fixture:options')");
+    await call("Emulation.clearDeviceMetricsOverride");
+
+    // Next-chapter prefetch (usePrefetchNextChapter) on the same long chapter: what reaches router.prefetch and the
+    // "Next" link's prefetch prop. router.prefetch is the harness's recorder: whether Next.js fetches, keeps or reuses
+    // the chapter is not exercised here.
+    const nextHref = "/en/books/dracula/chapter-2";
+    const prefetches = () =>
+      evaluate("fixture.prefetches.map(p=>({href:p.href,kind:p.kind,onInvalidate:typeof p.onInvalidate}))");
+    const nextLinkPrefetch = () => evaluate("document.querySelector('a[rel=next]')?.dataset.prefetch??null");
+    // Scrolls so the top of the chapter's footer is `screens` viewport heights below the top of the viewport. The
+    // prefetch starts within one screen below the viewport (NEXT_CHAPTER_FOOTER_MARGIN): 2.5 is outside, 1.5 inside.
+    const footerAt = async (screens) => {
+      await evaluate(
+        `window.scrollTo(0,document.querySelector('nav[aria-label=chapterNavigation]').closest('footer').getBoundingClientRect().top+scrollY-innerHeight*${screens})`,
+      );
+      await stableScroll();
+      await settle();
+    };
+    // A fresh page (and so a fresh prefetcher) at the top of chapter 1, with no saved position and nothing recorded. The
+    // reader is left first (for the short home page): a reader still shown would save its position as the page unloads,
+    // after the storage is cleared, and the reload would restore it.
+    const openChapter = async (extra = {}) => {
+      await evaluate("fixture.mode='home';fixture.navigate('/en')");
+      await settle();
+      await evaluate(
+        `localStorage.clear();sessionStorage.setItem('fixture:options',JSON.stringify(${JSON.stringify({ realScroll: true, long: true, guest: true, ...extra })}));window.ready=false`,
+      );
+      await loadReader();
+      assert.equal(await evaluate("scrollY"), 0);
+      assert.deepEqual(await prefetches(), []);
+    };
+    const full = { href: nextHref, kind: "full", onInvalidate: "function" };
+    await call("Emulation.setDeviceMetricsOverride", { width: 800, height: 600, deviceScaleFactor: 1, mobile: false });
+
+    // 1. Nothing while the footer is far; one full prefetch of the next chapter once it is within a screen.
+    await openChapter();
+    assert.equal(await nextLinkPrefetch(), "true");
+    await footerAt(2.5);
+    assert.deepEqual(await prefetches(), []);
+    await footerAt(1.5);
+    await waitFor("fixture.prefetches.length>0", "the prefetch near the footer");
+    await settle();
+    assert.deepEqual(await prefetches(), [full]);
+    console.log(
+      "PASS prefetch: one full prefetch of the next chapter once its footer is within a screen, none before.",
+    );
+
+    // 2. Crossing the threshold again, and network events, add none for the same URL.
+    for (let crossing = 0; crossing < 3; crossing++) {
+      await footerAt(2.5);
+      await footerAt(1.5);
+    }
+    await footerAt(0.5);
+    await evaluate(
+      "window.dispatchEvent(new Event('online'));navigator.connection?.dispatchEvent(new Event('change'))",
+    );
+    await settle();
+    assert.deepEqual(await prefetches(), [full]);
+    console.log("PASS prefetch: crossing the threshold again and network events add no prefetch.");
+
+    // 3. An invalidation refreshes the prefetch once; later ones (of either call) do not.
+    await evaluate("fixture.prefetches[0].onInvalidate()");
+    await waitFor("fixture.prefetches.length===2", "the refresh after an invalidation");
+    await evaluate("fixture.prefetches[0].onInvalidate();fixture.prefetches[1].onInvalidate()");
+    await settle();
+    assert.deepEqual(await prefetches(), [full, full]);
+    console.log("PASS prefetch: an invalidation refreshes it once, and only once.");
+
+    // 4. In the last chapter (no next one) a pending invalidation of the previous chapter's prefetch, network events
+    // and scrolling start none, and there is no "Next" link. A fresh prefetch is used: one never refreshed would.
+    await openChapter();
+    await footerAt(1.5);
+    await waitFor("fixture.prefetches.length===1", "a fresh prefetch");
+    await evaluate("fixture.navigate('/en/books/dracula/chapter-2')");
+    await settle();
+    assert.equal(await evaluate("document.querySelector('h1')?.textContent"), "Chapter 2");
+    assert.equal(await evaluate("document.querySelector('a[rel=next]')"), null);
+    await evaluate(
+      "fixture.prefetches[0].onInvalidate();window.dispatchEvent(new Event('online'));navigator.connection?.dispatchEvent(new Event('change'))",
+    );
+    await evaluate("window.scrollTo(0,0)");
+    await stableScroll();
+    await evaluate("window.scrollTo(0,document.documentElement.scrollHeight)");
+    await stableScroll();
+    await settle();
+    assert.deepEqual(await prefetches(), [full]);
+    console.log("PASS prefetch: the last chapter starts none, even on an earlier invalidation or network events.");
+
+    // 5. Offline, data saver or 2g: the link keeps its default ("auto") and nothing is prefetched near the footer;
+    // once the connection allows it, one prefetch and the full link prefetch. Each case starts on a fresh page.
+    await call("Network.enable");
+    await openChapter({ fakeConnection: true });
+    await call("Network.emulateNetworkConditions", {
+      offline: true,
+      latency: 0,
+      downloadThroughput: -1,
+      uploadThroughput: -1,
+    });
+    await waitFor(
+      "navigator.onLine===false&&document.querySelector('a[rel=next]').dataset.prefetch==='auto'",
+      "offline",
+    );
+    await footerAt(1.5);
+    assert.deepEqual(await prefetches(), []);
+    await call("Network.emulateNetworkConditions", {
+      offline: false,
+      latency: 0,
+      downloadThroughput: -1,
+      uploadThroughput: -1,
+    });
+    await waitFor("navigator.onLine===true&&fixture.prefetches.length===1", "the prefetch once back online");
+    await evaluate("window.dispatchEvent(new Event('online'))");
+    await settle();
+    assert.deepEqual(await prefetches(), [full]);
+    assert.equal(await nextLinkPrefetch(), "true");
+    for (const [setting, blocked, allowed] of [
+      ["saveData", true, false],
+      ["effectiveType", "'2g'", "'4g'"],
+    ]) {
+      await openChapter({ fakeConnection: true });
+      await evaluate(`fixtureConnection.${setting}=${blocked};fixtureConnection.dispatchEvent(new Event('change'))`);
+      await waitFor("document.querySelector('a[rel=next]').dataset.prefetch==='auto'", `${setting} blocked`);
+      await footerAt(1.5);
+      assert.deepEqual(await prefetches(), [], setting);
+      await evaluate(`fixtureConnection.${setting}=${allowed};fixtureConnection.dispatchEvent(new Event('change'))`);
+      await waitFor("fixture.prefetches.length===1", `the prefetch once ${setting} allows it`);
+      await evaluate("fixtureConnection.dispatchEvent(new Event('change'))");
+      await settle();
+      assert.deepEqual(await prefetches(), [full], setting);
+      assert.equal(await nextLinkPrefetch(), "true", setting);
+    }
+    console.log("PASS prefetch: offline, data saver and 2g prefetch nothing; allowed again, exactly one.");
+
+    // 6. Focus: a mouse press on "Next" adds no prefetch of its own; keyboard focus (Tab from "Aa") adds one full
+    // prefetch. The press is released elsewhere, so it is not a click and does not navigate.
+    await openChapter();
+    await footerAt(0.5);
+    await waitFor("fixture.prefetches.length===1", "the prefetch near the footer");
+    const linkCenter = await evaluate(
+      "(()=>{const r=document.querySelector('a[rel=next]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()",
+    );
+    await call("Input.dispatchMouseEvent", { type: "mousePressed", ...linkCenter, button: "left", clickCount: 1 });
+    await call("Input.dispatchMouseEvent", { type: "mouseReleased", x: 4, y: 300, button: "left", clickCount: 1 });
+    await settle();
+    assert.deepEqual(
+      await evaluate(
+        "(()=>{const a=document.activeElement;return [a.getAttribute('rel'),a.matches(':focus-visible')]})()",
+      ),
+      ["next", false],
+    );
+    assert.equal(await evaluate("document.querySelector('h1')?.textContent"), "Chapter 1");
+    assert.deepEqual(await prefetches(), [full]);
+    await evaluate("document.querySelector('button[aria-label=readingSettings]').focus()");
+    await press("Tab");
+    assert.deepEqual(
+      await evaluate(
+        "(()=>{const a=document.activeElement;return [a.getAttribute('rel'),a.matches(':focus-visible')]})()",
+      ),
+      ["next", true],
+    );
+    assert.deepEqual(await prefetches(), [full, { href: nextHref, kind: "full", onInvalidate: "undefined" }]);
+    console.log("PASS prefetch: keyboard focus on Next prefetches the chapter, a mouse press does not.");
+
+    // 7. Without IntersectionObserver, scrolling past the footer prefetches nothing and the link keeps its own full
+    // prefetch.
+    await openChapter({ noIntersectionObserver: true });
+    assert.equal(await evaluate("typeof IntersectionObserver"), "undefined");
+    await footerAt(1.5);
+    await footerAt(0.5);
+    await evaluate("window.scrollTo(0,document.documentElement.scrollHeight)");
+    await stableScroll();
+    await evaluate("window.dispatchEvent(new Event('online'))");
+    await settle();
+    assert.deepEqual(await prefetches(), []);
+    assert.equal(await nextLinkPrefetch(), "true");
+    console.log(
+      "PASS prefetch: without IntersectionObserver, scrolling prefetches nothing and the link keeps its own.",
     );
 
     await evaluate("sessionStorage.removeItem('fixture:options')");
