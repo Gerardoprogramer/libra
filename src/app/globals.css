@@ -265,6 +265,24 @@ html[data-reader-early-line-spacing="relaxed"] article[data-reader-line-spacing]
   line-height: 1.8;
 }
 
+/* The side margin of the reading surface at each width (READER_SIDE_MARGINS, src/lib/reader-preferences.ts). The
+   measure caps the column on wide screens; where the screen is narrower, the margin sets it, so each width still has
+   its own column there. Medium is the 1.5rem the reader has always had. Before hydration a stored width comes from
+   <html> (data-reader-early-width), as the typeface does above. */
+main[data-reader-width="medium"] {
+  padding-inline: 1.5rem;
+}
+
+main[data-reader-width="narrow"],
+html[data-reader-early-width="narrow"] main[data-reader-width] {
+  padding-inline: 2rem;
+}
+
+main[data-reader-width="wide"],
+html[data-reader-early-width="wide"] main[data-reader-width] {
+  padding-inline: 0.75rem;
+}
+
 /* Until the reader has painted its stored theme once (data-reader-settled, ReaderView), its controls do not fade:
    the theme that replaces the server's light one on hydration is not a hover or a focus. */
 [data-reader-theme]:not([data-reader-settled]) * {

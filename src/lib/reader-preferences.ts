@@ -41,6 +41,16 @@ export const READER_MEASURES: Record<ReaderWidth, number> = {
 
 const READER_WIDTHS = Object.keys(READER_MEASURES) as ReaderWidth[];
 
+// Side margin of the reading surface at each width, in rem (32, 24 and 12px at the default root size). Where the screen
+// is narrower than the measure (phones, or tablets at large sizes), the margin is what sets the column, so each width
+// still gives its own; elsewhere the measure caps the column first. globals.css sets each on the reader's main
+// ([data-reader-width]); medium is the 1.5rem the reader has always had.
+export const READER_SIDE_MARGINS: Record<ReaderWidth, number> = {
+  narrow: 2,
+  medium: 1.5,
+  wide: 0.75,
+};
+
 // Line height of the chapter text at each spacing, in the order the settings panel lists them. globals.css sets each on
 // the article ([data-reader-line-spacing]); normal is the 1.65 the chapter text has always had.
 export const READER_LINE_HEIGHTS: Record<ReaderLineSpacing, number> = {
@@ -108,15 +118,16 @@ const EARLY_THEME_ATTRIBUTE = "data-reader-early-theme";
 const EARLY_MEASURE_ATTRIBUTE = "data-reader-early-measure";
 const EARLY_FONT_ATTRIBUTE = "data-reader-early-font";
 const EARLY_LINE_SPACING_ATTRIBUTE = "data-reader-early-line-spacing";
+const EARLY_WIDTH_ATTRIBUTE = "data-reader-early-width";
 const EARLY_FONT_SIZE_PROPERTY = "--reader-early-font-size";
 const EARLY_MEASURE_PROPERTY = "--reader-early-measure";
 
 // A fixed string built from the constants above, the same for every visitor: nothing stored is written into it. It
 // validates as parseReaderPreferences does (same lists, limits and defaults; reader-preferences.test.ts runs both on
-// the same inputs) and only writes a listed theme, typeface or spacing name and numbers it computed. A preference
-// changed in another tab before the reader takes over removes the marks, so they never outlive the stored value they
-// came from. It contains no "<", so inline in <head> it can never close its own tag.
-export const earlyReaderPreferencesScript = `(function(){var d=document.documentElement;function c(){d.removeAttribute(${JSON.stringify(EARLY_THEME_ATTRIBUTE)});d.removeAttribute(${JSON.stringify(EARLY_MEASURE_ATTRIBUTE)});d.removeAttribute(${JSON.stringify(EARLY_FONT_ATTRIBUTE)});d.removeAttribute(${JSON.stringify(EARLY_LINE_SPACING_ATTRIBUTE)});d.style.removeProperty(${JSON.stringify(EARLY_FONT_SIZE_PROPERTY)});d.style.removeProperty(${JSON.stringify(EARLY_MEASURE_PROPERTY)});if(!d.getAttribute("style"))d.removeAttribute("style")}try{var k=${JSON.stringify(READER_PREFERENCES_STORAGE_KEY)},s=localStorage.getItem(k);if(!s)return;var p=JSON.parse(s);if(!p||typeof p!=="object")return;var m=${JSON.stringify(READER_MEASURES)},t=${JSON.stringify(READER_THEMES)}.indexOf(p.theme)===-1?${JSON.stringify(DEFAULT_READER_PREFERENCES.theme)}:p.theme,w=${JSON.stringify(READER_WIDTHS)}.indexOf(p.width)===-1?${JSON.stringify(DEFAULT_READER_PREFERENCES.width)}:p.width,f=typeof p.fontSize==="number"?Math.min(Math.max(p.fontSize,${READER_FONT_SIZE_LIMITS.min}),${READER_FONT_SIZE_LIMITS.max}):${DEFAULT_READER_PREFERENCES.fontSize},n=${JSON.stringify(READER_FONTS)}.indexOf(p.font)===-1?${JSON.stringify(DEFAULT_READER_PREFERENCES.font)}:p.font,l=${JSON.stringify(READER_LINE_SPACINGS)}.indexOf(p.lineSpacing)===-1?${JSON.stringify(DEFAULT_READER_PREFERENCES.lineSpacing)}:p.lineSpacing;if(t!==${JSON.stringify(DEFAULT_READER_PREFERENCES.theme)})d.setAttribute(${JSON.stringify(EARLY_THEME_ATTRIBUTE)},t);if(n!==${JSON.stringify(DEFAULT_READER_PREFERENCES.font)})d.setAttribute(${JSON.stringify(EARLY_FONT_ATTRIBUTE)},n);if(l!==${JSON.stringify(DEFAULT_READER_PREFERENCES.lineSpacing)})d.setAttribute(${JSON.stringify(EARLY_LINE_SPACING_ATTRIBUTE)},l);if(f!==${DEFAULT_READER_PREFERENCES.fontSize}||w!==${JSON.stringify(DEFAULT_READER_PREFERENCES.width)}){d.style.setProperty(${JSON.stringify(EARLY_FONT_SIZE_PROPERTY)},f+"px");d.style.setProperty(${JSON.stringify(EARLY_MEASURE_PROPERTY)},m[w]*f+"px");d.setAttribute(${JSON.stringify(EARLY_MEASURE_ATTRIBUTE)},"")}addEventListener("storage",function(e){if(e.key===k||e.key===null)c()})}catch(e){}})()`;
+// the same inputs) and only writes a listed theme, typeface, spacing or width name and numbers it computed. A
+// preference changed in another tab before the reader takes over removes the marks, so they never outlive the stored
+// value they came from. It contains no "<", so inline in <head> it can never close its own tag.
+export const earlyReaderPreferencesScript = `(function(){var d=document.documentElement;function c(){d.removeAttribute(${JSON.stringify(EARLY_THEME_ATTRIBUTE)});d.removeAttribute(${JSON.stringify(EARLY_MEASURE_ATTRIBUTE)});d.removeAttribute(${JSON.stringify(EARLY_FONT_ATTRIBUTE)});d.removeAttribute(${JSON.stringify(EARLY_LINE_SPACING_ATTRIBUTE)});d.removeAttribute(${JSON.stringify(EARLY_WIDTH_ATTRIBUTE)});d.style.removeProperty(${JSON.stringify(EARLY_FONT_SIZE_PROPERTY)});d.style.removeProperty(${JSON.stringify(EARLY_MEASURE_PROPERTY)});if(!d.getAttribute("style"))d.removeAttribute("style")}try{var k=${JSON.stringify(READER_PREFERENCES_STORAGE_KEY)},s=localStorage.getItem(k);if(!s)return;var p=JSON.parse(s);if(!p||typeof p!=="object")return;var m=${JSON.stringify(READER_MEASURES)},t=${JSON.stringify(READER_THEMES)}.indexOf(p.theme)===-1?${JSON.stringify(DEFAULT_READER_PREFERENCES.theme)}:p.theme,w=${JSON.stringify(READER_WIDTHS)}.indexOf(p.width)===-1?${JSON.stringify(DEFAULT_READER_PREFERENCES.width)}:p.width,f=typeof p.fontSize==="number"?Math.min(Math.max(p.fontSize,${READER_FONT_SIZE_LIMITS.min}),${READER_FONT_SIZE_LIMITS.max}):${DEFAULT_READER_PREFERENCES.fontSize},n=${JSON.stringify(READER_FONTS)}.indexOf(p.font)===-1?${JSON.stringify(DEFAULT_READER_PREFERENCES.font)}:p.font,l=${JSON.stringify(READER_LINE_SPACINGS)}.indexOf(p.lineSpacing)===-1?${JSON.stringify(DEFAULT_READER_PREFERENCES.lineSpacing)}:p.lineSpacing;if(t!==${JSON.stringify(DEFAULT_READER_PREFERENCES.theme)})d.setAttribute(${JSON.stringify(EARLY_THEME_ATTRIBUTE)},t);if(n!==${JSON.stringify(DEFAULT_READER_PREFERENCES.font)})d.setAttribute(${JSON.stringify(EARLY_FONT_ATTRIBUTE)},n);if(l!==${JSON.stringify(DEFAULT_READER_PREFERENCES.lineSpacing)})d.setAttribute(${JSON.stringify(EARLY_LINE_SPACING_ATTRIBUTE)},l);if(w!==${JSON.stringify(DEFAULT_READER_PREFERENCES.width)})d.setAttribute(${JSON.stringify(EARLY_WIDTH_ATTRIBUTE)},w);if(f!==${DEFAULT_READER_PREFERENCES.fontSize}||w!==${JSON.stringify(DEFAULT_READER_PREFERENCES.width)}){d.style.setProperty(${JSON.stringify(EARLY_FONT_SIZE_PROPERTY)},f+"px");d.style.setProperty(${JSON.stringify(EARLY_MEASURE_PROPERTY)},m[w]*f+"px");d.setAttribute(${JSON.stringify(EARLY_MEASURE_ATTRIBUTE)},"")}addEventListener("storage",function(e){if(e.key===k||e.key===null)c()})}catch(e){}})()`;
 
 // Idempotent: removes whatever marks the early script left on <html>, and nothing else.
 export function clearEarlyReaderPreferences(root: HTMLElement = document.documentElement) {
@@ -124,6 +135,7 @@ export function clearEarlyReaderPreferences(root: HTMLElement = document.documen
   root.removeAttribute(EARLY_MEASURE_ATTRIBUTE);
   root.removeAttribute(EARLY_FONT_ATTRIBUTE);
   root.removeAttribute(EARLY_LINE_SPACING_ATTRIBUTE);
+  root.removeAttribute(EARLY_WIDTH_ATTRIBUTE);
   root.style.removeProperty(EARLY_FONT_SIZE_PROPERTY);
   root.style.removeProperty(EARLY_MEASURE_PROPERTY);
   if (!root.getAttribute("style")) root.removeAttribute("style");
