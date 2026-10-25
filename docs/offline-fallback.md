@@ -9,13 +9,18 @@ contenido de la aplicación.
 | Archivo                                               | Función                                                                                                               |
 | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `public/sw.js`                                        | Service worker en JavaScript plano, sin dependencias. Scope `/`.                                                      |
-| `public/offline-es.html`, `public/offline-en.html`    | Páginas de respaldo autocontenidas: sin JavaScript, CSS inline, sin recursos de red, `noindex`.                       |
+| `public/offline-es.html`, `public/offline-en.html`    | Páginas de respaldo autocontenidas: CSS y un script inline (tema), sin recursos de red, `noindex`.                    |
 | `src/components/layout/ServiceWorkerRegistration.tsx` | Registra `/sw.js` tras la hidratación, solo en builds de producción (previews de Vercel incluidas).                   |
 | `src/app/[locale]/layout.tsx`                         | Monta el registro en todas las páginas.                                                                               |
 | `next.config.ts`                                      | `Cache-Control: no-cache, no-store, must-revalidate` en `/sw.js`; `X-Robots-Tag: noindex` en las páginas de respaldo. |
 
 `src/proxy.ts` excluye las rutas con punto, así que `/sw.js` y las páginas de respaldo se sirven desde `public/` sin
 redirección de idioma ni sesión de Supabase.
+
+Las páginas de respaldo leen el tema guardado del lector (`libra:reader-preferences` en `localStorage`, el mismo origen)
+con un script inline en `<head>`, antes de la primera pintura. Si es `dark`, usan los colores nocturnos del lector y su
+`theme-color` (`#0a0a0a`). Cualquier otro tema, una preferencia ilegible, el almacenamiento bloqueado o JavaScript
+desactivado dejan el papel claro del sitio.
 
 ## Reglas de caché
 

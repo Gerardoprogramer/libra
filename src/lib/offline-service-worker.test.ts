@@ -367,6 +367,12 @@ test("without the offline page in the cache, the original network error reaches 
   assert.equal(worker.calls.network.length, 1);
 });
 
+test("the cache version is past the one the light-only offline pages shipped with, so clients get the dark theme", () => {
+  // v1 cached the offline pages before they took the reader's dark theme. Change it again with every change to this
+  // worker or to the offline pages (docs/offline-fallback.md).
+  assert.equal(workerSource.match(/const CACHE_VERSION = "(.+?)";/)?.[1], "v2");
+});
+
 test("the worker never stores a response: its only cache write is the install's addAll", () => {
   const code = workerSource.replace(/^\s*(\/\/|\/?\*).*$/gm, "");
 
@@ -393,21 +399,26 @@ for (const [locale, retry] of [
   ["es", "Reintentar"],
   ["en", "Try again"],
 ] as const) {
-  test(`the ${locale} offline page stands alone: no script, no network resource, not indexed`, () => {
+  test(`the ${locale} offline page stands alone: one inline script, no network resource, not indexed`, () => {
     const html = offlinePage(locale);
 
     assert.match(html, /^<!doctype html>/i);
     assert.match(html, new RegExp(`<html lang="${locale}">`));
     assert.match(html, /<meta name="robots" content="noindex" \/>/);
     assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1" \/>/);
-    assert.doesNotMatch(html, /<script|<link|<img|<iframe|src=|srcset=|url\(|@import|_next|https?:/i);
+    // The only script is inline, without attributes: it reads the reader's stored theme (reader-theme-color.test.ts).
+    assert.deepEqual(html.match(/<script[^>]*>/gi), ["<script>"]);
+    assert.doesNotMatch(html, /<link|<img|<iframe|src=|srcset=|url\(|@import|_next|https?:|fetch\(|import\(/i);
     // An empty href reloads this same URL, without a script or a redirect.
     assert.deepEqual(html.match(/href="[^"]*"/g), ['href=""']);
     assert.match(html, new RegExp(`<a href="">${retry}</a>`));
   });
 
   test(`the ${locale} offline page does not promise that books can be read offline`, () => {
-    const text = offlinePage(locale).replace(/<style>[\s\S]*<\/style>|<!--[\s\S]*?-->|<[^>]+>/g, " ");
+    const text = offlinePage(locale).replace(
+      /<style>[\s\S]*<\/style>|<script>[\s\S]*<\/script>|<!--[\s\S]*?-->|<[^>]+>/g,
+      " ",
+    );
 
     assert.doesNotMatch(text, /disponible|available|guardad|saved|descargad|download/i);
   });

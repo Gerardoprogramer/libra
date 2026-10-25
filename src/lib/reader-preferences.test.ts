@@ -5,6 +5,7 @@ import { runInNewContext } from "node:vm";
 
 import {
   DEFAULT_READER_PREFERENCES,
+  READER_DARK_THEME_COLOR,
   READER_FONTS,
   READER_LINE_HEIGHTS,
   READER_LINE_SPACINGS,
@@ -238,8 +239,9 @@ test("blocked and quota-limited storage never reports a successful save", () => 
   assert.equal(notifications, 0);
 });
 
-// An <html> element with the parts of the DOM the early script and clearEarlyReaderPreferences use. Like the DOM, the
-// style attribute appears with the first property and stays (empty) when the last one is removed.
+// An <html> element with the parts of the DOM the early script and clearEarlyReaderPreferences use, in a document whose
+// <head> holds the site's theme-color meta. Like the DOM, the style attribute appears with the first property and
+// stays (empty) when the last one is removed.
 function createRoot() {
   const attributes = new Map<string, string>();
   const properties = new Map<string, string>();
@@ -248,10 +250,44 @@ function createRoot() {
       attributes.set("style", [...properties].map(([name, value]) => `${name}: ${value};`).join(" "));
     }
   };
+  const head: FakeElement[] = [];
+  const loaded: (() => void)[] = [];
+  const document = {
+    // Whether a reader or its placeholder is in the page once it has loaded.
+    hasReader: true,
+    head: {
+      children: head,
+      prepend: (element: FakeElement) => void head.unshift(element),
+    },
+    createElement: () => {
+      const element: FakeElement = {
+        attributes: new Map(),
+        getAttribute: (name) => element.attributes.get(name) ?? null,
+        setAttribute: (name, value) => void element.attributes.set(name, String(value)),
+        remove: () => void (head.includes(element) && head.splice(head.indexOf(element), 1)),
+      };
+      return element;
+    },
+    querySelector(selector: string) {
+      if (selector === "[data-reader-theme],[data-reader-pending]") return document.hasReader ? {} : null;
+      const attribute = /^meta\[([\w-]+)\]$/.exec(selector)?.[1];
+      assert.ok(attribute, selector);
+      return head.find((element) => element.attributes.has(attribute)) ?? null;
+    },
+    addEventListener: (type: string, listener: () => void) => {
+      if (type === "DOMContentLoaded") loaded.push(listener);
+    },
+    load: () => loaded.splice(0).forEach((listener) => listener()),
+  };
+  const site = document.createElement();
+  site.setAttribute("name", "theme-color");
+  site.setAttribute("content", "#fcfaf6");
+  head.push(site);
 
-  return {
+  const root = {
     attributes,
     properties,
+    ownerDocument: document,
     getAttribute: (name: string) => attributes.get(name) ?? null,
     setAttribute: (name: string, value: string) => void attributes.set(name, String(value)),
     removeAttribute: (name: string) => void attributes.delete(name),
@@ -265,12 +301,21 @@ function createRoot() {
       },
     },
   };
+  return root;
+}
+
+interface FakeElement {
+  attributes: Map<string, string>;
+  getAttribute(name: string): string | null;
+  setAttribute(name: string, value: string): void;
+  remove(): void;
 }
 
 type StorageListener = (event: { key: string | null }) => void;
 
-// Runs the early script as the browser does, in a context of its own, against a stored value or blocked storage.
-function runEarlyScript(stored: string | null | { blocked: true }) {
+// Runs the early script as the browser does, in a context of its own, against a stored value or blocked storage, on a
+// chapter's URL unless another is given.
+function runEarlyScript(stored: string | null | { blocked: true }, pathname = "/en/books/dracula/chapter-1") {
   const root = createRoot();
   const listeners: StorageListener[] = [];
   const localStorage = {
@@ -284,12 +329,20 @@ function runEarlyScript(stored: string | null | { blocked: true }) {
   };
 
   runInNewContext(earlyReaderPreferencesScript, {
-    document: { documentElement: root },
+    document: Object.assign(root.ownerDocument, { documentElement: root }),
+    location: { pathname },
     localStorage,
     addEventListener,
   });
 
   return { root, listeners };
+}
+
+// The color the browser's bar shows: the first theme-color meta's.
+function barColor(root: ReturnType<typeof createRoot>) {
+  return root.ownerDocument.head.children
+    .find((element) => element.getAttribute("name") === "theme-color")!
+    .getAttribute("content");
 }
 
 function earlyMarks(root: ReturnType<typeof createRoot>) {
@@ -301,6 +354,7 @@ function earlyMarks(root: ReturnType<typeof createRoot>) {
     measured: root.getAttribute("data-reader-early-measure") !== null,
     fontSize: root.properties.get("--reader-early-font-size") ?? null,
     measure: root.properties.get("--reader-early-measure") ?? null,
+    themeColor: barColor(root),
   };
 }
 
@@ -323,6 +377,8 @@ function marksFor(stored: string | null) {
     // The same expressions as the article's inline style in ReaderView.
     fontSize: measured ? `${fontSize}px` : null,
     measure: measured ? `${READER_MEASURES[width] * fontSize}px` : null,
+    // The bar's color useReaderThemeColor gives the reader (src/lib/reader-theme-color.ts); the site's otherwise.
+    themeColor: theme === "dark" ? READER_DARK_THEME_COLOR : "#fcfaf6",
   };
 }
 
@@ -407,7 +463,50 @@ test("the early script is a fixed string that never carries stored data", () => 
     for (const value of [marks.fontSize, marks.measure]) {
       assert.ok(value === null || /^\d+(\.\d+)?px$/.test(value), `${stored}: ${value}`);
     }
+    assert.ok([READER_DARK_THEME_COLOR, "#fcfaf6"].includes(marks.themeColor!), String(stored));
   }
+});
+
+test("before hydration, a stored dark theme gives the bar its color only on a chapter's URL, ahead of the site's", () => {
+  const dark = JSON.stringify({ theme: "dark", width: "wide", fontSize: 22 });
+
+  for (const pathname of ["/en/books/dracula/chapter-1", "/es/books/quijote/capitulo-3", "/es/books/quijote/3/"]) {
+    const { root } = runEarlyScript(dark, pathname);
+    const [first, site] = root.ownerDocument.head.children;
+    assert.equal(barColor(root), READER_DARK_THEME_COLOR, pathname);
+    assert.equal(first.getAttribute("data-reader-early-theme-color"), "", pathname);
+    assert.equal(site.getAttribute("content"), "#fcfaf6", pathname);
+  }
+  // The home, the catalog, a book's page and anything deeper or elsewhere keep the site's color: they have no reader.
+  for (const pathname of ["/", "/en", "/en/books", "/en/books/dracula", "/en/books/dracula/1/x", "/en/authors/a/b"]) {
+    const { root } = runEarlyScript(dark, pathname);
+    assert.equal(barColor(root), "#fcfaf6", pathname);
+    assert.equal(root.ownerDocument.head.children.length, 1, pathname);
+    // The surface's own marks are written as before: globals.css applies them only where there is a reader.
+    assert.equal(earlyMarks(root).theme, "dark", pathname);
+  }
+  for (const stored of [JSON.stringify({ theme: "sepia" }), JSON.stringify({ theme: "light" }), null]) {
+    assert.equal(barColor(runEarlyScript(stored).root), "#fcfaf6", String(stored));
+  }
+});
+
+test("the early bar color goes once the page has loaded without a reader, and stays while one is there", () => {
+  const dark = JSON.stringify({ theme: "dark" });
+
+  // A chapter URL that renders a not-found or error page.
+  const missing = runEarlyScript(dark).root;
+  missing.ownerDocument.hasReader = false;
+  missing.ownerDocument.load();
+  assert.equal(barColor(missing), "#fcfaf6");
+  assert.equal(missing.ownerDocument.head.children.length, 1);
+
+  const reader = runEarlyScript(dark).root;
+  reader.ownerDocument.load();
+  assert.equal(barColor(reader), READER_DARK_THEME_COLOR);
+  // Then the reader, once React renders the same theme, removes the marks, this color included: by then its own
+  // (useReaderThemeColor) is in place.
+  clearEarlyReaderPreferences(reader as unknown as HTMLElement);
+  assert.equal(barColor(reader), "#fcfaf6");
 });
 
 test("a change of the stored preferences in another tab removes the early marks", () => {

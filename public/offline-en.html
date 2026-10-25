@@ -6,6 +6,17 @@
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#fcfaf6" />
     <title>Offline · Libra</title>
+    <script>
+      // The reader's stored theme (libra:reader-preferences, src/lib/reader-preferences.ts). A dark one keeps the night
+      // colors of the reader, before the first paint; anything else, or no readable storage, keeps the light paper.
+      try {
+        var stored = JSON.parse(localStorage.getItem("libra:reader-preferences"));
+        if (stored && stored.theme === "dark") {
+          document.documentElement.setAttribute("data-theme", "dark");
+          document.querySelector('meta[name="theme-color"]').setAttribute("content", "#0a0a0a");
+        }
+      } catch (error) {}
+    </script>
     <style>
       :root {
         color-scheme: light;
@@ -66,6 +77,27 @@
       a:focus-visible {
         outline: 3px solid #211d1a;
         outline-offset: 3px;
+      }
+      /* The reader's dark theme (src/app/globals.css, [data-reader-theme="dark"]). */
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+      }
+      :root[data-theme="dark"] body {
+        background: #0a0a0a;
+        color: #e3dfd8;
+      }
+      :root[data-theme="dark"] p {
+        color: #c8c3bb;
+      }
+      :root[data-theme="dark"] .brand {
+        color: #a8a29a;
+      }
+      :root[data-theme="dark"] a {
+        background: #e0958c;
+        color: #0a0a0a;
+      }
+      :root[data-theme="dark"] a:focus-visible {
+        outline-color: #e3dfd8;
       }
     </style>
   </head>

@@ -9,7 +9,7 @@
 // cache, and only once it is active removes the caches of the earlier versions.
 
 const CACHE_PREFIX = "libra-offline-";
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 
 // Spanish is the default locale (src/i18n/routing.ts), so "/" falls back to it.
