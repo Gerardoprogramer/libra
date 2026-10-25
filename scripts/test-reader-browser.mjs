@@ -49,6 +49,7 @@ import {ReaderView} from "@/components/reader/ReaderView";
 import {ContinueReading} from "@/components/home/ContinueReading";
 import {RecentlyRead} from "@/components/home/RecentlyRead";
 import {BookReadingAction} from "@/components/books/BookReadingAction";
+import {ReaderPending} from "@/components/reader/ReaderPending";
 import {saveScopedReadingProgress} from "@/lib/reading-progress";
 // Options of the reading-progress scenarios, kept in sessionStorage so they survive a reload; without them the fixture
 // is unchanged. realScroll: the reader's scrollTo scrolls (otherwise a no-op); long: a chapter long enough to scroll;
@@ -70,6 +71,8 @@ state.seed("A","dracula",40);
 function App(){
  useSyncExternalStore(fn=>{state.route.add(fn);return()=>state.route.delete(fn)},()=>state.mode+state.path);
  const n=state.path.includes("chapter-2")?2:1;
+ // The chapter's loading placeholder, as loading.tsx renders it while the chapter streams.
+ if(state.mode==="pending")return <ReaderPending/>;
  if(state.mode==="home")return <><div id="continue"><ContinueReading books={books} title="Continue" chapterLabel="Chapter" continueLabel="Read" storageUnavailableLabel="Storage unavailable"/></div><div id="recent"><RecentlyRead books={books} title="Recent" continueLabel="Read"/></div><div id="action"><BookReadingAction bookSlug="dracula" editionId="dracula-en" chapterSlugs={["chapter-1","chapter-2"]} firstChapterSlug="chapter-1" startLabel="Start" continueLabel="Continue" readAgainLabel="Again" progressLabel="{progress}%"/></div></>;
  return <ReaderView bookSlug="dracula" bookTitle="Dracula" author="Stoker" contentLanguage="en" editionId="dracula-en" chapterSlug={"chapter-"+n} chapterId={"chapter-"+n} chapterTitle={"Chapter "+n} chapterRoutes={routes} chapterNumber={n} chapterIndex={n-1} totalChapters={2} previousHref={n===2?"/en/books/dracula/chapter-1":undefined} nextHref={n===1?"/en/books/dracula/chapter-2":undefined}>{options.long?Array.from({length:40},(_,index)=><p key={index}>{"Paragraph "+(index+1)+"."+longText}</p>):<><p>First paragraph.</p><p>Second paragraph.</p></>}</ReaderView>
 }
@@ -142,7 +145,10 @@ const server = createServer((req, res) => {
     res.end(output.outputFiles[0].contents);
   } else {
     res.setHeader("Content-Type", "text/html");
-    res.end('<div id="root"></div><script src="/bundle.js"></script>');
+    // The site's theme-color, as Next.js renders viewport.themeColor (src/app/[locale]/layout.tsx).
+    res.end(
+      '<head><meta name="theme-color" content="#fcfaf6"></head><div id="root"></div><script src="/bundle.js"></script>',
+    );
   }
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -398,6 +404,62 @@ try {
     assert.equal(await evaluate(`document.activeElement===${trigger}`), true);
     console.log("PASS theme by keyboard: surface, pressed swatch and panel follow it; panel stays open until Escape.");
     console.log("PASS theme restored after another chapter, a remount of the reader and a reload.");
+
+    // The browser's bar (the first <meta name="theme-color">): the dark reader's background while a dark reader or its
+    // placeholder is shown, ahead of the site's meta, which is never changed; the site's color with light or sepia and
+    // once the reader is gone. One reader meta at most, whatever happens.
+    const browserBar = () =>
+      evaluate(
+        "(()=>{const metas=[...document.head.querySelectorAll('meta[name=theme-color]')];return {color:metas[0].content,reader:document.head.querySelectorAll('meta[data-reader-theme-color]').length,site:metas.at(-1).content}})()",
+      );
+    const darkBar = { color: "#0a0a0a", reader: 1, site: "#fcfaf6" };
+    const siteBar = { color: "#fcfaf6", reader: 0, site: "#fcfaf6" };
+    // After the reload above: dark, from storage alone.
+    assert.deepEqual(await browserBar(), darkBar);
+    await evaluate(`${trigger}.focus()`);
+    await press("Enter");
+    assert.equal((await themeState()).focus, "lightTheme");
+    await press("Enter");
+    assert.equal((await themeState()).surface, "light");
+    assert.deepEqual(await browserBar(), siteBar);
+    await press("Tab");
+    await press("Enter");
+    assert.equal((await themeState()).surface, "sepia");
+    assert.deepEqual(await browserBar(), siteBar);
+    await press("Tab");
+    await press("Enter");
+    assert.equal((await themeState()).surface, "dark");
+    assert.deepEqual(await browserBar(), darkBar);
+    await press("Escape");
+    await evaluate("[...document.querySelectorAll('a')].find(a=>a.getAttribute('href').endsWith('chapter-2')).click()");
+    await settle();
+    assert.equal(await evaluate("document.querySelector('h1')?.textContent"), "Chapter 2");
+    assert.deepEqual(await browserBar(), darkBar);
+    // The placeholder of a chapter that is still loading, then the chapter, then any other page.
+    await evaluate("fixture.mode='pending';fixture.navigate('/en/books/dracula/chapter-1')");
+    await settle();
+    assert.equal(await evaluate("document.querySelector('[data-reader-pending]')?.dataset.readerPending"), "dark");
+    assert.equal(await evaluate("document.querySelector('[data-reader-theme]')"), null);
+    assert.deepEqual(await browserBar(), darkBar);
+    await evaluate("fixture.mode='reader';fixture.notify()");
+    await settle();
+    assert.deepEqual(await browserBar(), darkBar);
+    await evaluate("fixture.mode='home';fixture.navigate('/en')");
+    await settle();
+    assert.deepEqual(await browserBar(), siteBar);
+    // Back to the chapter (the browser's back button mounts the reader again here), then a light placeholder.
+    await evaluate("fixture.mode='reader';fixture.navigate('/en/books/dracula/chapter-1')");
+    await settle();
+    assert.deepEqual(await browserBar(), darkBar);
+    await evaluate(
+      "localStorage.setItem('libra:reader-preferences',JSON.stringify({theme:'light'}));fixture.mode='pending';fixture.navigate('/en/books/dracula/chapter-2')",
+    );
+    await settle();
+    assert.equal(await evaluate("document.querySelector('[data-reader-pending]')?.dataset.readerPending"), "light");
+    assert.deepEqual(await browserBar(), siteBar);
+    console.log(
+      "PASS browser bar: dark reader and placeholder take #0a0a0a ahead of the site's color; light, sepia and leaving restore it.",
+    );
 
     // Typeface: chosen from the settings panel by keyboard, applied to the article, kept with the other preferences
     // across chapters and a reload. The reader is left and mounted again with these preferences set, so nothing the

@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { usePrefetchNextChapter } from "@/hooks/usePrefetchNextChapter";
 import { useReaderPreferences } from "@/hooks/useReaderPreferences";
 import { readerPanelThemeProps, ReaderPanelThemeProvider } from "@/lib/reader-panel-theme";
+import { useReaderThemeColor } from "@/lib/reader-theme-color";
 import {
   clearEarlyReaderPreferences,
   READER_FONTS,
@@ -207,6 +208,8 @@ export function ReaderView({
   } = useReaderPreferences();
   const t = useTranslations("reader");
   const scope = useReadingProgressScope();
+  // The browser's bar takes the dark theme's background while this reader is shown in it.
+  useReaderThemeColor(theme);
 
   const [progress, setProgress] = useState(0);
   const [storageError, setStorageError] = useState(false);

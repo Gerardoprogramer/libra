@@ -194,21 +194,38 @@ html[data-reader-early-theme="dark"]:has(
     :is([data-reader-theme], [data-reader-pending]):not([style*="display: none"], [style*="display: none"] *)
   ),
 [data-reader-panel-theme="dark"] {
+  /* Night reading on OLED screens: a near-black page (READER_DARK_THEME_COLOR, src/lib/reader-preferences.ts, which
+     the browser's bar takes), warm grey text rather than white, and raised surfaces a step lighter. Set in sRGB hex so
+     the bar's color and the contrast checks (reader-theme-color.test.ts) read the same values. Unlike sepia, it also
+     sets card, secondary and sidebar, so no component dropped into the reader shows the light paper. The ring meets
+     3:1 against the page and the panels at the 50% the controls draw it with (focus-visible:ring-ring/50). */
   color-scheme: dark;
-  --background: oklch(0.2 0.004 60);
-  --foreground: oklch(0.91 0.006 80);
-  --popover: oklch(0.24 0.005 60);
-  --popover-foreground: oklch(0.91 0.006 80);
-  --accent: oklch(0.3 0.007 60);
-  --accent-foreground: oklch(0.91 0.006 80);
-  --muted: oklch(0.26 0.006 60);
-  --muted-foreground: oklch(0.72 0.008 70);
-  --border: oklch(0.33 0.008 60);
-  --input: oklch(0.33 0.008 60);
-  --primary: oklch(0.74 0.1 25);
-  --primary-foreground: oklch(0.2 0.004 60);
-  --ring: oklch(0.68 0.1 25);
-  --destructive: oklch(0.72 0.15 25);
+  --background: #0a0a0a;
+  --foreground: #e3dfd8;
+  --card: #121212;
+  --card-foreground: #e3dfd8;
+  --popover: #121212;
+  --popover-foreground: #e3dfd8;
+  --secondary: #1c1c1c;
+  --secondary-foreground: #e3dfd8;
+  --accent: #222120;
+  --accent-foreground: #e3dfd8;
+  --muted: #1c1c1c;
+  --muted-foreground: #a8a29a;
+  --border: #3a3836;
+  --input: #3a3836;
+  --primary: #e0958c;
+  --primary-foreground: #0a0a0a;
+  --ring: #eaa9a1;
+  --destructive: #f08a80;
+  --sidebar: #121212;
+  --sidebar-foreground: #e3dfd8;
+  --sidebar-primary: #e0958c;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: #222120;
+  --sidebar-accent-foreground: #e3dfd8;
+  --sidebar-border: #3a3836;
+  --sidebar-ring: #eaa9a1;
 }
 
 /* Before hydration the server's HTML carries the default text size and width, as inline styles. The stored ones,
