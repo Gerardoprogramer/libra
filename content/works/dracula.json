@@ -1,0 +1,19 @@
+{
+  "es": {
+    "status": "draft",
+    "text": "Drácula, la novela de terror gótico de Bram Stoker, se publicó por primera vez en Londres en 1897. No la cuenta un único narrador: se compone de diarios, cartas, recortes de prensa y otros documentos escritos por sus personajes, de modo que el lector reconstruye los hechos casi al mismo tiempo que ellos. Comienza con Jonathan Harker, un joven abogado inglés que viaja a un castillo aislado de los Cárpatos para ayudar a un enigmático noble a cerrar la compra de una casa cerca de Londres. Lo que empieza como un encargo profesional se convierte en una inquietud creciente que acompaña a los personajes de regreso a Inglaterra. Con el tiempo, el libro se ha convertido en la obra de referencia de la literatura de vampiros: contribuyó a fijar la imagen moderna del vampiro y ha inspirado innumerables adaptaciones en el teatro y el cine."
+  },
+  "en": {
+    "status": "draft",
+    "text": "Dracula, Bram Stoker's Gothic horror novel, was first published in London in 1897. Rather than following a single narrator, it is assembled from journals, letters, newspaper cuttings and other documents written by its characters, so the reader pieces events together almost as they do. It opens with Jonathan Harker, a young English solicitor, travelling to a remote castle in the Carpathian Mountains to help a mysterious nobleman complete the purchase of a house near London. What begins as a business errand turns into a growing unease that follows the characters back to England. Over time it has become the touchstone of vampire literature: it helped shape the modern image of the vampire and has inspired countless adaptations on stage and screen."
+  },
+  "sources": [
+    "Wikipedia (en), «Dracula», consultada el 2026-10-25: primera publicación en mayo de 1897 por Archibald Constable and Company; forma epistolar (cartas, diarios, artículos de prensa); viaje de Jonathan Harker, abogado (solicitor), al castillo de los Cárpatos para ayudar al conde a comprar una casa cerca de Londres; valoración como obra central de la ficción de vampiros («centrepiece of vampire fiction»; la descripción la reformula, no la cita) y adaptaciones numerosas. https://en.wikipedia.org/wiki/Dracula",
+    "Edición de Libra: Project Gutenberg, eBook #345 (metadatos del EPUB local imports/dracula.epub)."
+  ],
+  "review": [
+    "Pendiente de revisión editorial humana en ambos idiomas antes de publicar.",
+    "«Londres» como lugar de primera publicación se deduce del editor (Archibald Constable and Company, Westminster); confirmar con una fuente bibliográfica.",
+    "La ficha almacena 1897 como año de la edición de Libra, aunque el texto procede del eBook de Project Gutenberg; ese dato no se usa en esta descripción."
+  ]
+}

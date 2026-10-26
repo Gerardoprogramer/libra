@@ -1,0 +1,176 @@
+import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { test } from "node:test";
+
+import {
+  countWords,
+  getWorkDescription,
+  parseWorkDescription,
+  summarizeDescription,
+  WORK_DESCRIPTION_METADATA_LENGTH,
+  WORK_DESCRIPTIONS,
+  type WorkDescription,
+} from "./work-descriptions";
+
+// A text of exactly `count` words.
+const words = (count: number, word = "palabra") => Array.from({ length: count }, () => word).join(" ");
+
+function file(overrides: Record<string, unknown> = {}) {
+  return {
+    es: { status: "published", text: words(120) },
+    en: { status: "draft", text: words(120, "word") },
+    sources: ["A reference."],
+    review: [],
+    ...overrides,
+  };
+}
+
+function works(entries: Record<string, unknown>): ReadonlyMap<string, WorkDescription> {
+  return new Map(Object.entries(entries).map(([slug, value]) => [slug, parseWorkDescription(slug, value)]));
+}
+
+test("the published text of the interface language is returned, and a draft language gives nothing", () => {
+  const library = works({
+    dracula: file({
+      es: { status: "published", text: `Texto en español. ${words(100)}` },
+      en: { status: "draft", text: `English text. ${words(100, "word")}` },
+    }),
+  });
+
+  assert.match(getWorkDescription("dracula", "es", library)!, /^Texto en español\./);
+  assert.equal(getWorkDescription("dracula", "en", library), null);
+});
+
+test("both languages published: each interface language gets its own text", () => {
+  const library = works({
+    marianela: file({
+      es: { status: "published", text: `Uno. ${words(100)}` },
+      en: { status: "published", text: `One. ${words(100, "word")}` },
+    }),
+  });
+
+  assert.match(getWorkDescription("marianela", "es", library)!, /^Uno\./);
+  assert.match(getWorkDescription("marianela", "en", library)!, /^One\./);
+});
+
+test("a work without a file, or a slug no file can have, has no description", () => {
+  const library = works({ dracula: file() });
+
+  for (const slug of ["frankenstein", "libra-test-missing-0f7b16", "../dracula", ""]) {
+    assert.equal(getWorkDescription(slug, "es", library), null, slug);
+  }
+});
+
+test("the text is trimmed, and its word limits are 80 and 180 inclusive", () => {
+  assert.equal(
+    parseWorkDescription("dracula", file({ es: { status: "draft", text: `  ${words(80)}  ` } })).es.text,
+    words(80),
+  );
+  parseWorkDescription("dracula", file({ es: { status: "draft", text: words(180) } }));
+
+  for (const count of [79, 181, 1]) {
+    assert.throws(
+      () => parseWorkDescription("dracula", file({ es: { status: "draft", text: words(count) } })),
+      new RegExp(`dracula\\.json es: ${count} words, expected 80–180`),
+    );
+  }
+  // Punctuation alone is not a word.
+  assert.equal(countWords("Uno , dos — tres ."), 3);
+});
+
+test("empty text, an unknown status and invalid shapes are rejected, naming the file and field", () => {
+  const cases: [Record<string, unknown>, RegExp][] = [
+    [{ es: { status: "draft", text: "" } }, /dracula\.json es: empty text/],
+    [{ es: { status: "draft", text: "   \t " } }, /dracula\.json es: empty text/],
+    [{ es: { status: "draft", text: 120 } }, /dracula\.json es: empty text/],
+    [{ en: { status: "review", text: words(120) } }, /dracula\.json en: unknown status "review"/],
+    [{ en: { status: "PUBLISHED", text: words(120) } }, /unknown status "PUBLISHED"/],
+    [{ en: { text: words(120) } }, /unknown status undefined/],
+    [{ en: undefined }, /dracula\.json en: missing/],
+    [{ es: { status: "draft", text: `${words(60)}\n\n${words(60)}` } }, /line breaks are not supported/],
+    [{ es: { status: "draft", text: words(120), stauts: "x" } }, /dracula\.json es: unknown field stauts/],
+    [{ summary: "x" }, /dracula\.json: unknown field summary/],
+    [{ sources: "A reference." }, /sources: must be a list of non-empty strings/],
+    [{ sources: [""] }, /sources: must be a list of non-empty strings/],
+    [{ review: [42] }, /review: must be a list of non-empty strings/],
+    [{ sources: [] }, /a published description needs its sources/],
+  ];
+
+  for (const [overrides, error] of cases) {
+    assert.throws(() => parseWorkDescription("dracula", file(overrides)), error, JSON.stringify(overrides));
+  }
+  assert.throws(() => parseWorkDescription("Dracula Novel", file()), /invalid book slug/);
+  assert.throws(() => parseWorkDescription("dracula", null), /must be an object/);
+  // Drafts may still be missing their sources.
+  parseWorkDescription(
+    "dracula",
+    file({ es: { status: "draft", text: words(120) }, en: { status: "draft", text: words(120) }, sources: [] }),
+  );
+});
+
+test("machine-summary boilerplate is rejected in both languages", () => {
+  for (const phrase of [
+    "This is an automatically generated summary.",
+    "An auto-generated description.",
+    "AI-generated text.",
+    "Este es un resumen generado automáticamente.",
+    "Resumen automático de la obra.",
+    "Texto generado por inteligencia artificial.",
+    "Descripción generada con IA.",
+  ]) {
+    assert.throws(
+      () => parseWorkDescription("dracula", file({ en: { status: "draft", text: `${phrase} ${words(100, "word")}` } })),
+      /contains an automatic-summary phrase/,
+      phrase,
+    );
+  }
+});
+
+test("metadata takes the description whole when it fits, or cut at a word with an ellipsis", () => {
+  assert.equal(summarizeDescription("  A short   description. "), "A short description.");
+
+  const long = `${words(40, "word")}, and more words after the comma.`;
+  const summary = summarizeDescription(long);
+  assert.ok(summary.length <= WORK_DESCRIPTION_METADATA_LENGTH, String(summary.length));
+  assert.match(summary, /^word( word)*…$/);
+  assert.ok(long.startsWith(summary.slice(0, -1)));
+  // A single word longer than the limit is cut inside it.
+  assert.equal(summarizeDescription("x".repeat(200), 10), `${"x".repeat(9)}…`);
+});
+
+// The content of content/works.
+
+const directory = new URL("../../content/works/", import.meta.url);
+const pilots = ["dracula", "frankenstein", "marianela", "treasure-island"];
+
+test("every file in content/works is registered under its file name, and valid", () => {
+  const slugs = readdirSync(directory)
+    .filter((name) => name.endsWith(".json"))
+    .map((name) => name.slice(0, -".json".length))
+    .sort();
+
+  assert.deepEqual([...WORK_DESCRIPTIONS.keys()].sort(), slugs);
+  for (const slug of slugs) {
+    assert.deepEqual(
+      WORK_DESCRIPTIONS.get(slug),
+      parseWorkDescription(slug, JSON.parse(readFileSync(new URL(`${slug}.json`, directory), "utf8"))),
+    );
+  }
+});
+
+test("the four pilot works are drafts in both languages, so none is shown yet", () => {
+  for (const slug of pilots) {
+    const work = WORK_DESCRIPTIONS.get(slug)!;
+    assert.ok(work, slug);
+
+    for (const locale of ["es", "en"] as const) {
+      assert.equal(work[locale].status, "draft", `${slug} ${locale}`);
+      assert.equal(getWorkDescription(slug, locale), null, `${slug} ${locale}`);
+      // The editorial target, inside the wider validation limits.
+      const count = countWords(work[locale].text);
+      assert.ok(count >= 100 && count <= 150, `${slug} ${locale}: ${count} words`);
+    }
+    assert.ok(work.sources.length > 0, slug);
+    assert.ok(work.review.length > 0, slug);
+  }
+});
