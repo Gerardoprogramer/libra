@@ -9,6 +9,7 @@ import { FiBookOpen } from "react-icons/fi";
 import { Badge } from "@/components/ui/badge";
 import { BookReadingAction } from "@/components/books/BookReadingAction";
 import { EditionDetails } from "@/components/books/EditionDetails";
+import { WorkDescription } from "@/components/books/WorkDescription";
 
 import { getBookBySlug, getBookContentLocales, getSitemapContent, type ContentLocale } from "@/db/queries/books";
 import { LibraryButton } from "@/components/books/LibraryButton";
@@ -17,6 +18,7 @@ import { createLocalizedMetadata } from "@/lib/seo-metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getAbsolutePublicImageUrl, getConfiguredSiteUrl } from "@/lib/site-url";
 import { getBookSocialImage } from "@/lib/social-metadata";
+import { getWorkDescription, summarizeDescription } from "@/lib/work-descriptions";
 
 import { Link } from "@/i18n/navigation";
 import { BookShareButton } from "@/components/books/BookShareButton";
@@ -95,13 +97,16 @@ export async function generateMetadata({ params }: BookPageProps): Promise<Metad
 
   const isContentLocaleMatch = contentLanguage === interfaceLocale;
   const siteUrl = getConfiguredSiteUrl();
+  const workDescription = getWorkDescription(book.slug, interfaceLocale);
 
   const metadata = createLocalizedMetadata({
     locale: interfaceLocale,
     pathname: `/books/${encodeURIComponent(slug)}`,
     title: authors ? `${book.edition.title} — ${authors}` : book.edition.title,
+    // The edition's own description, then the work's published one (shortened), then the template.
     description:
       book.edition.description?.trim() ||
+      (workDescription && summarizeDescription(workDescription)) ||
       t(authors ? "metadataDescription" : "metadataDescriptionWithoutAuthors", {
         title: book.edition.title,
         authors,
@@ -147,6 +152,12 @@ export default async function BookPage({ params }: BookPageProps) {
 
   const imageUrl = book.edition.coverUrl ? getAbsolutePublicImageUrl(book.edition.coverUrl) : null;
 
+  const workDescription = getWorkDescription(book.slug, interfaceLocale);
+  // Structured data repeats a description shown on the page, in full: the edition's, or else the work's. The work's
+  // is written in the interface language, so it is only used when that is the edition's (the Book's inLanguage).
+  const isContentLocaleMatch = getLanguageCode(book.edition.language) === interfaceLocale;
+  const structuredDescription = book.edition.description?.trim() || (isContentLocaleMatch ? workDescription : null);
+
   const authorEntities = siteUrl
     ? book.authors.map((author) => {
         const authorUrl = new URL(`/${interfaceLocale}/authors/${encodeURIComponent(author.slug)}`, siteUrl).href;
@@ -186,7 +197,7 @@ export default async function BookPage({ params }: BookPageProps) {
               inLanguage: book.edition.language,
               isAccessibleForFree: true,
               author: authorEntities,
-              ...(book.edition.description?.trim() ? { description: book.edition.description.trim() } : {}),
+              ...(structuredDescription ? { description: structuredDescription } : {}),
               ...(imageUrl ? { image: imageUrl } : {}),
               ...(book.edition.publicationYear !== null ? { datePublished: String(book.edition.publicationYear) } : {}),
               ...(book.categories.length > 0 ? { genre: book.categories.map((category) => category.name) } : {}),
@@ -412,6 +423,8 @@ export default async function BookPage({ params }: BookPageProps) {
             </div>
           </div>
         </section>
+
+        <WorkDescription description={workDescription} lang={interfaceLocale} />
 
         <section className="mx-auto max-w-4xl px-6 py-14">
           <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
