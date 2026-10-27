@@ -235,8 +235,9 @@ pnpm db:review -- --source-name "Archive name" --source-identifier "item-id"
 
 `show` (sin acción) es de solo lectura y muestra capítulos, palabras y autores. Cualquier otra acción escribe y exige
 `--confirm-database <id>` si la base es remota. `--publish` además exige, comprobado dentro de la transacción con la
-edición bloqueada: al menos un capítulo, ninguno vacío, texto legible, al menos un autor, título, idioma y `--notes` con
-los motivos (≥ 10 caracteres). `--publish` requiere que el operador proporcione `PUBLIC_DOMAIN_VERIFIED`, `LICENSED` u
+edición bloqueada: al menos un capítulo, ninguno vacío, texto legible, título, idioma y `--notes` con los motivos
+(≥ 10 caracteres). No exige autor: una obra anónima no tiene filas en `book_authors` y el catálogo la muestra como
+«Anónimo» / «Anonymous». `--publish` requiere que el operador proporcione `PUBLIC_DOMAIN_VERIFIED`, `LICENSED` u
 `ORIGINAL`; el programa no elige ni infiere la clasificación, y no emite conclusiones jurídicas.
 
 Cada decisión (`PUBLISH`, `REJECT`, `ARCHIVE`, `PREFER`) se registra en la tabla `edition_reviews` en la **misma
