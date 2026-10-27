@@ -12,6 +12,7 @@ import type { ApplyArgs, ImportDatabase } from "./import-database";
 import { importGutenbergBook, type ImportGutenbergOptions } from "./import-gutenberg";
 import { describeDatabaseTarget } from "./import-plan";
 import { ImportBlockedError, type EditionState } from "./import-state";
+import { R2_SETTINGS, removeRealStorageSettings, testImportDependencies } from "./import-test-guards";
 import { MemoryObjectStore } from "./object-store-fixtures";
 import { createSharpCodec, SharpEnvironmentError } from "./sharp-codec";
 
@@ -19,6 +20,7 @@ import { createSharpCodec, SharpEnvironmentError } from "./sharp-codec";
 // codec (unverified, so this runs on any platform). Images are stored and verified outside the write transaction,
 // only for a plan the policy accepts, and the write references nothing that was not verified. No PostgreSQL, R2 or
 // network.
+removeRealStorageSettings();
 
 const sentence = (label: string) => `${label} sentence keeps the reader company. `.repeat(20).trim();
 const plate = encodePng({ width: 12, height: 8 });
@@ -137,14 +139,31 @@ function codec(reject: Buffer[] = []): () => Promise<ImageCodec> {
 }
 
 function dependencies(database: ImportDatabase, extra: Record<string, unknown> = {}) {
-  return {
+  return testImportDependencies({
     database,
     createCodec: codec(),
     uploadCover: async () => "https://covers.example/covers/uploaded.jpg",
     revalidate: async () => true,
     ...extra,
-  };
+  });
 }
+
+test("an importer test cannot reach the real cover upload by accident", async (t) => {
+  quiet(t);
+  // The guard refuses dependencies without a test cover upload, or with the real one.
+  const { uploadCover } = await import("./r2");
+  const { database } = fakeDatabase([]);
+  const withoutCover = { database };
+  const withRealCover = { database, uploadCover };
+  const withoutFunction = { database, uploadCover: "https://covers.example/x.jpg" };
+  for (const refused of [withoutCover, withRealCover, withoutFunction]) {
+    assert.throws(() => testImportDependencies(refused), /must inject a test uploadCover/);
+  }
+
+  // And should the real upload still be reached, it would stop on its first setting: none is in this process. Only
+  // presence is checked; no value is read.
+  for (const name of R2_SETTINGS) assert.ok(!(name in process.env), `${name} is not in this test process`);
+});
 
 test("an unsupported codec environment stops the import before the EPUB is parsed or anything is touched", async (t) => {
   quiet(t);

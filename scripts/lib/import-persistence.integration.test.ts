@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { after, before, test, type TestContext } from "node:test";
 
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
@@ -20,19 +21,25 @@ import { encodePng } from "./epub-image-fixtures";
 import { buildEpub3 } from "./epub-fixtures";
 import {
   assertEditionConsistent,
+  createImportDatabase,
   createPostgresImportDatabase,
   EditionConsistencyError,
   ImageAssetConflictError,
   type ImportDatabase,
 } from "./import-database";
 import { importGutenbergBook, type ImportGutenbergOptions } from "./import-gutenberg";
+import { describeDatabaseTarget } from "./import-plan";
+import { removeRealStorageSettings, testImportDependencies } from "./import-test-guards";
 import { MemoryObjectStore } from "./object-store-fixtures";
+import { parseEpub } from "./parse-epub";
 import { createSharpCodec } from "./sharp-codec";
 
 // The import persisted in a real PostgreSQL: a throwaway database on the local disposable container, migrations
 // 0000–0010 applied to it, and the importer writing through its real postgres.js implementation. Opt-in only
 // (LIBRA_DISPOSABLE_POSTGRES=1, a switch, not a connection string): the target is fixed in disposable-postgres.ts and
 // checked before any connection. Images go to an in-memory object store. Nothing else is contacted.
+
+removeRealStorageSettings();
 
 const enabled = process.env.LIBRA_DISPOSABLE_POSTGRES === "1";
 const skip = enabled
@@ -130,13 +137,13 @@ function run(
       confirmDatabase: database.target.token,
       ...extra,
     },
-    {
+    testImportDependencies({
       database,
       createCodec: async () => createSharpCodec(),
       objectStore: store,
       uploadCover: async () => "https://covers.example/covers/unused.jpg",
       revalidate: async () => true,
-    },
+    }),
   );
 }
 
@@ -411,6 +418,224 @@ test(
       assert.equal(await count("books", "slug = 'orphan-book'"), 0, "rolled back");
     } finally {
       await client.end();
+    }
+  },
+);
+
+/*
+ * The identity race, made deterministic. Transaction A holds an uncommitted image_assets row on its own connection;
+ * import B, through the real write transaction (READ COMMITTED), reaches the INSERT ... ON CONFLICT DO NOTHING of the
+ * same identity. B waiting on A is proven from PostgreSQL itself (pg_stat_activity and pg_blocking_pids), never
+ * assumed from timing; only then does A commit or roll back. Every wait has a time limit.
+ */
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${ms} ms: ${label}`)), ms);
+  });
+  try {
+    return await Promise.race([promise, limit]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Polls a PostgreSQL condition until it holds; false when the limit passes first. */
+async function eventually(check: () => Promise<boolean>, ms: number) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (await check()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return false;
+}
+
+/** The backends waiting on a lock held by `holder` while inserting into image_assets (quoted or not). */
+async function insertsBlockedBy(holder: number) {
+  return db.sql`
+    SELECT pid FROM pg_stat_activity
+    WHERE datname = current_database()
+      AND wait_event_type = 'Lock'
+      AND query ~* '^[[:space:]]*insert[[:space:]]+into[[:space:]]+"?image_assets"?'
+      AND ${holder}::int = ANY(pg_blocking_pids(pid))`;
+}
+
+/**
+ * Ends A before B: B may still be blocked on A's row, and anything queued on B's connection would wait for it.
+ * Ending A's connection aborts its transaction if it is still open.
+ */
+async function endInOrder(a: postgres.ReservedSql, clientA: postgres.Sql, clientB: postgres.Sql) {
+  await a.unsafe("ROLLBACK").catch(() => {});
+  a.release();
+  await clientA.end({ timeout: 5 });
+  await clientB.end({ timeout: 5 });
+}
+
+/** What the importer will compute for the only image of `file`: the identity and bytes A plants. */
+async function plannedImage(file: string) {
+  const parsed = await parseEpub(await fs.readFile(file), {}, { codec: createSharpCodec() });
+  assert.equal(parsed.images?.length, 1);
+  return parsed.images![0];
+}
+
+async function race(t: TestContext, ending: "COMMIT" | "ROLLBACK", plate: Buffer, gutenbergId: string) {
+  quiet(t);
+  const file = await epubFile(t, plate, `Race ${ending}`);
+  const image = await plannedImage(file);
+
+  // A: the planted identity, left uncommitted on a reserved connection.
+  const clientA = postgres(db.url, { max: 1, ssl: false, onnotice: () => {} });
+  const a = await clientA.reserve();
+  const queriesB: string[] = [];
+  const clientB = postgres(db.url, {
+    max: 1,
+    ssl: false,
+    prepare: false,
+    onnotice: () => {},
+    debug: (_connection, query) => queriesB.push(query),
+  });
+  try {
+    await a`BEGIN`;
+    const [{ pid: holder }] = await a`SELECT pg_backend_pid() AS pid`;
+    const [planted] = await a`
+      INSERT INTO image_assets (source_sha256, codec_id, max_width, sha256, object_key, media_type, width, height, byte_size)
+      VALUES (${image.sourceSha256}, ${image.codec}, ${image.maxWidth}, ${image.sha256}, ${image.key},
+              ${image.mediaType}, ${image.width}, ${image.height}, ${image.bytes})
+      RETURNING id`;
+
+    // B: the real import, through the real write transaction, on its own connection. Each of its transactions first
+    // reports the isolation PostgreSQL applies to it, read after drizzle has set the importer's configuration.
+    const ormB = drizzle(clientB);
+    const isolationsB: string[] = [];
+    type Transaction = typeof ormB.transaction;
+    const observedB: typeof ormB = Object.assign(Object.create(ormB), {
+      transaction: ((body: Parameters<Transaction>[0], config?: Parameters<Transaction>[1]) =>
+        ormB.transaction(async (tx) => {
+          const [row] = await tx.execute<{ isolation: string }>(
+            sql`SELECT current_setting('transaction_isolation') AS isolation`,
+          );
+          isolationsB.push(row.isolation);
+          return body(tx);
+        }, config)) as Transaction,
+    });
+    const databaseB = createImportDatabase(observedB, describeDatabaseTarget(db.url), async () => {});
+    let settled = false;
+    const outcomeB = run(file, gutenbergId, `race-${ending.toLowerCase()}`, databaseB).then(
+      (outcome) => {
+        settled = true;
+        return { outcome, error: null as unknown };
+      },
+      (error: unknown) => {
+        settled = true;
+        return { outcome: null, error };
+      },
+    );
+
+    const waited = await eventually(async () => (await insertsBlockedBy(holder)).length === 1, 15_000);
+    assert.ok(waited, "B never waited on A's uncommitted row: the race was not exercised");
+    assert.equal(settled, false, "B finished while A still held the row");
+
+    await a.unsafe(ending);
+    const { outcome, error } = await withTimeout(outcomeB, 30_000, "import B after A ended");
+    assert.equal(error, null, String(error));
+    assert.equal(outcome?.status, "applied");
+
+    // Inside PostgreSQL: B's read-only check ran under REPEATABLE READ and its write under READ COMMITTED.
+    assert.deepEqual(isolationsB, ["repeatable read", "read committed"]);
+    // And the statements the client sent for them.
+    assert.ok(queriesB.includes("set transaction isolation level read committed"));
+    assert.ok(queriesB.includes("set transaction isolation level repeatable read read only"));
+
+    const rows = await db.sql`
+      SELECT id, sha256, object_key FROM image_assets
+      WHERE source_sha256 = ${image.sourceSha256} AND codec_id = ${image.codec} AND max_width = ${image.maxWidth}`;
+    assert.equal(rows.length, 1, "exactly one asset for the identity");
+    assert.equal(rows[0].sha256, image.sha256);
+    assert.equal(rows[0].object_key, image.key);
+    const links = await db.sql`
+      SELECT ea.asset_id FROM edition_assets ea JOIN editions e ON e.id = ea.edition_id
+      WHERE e.source_identifier = ${gutenbergId}`;
+    assert.equal(links.length, 1);
+    assert.equal(links[0].asset_id, rows[0].id);
+    if (ending === "COMMIT") assert.equal(rows[0].id, planted.id, "B reused the row A committed");
+    else assert.notEqual(rows[0].id, planted.id, "A's row was rolled back; B inserted its own");
+  } finally {
+    await endInOrder(a, clientA, clientB);
+  }
+}
+
+// A test-level limit on top of the waits inside: a race test can never hang the run.
+const RACE_TIMEOUT = 90_000;
+
+test(
+  "identity race: B waits on A's uncommitted asset and, after A commits, reuses it under READ COMMITTED",
+  { skip, timeout: RACE_TIMEOUT },
+  (t) => race(t, "COMMIT", encodePng({ width: 17, height: 13 }), "31"),
+);
+
+test(
+  "identity race: B waits on A's uncommitted asset and, after A rolls back, inserts its own",
+  { skip, timeout: RACE_TIMEOUT },
+  (t) => race(t, "ROLLBACK", encodePng({ width: 19, height: 7 }), "32"),
+);
+
+test(
+  "control: the same race under REPEATABLE READ cannot read the winner, so the isolation level is what makes it work",
+  { skip, timeout: RACE_TIMEOUT },
+  async () => {
+    const source = "c".repeat(64);
+    const digest = "d".repeat(64);
+    const row = {
+      source_sha256: source,
+      codec_id: "race-control",
+      max_width: 1600,
+      sha256: digest,
+      object_key: `illustrations/${digest}.png`,
+      media_type: "image/png",
+      width: 10,
+      height: 5,
+      byte_size: 100,
+    };
+    const clientA = postgres(db.url, { max: 1, ssl: false, onnotice: () => {} });
+    const clientB = postgres(db.url, { max: 1, ssl: false, onnotice: () => {} });
+    const a = await clientA.reserve();
+    const b = await clientB.reserve();
+    try {
+      await a`BEGIN`;
+      const [{ pid: holder }] = await a`SELECT pg_backend_pid() AS pid`;
+      await a`INSERT INTO image_assets ${a(row)}`;
+
+      // B takes its snapshot before A commits, as an import's write transaction would.
+      await b`BEGIN ISOLATION LEVEL REPEATABLE READ`;
+      await b`SELECT 1`;
+      const inserted = b`
+        INSERT INTO image_assets ${b(row)}
+        ON CONFLICT (source_sha256, codec_id, max_width) DO NOTHING RETURNING id`.then(
+        (rows) => ({ rows: [...rows], error: null as unknown }),
+        (error: unknown) => ({ rows: null, error }),
+      );
+      const waited = await eventually(async () => (await insertsBlockedBy(holder)).length === 1, 15_000);
+      assert.ok(waited, "B never waited on A's uncommitted row");
+      await a`COMMIT`;
+
+      const { rows, error } = await withTimeout(inserted, 15_000, "control insert after A committed");
+      if (error) {
+        // PostgreSQL refuses: the conflicting row is not in B's snapshot.
+        assert.equal((error as { code?: string }).code, "40001", String(error));
+      } else {
+        assert.deepEqual(rows, []);
+        const seen = await b`SELECT id FROM image_assets WHERE source_sha256 = ${source} AND codec_id = 'race-control'`;
+        assert.equal(seen.length, 0, "the winner is invisible to B's snapshot");
+      }
+    } finally {
+      // A first, so B is no longer blocked when its own rollback is sent.
+      await a.unsafe("ROLLBACK").catch(() => {});
+      a.release();
+      await clientA.end({ timeout: 5 });
+      await withTimeout(b.unsafe("ROLLBACK"), 10_000, "control rollback").catch(() => {});
+      b.release();
+      await clientB.end({ timeout: 5 });
     }
   },
 );

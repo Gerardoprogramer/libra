@@ -10,10 +10,12 @@ import type { ApplyArgs, ImportDatabase } from "./import-database";
 import { importGutenbergBook, type ImportGutenbergOptions } from "./import-gutenberg";
 import { describeDatabaseTarget } from "./import-plan";
 import { ImportBlockedError, type EditionState } from "./import-state";
+import { removeRealStorageSettings, testImportDependencies } from "./import-test-guards";
 import { parseEpub } from "./parse-epub";
 import { createSharpCodec } from "./sharp-codec";
 
 // Everything here runs against an in-memory database double: no PostgreSQL, R2 or network.
+removeRealStorageSettings();
 
 const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
 const sentence = (title: string, words = 60) => `Texto de ${title}. `.repeat(Math.ceil(words / 3)).trim();
@@ -169,7 +171,7 @@ function dependencies(database: ImportDatabase) {
   return {
     uploads,
     revalidations,
-    dependencies: {
+    dependencies: testImportDependencies({
       database,
       // The real sharp codec, unverified: these tests run on any platform, not only the approved one.
       createCodec: async () => createSharpCodec(),
@@ -181,7 +183,7 @@ function dependencies(database: ImportDatabase) {
         revalidations.push(tags);
         return true;
       },
-    },
+    }),
   };
 }
 
