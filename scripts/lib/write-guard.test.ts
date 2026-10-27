@@ -117,11 +117,27 @@ test("L09: a complete edition with recorded grounds can be published", () => {
   assert.deepEqual(findPublicationProblems(ready), []);
 });
 
-test("L09: publishing is refused for empty, textless or authorless editions and for missing grounds", () => {
+test("L09: an anonymous work (no authors) can be published when everything else is complete", () => {
+  assert.deepEqual(findPublicationProblems({ ...ready, authorCount: 0 }), []);
+});
+
+test("L09: an anonymous work is still refused for the other problems", () => {
+  const anonymous = { ...ready, authorCount: 0 };
+  assert.match(findPublicationProblems({ ...anonymous, chapterCount: 0, wordCount: 0 }).join("\n"), /no chapters/);
+  assert.match(
+    findPublicationProblems({ ...anonymous, emptyChapterCount: 1 }).join("\n"),
+    /1 chapter\(s\) have no text/,
+  );
+  assert.match(
+    findPublicationProblems({ ...anonymous, notes: undefined }).join("\n"),
+    /--notes must record the grounds/,
+  );
+});
+
+test("L09: publishing is refused for empty or textless editions and for missing grounds", () => {
   assert.match(findPublicationProblems({ ...ready, chapterCount: 0, wordCount: 0 }).join("\n"), /no chapters/);
   assert.match(findPublicationProblems({ ...ready, emptyChapterCount: 2 }).join("\n"), /2 chapter\(s\) have no text/);
   assert.match(findPublicationProblems({ ...ready, wordCount: 0 }).join("\n"), /no readable text/);
-  assert.match(findPublicationProblems({ ...ready, authorCount: 0 }).join("\n"), /no author/);
   assert.match(findPublicationProblems({ ...ready, notes: undefined }).join("\n"), /--notes must record the grounds/);
   assert.match(findPublicationProblems({ ...ready, notes: "ok" }).join("\n"), /--notes must record the grounds/);
   assert.match(
