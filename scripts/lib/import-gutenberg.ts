@@ -15,10 +15,18 @@ import {
   type ImportFlags,
   type PlanInput,
 } from "./import-plan";
+import type { ImageCodec } from "./epub-images";
 import { ImportBlockedError, type StateRequest } from "./import-state";
-import { parseEpub } from "./parse-epub";
+import { storeImages, type ObjectStore } from "./object-store";
+import { parseEpub, type ImageWarning } from "./parse-epub";
 import { coverKeyFor, uploadCover } from "./r2";
 import { revalidateEditorialCache } from "./revalidate-cache";
+import { createVerifiedSharpCodec } from "./sharp-codec";
+
+/** One line per unusable image, naming the edition, the chapter, the image and why. */
+export function formatImageWarning(gutenbergId: string, warning: ImageWarning) {
+  return `Image unavailable in Gutenberg ${gutenbergId}, chapter ${warning.chapter} ("${warning.chapterTitle}"): ${warning.sourcePath ?? warning.reference} — ${warning.code}: ${warning.reason}. The figure keeps its alt text and caption, without an image.`;
+}
 
 export interface ImportGutenbergOptions {
   file: string;
@@ -49,6 +57,17 @@ export interface ImportDependencies {
   database?: ImportDatabase;
   uploadCover?: typeof uploadCover;
   revalidate?: typeof revalidateEditorialCache;
+  /**
+   * The codec that normalizes the EPUB's images. By default the sharp codec verified against the approved
+   * environments, before the EPUB is parsed: an unsupported environment stops the import before any image is
+   * processed. Tests inject one.
+   */
+  createCodec?: () => Promise<ImageCodec>;
+  /**
+   * Where normalized images are stored and verified. There is no default: until a store with a verified bucket and
+   * environment exists, an import that would write images is refused before anything is written.
+   */
+  objectStore?: ObjectStore;
 }
 
 export type ImportOutcome =
@@ -112,7 +131,12 @@ export async function importGutenbergBook(
 
   const file = await fs.readFile(filePath);
 
-  const epub = await parseEpub(file);
+  // The codec is verified before the EPUB is parsed: an unsupported environment processes no image at all.
+  const codec = await (dependencies.createCodec ?? createVerifiedSharpCodec)();
+
+  const epub = await parseEpub(file, {}, { codec });
+  const images = epub.images;
+  if (!images) throw new Error("The EPUB was parsed without normalizing its images.");
 
   const slugWasExplicit = requestedSlug !== undefined;
   const bookSlug = requestedSlug ?? slugify(epub.title);
@@ -159,7 +183,16 @@ export async function importGutenbergBook(
     if (extraction.discarded.length > 40) console.log(`  ... and ${extraction.discarded.length - 40} more`);
   }
 
-  for (const warning of extraction.warnings) console.warn(`WARNING: ${warning}`);
+  console.log(
+    `Images: ${images.length} normalized for the figures (codec ${codec.id}); ${epub.imageWarnings.length} figure(s) without a usable image.`,
+  );
+
+  // The extractor's warnings and every unusable image: each needs a human decision (--accept-warnings).
+  const warnings = [
+    ...extraction.warnings,
+    ...epub.imageWarnings.map((warning) => formatImageWarning(gutenbergId, warning)),
+  ];
+  for (const warning of warnings) console.warn(`WARNING: ${warning}`);
 
   console.log("");
 
@@ -208,7 +241,20 @@ export async function importGutenbergBook(
           ? coverKeyFor({ bookSlug, gutenbergId, data: epub.cover.data, extension: epub.cover.extension })
           : null,
         chapters: epub.chapters,
+        images: images.map((image) => ({
+          sourcePath: image.sourcePath,
+          sourceSha256: image.sourceSha256,
+          codecId: image.codec,
+          maxWidth: image.maxWidth,
+          sha256: image.sha256,
+          key: image.key,
+          mediaType: image.mediaType,
+          width: image.width,
+          height: image.height,
+          bytes: image.bytes,
+        })),
       },
+      warnings,
     };
 
     const request: StateRequest = {
@@ -225,11 +271,11 @@ export async function importGutenbergBook(
 
     const evaluate = (state: Parameters<typeof buildImportDiff>[0]) => {
       const diff = buildImportDiff(state, input);
-      const planDigest = computePlanDigest(state, input, diff);
+      const planDigest = computePlanDigest(state, input, diff, flags);
       const violations = evaluateImportPolicy({
         diff,
         digest: planDigest,
-        extractionWarnings: extraction.warnings,
+        extractionWarnings: warnings,
         slugWasExplicit,
         flags,
       });
@@ -267,8 +313,9 @@ export async function importGutenbergBook(
         console.log("BLOCKED: --apply would be refused for these reasons:");
         for (const violation of violations) console.log(`  - ${violation}`);
       } else if (diff.hasChanges) {
+        // With warnings, this point is only reached when --accept-warnings was given, and the digest includes it.
         console.log(
-          `--apply would write this plan. Required: --confirm-database ${target.token}${diff.edition.publicationStatus === "PUBLISHED" ? ` --revise-published --plan-hash ${planDigest}` : ""}.`,
+          `--apply would write this plan. Required: --confirm-database ${target.token}${warnings.length ? " --accept-warnings" : ""}${diff.edition.publicationStatus === "PUBLISHED" ? ` --revise-published --plan-hash ${planDigest}` : ""}.`,
         );
       }
 
@@ -292,6 +339,44 @@ export async function importGutenbergBook(
 
     const upload = dependencies.uploadCover ?? uploadCover;
 
+    /*
+     * IMAGES, OUTSIDE ANY TRANSACTION
+     *
+     * A read-only check first, so a plan the policy refuses stores nothing. Then every image is stored and verified
+     * (read back and hashed) before the transaction opens; the transaction itself makes no network call for them.
+     * An object stored for a write that then fails is left unreferenced, never referenced unverified; the next run
+     * verifies and reuses it.
+     */
+    let verifiedKeys: ReadonlySet<string> = new Set();
+    {
+      let preview;
+      try {
+        preview = evaluate(await database.readState(request));
+      } catch (error) {
+        throw new Error(
+          `Could not read the current database state (${formatImportError(error)}). Nothing was stored or written.`,
+        );
+      }
+      if (preview.violations.length) throw new ImportBlockedError(preview.violations);
+
+      if (preview.diff.hasChanges && images.length) {
+        const store = dependencies.objectStore;
+        if (!store) {
+          throw new Error(
+            `This plan writes ${images.length} image(s), but image storage is not enabled: no object store with a verified bucket and environment is configured. Nothing was stored or written.`,
+          );
+        }
+        console.log("");
+        console.log(`Storing and verifying ${images.length} image(s) in ${store.description}...`);
+        const stored = await storeImages(store, images);
+        const uploaded = [...stored.values()].filter((outcome) => outcome === "uploaded").length;
+        console.log(
+          `Images verified: ${stored.size} object(s), ${uploaded} uploaded, ${stored.size - uploaded} reused.`,
+        );
+        verifiedKeys = new Set(stored.keys());
+      }
+    }
+
     const outcome = await database.write(request, async (state, operations): Promise<ImportOutcome> => {
       // Everything is decided again here, from the state read under lock, never from the earlier dry run.
       const { diff, planDigest, violations } = evaluate(state);
@@ -305,6 +390,14 @@ export async function importGutenbergBook(
       if (violations.length) throw new ImportBlockedError(violations);
 
       if (!diff.hasChanges) return { status: "unchanged", diff, planDigest };
+
+      // The database changed since the check above, and the plan now needs images that were not stored and verified.
+      const unprepared = images.filter((image) => !verifiedKeys.has(image.key));
+      if (unprepared.length) {
+        throw new Error(
+          `The plan under lock needs ${unprepared.length} image(s) that were not stored and verified before the transaction; nothing was written. Run the import again.`,
+        );
+      }
 
       let coverUrl: string | null = null;
       const coverChanges = !state.edition || diff.metadata.some((change) => change.field === "cover");
@@ -336,6 +429,8 @@ export async function importGutenbergBook(
           sourceUrl: `https://www.gutenberg.org/ebooks/${gutenbergId}`,
           coverUrl,
         },
+        images: input.incoming.images,
+        verifiedKeys,
       });
 
       console.log("");

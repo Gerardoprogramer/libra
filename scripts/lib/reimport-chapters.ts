@@ -23,7 +23,10 @@ function normalizedTitle(title: string) {
  * slug), never by chapter number: a new prologue shifts every number. Unmatched existing chapters are
  * `removed`. Pure: it neither writes nor decides whether a removal is acceptable.
  */
-export function matchChapters<Incoming extends ChapterContent>(existing: ExistingChapter[], incoming: Incoming[]) {
+export function matchChapters<Existing extends ExistingChapter, Incoming extends ChapterContent>(
+  existing: Existing[],
+  incoming: Incoming[],
+) {
   if (!incoming.length) throw new Error("Cannot replace an edition with no chapters.");
   if (
     new Set(incoming.map((chapter) => chapter.slug)).size !== incoming.length ||
@@ -31,7 +34,7 @@ export function matchChapters<Incoming extends ChapterContent>(existing: Existin
   ) {
     throw new Error("Duplicate chapter slug or number in import.");
   }
-  const matches = new Map<number, ExistingChapter>();
+  const matches = new Map<number, Existing>();
   const used = new Set<string>();
   const oldHashes = existing.map((chapter) => hash(chapter.content));
   const newHashes = incoming.map((chapter) => hash(chapter.content));

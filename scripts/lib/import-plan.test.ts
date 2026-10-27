@@ -12,15 +12,24 @@ import {
 } from "./import-plan";
 import type { EditionState } from "./import-state";
 
+/** One paragraph block per paragraph of the text: blocks that derive exactly `content`. */
+const blocksFor = (content: string) => ({
+  version: 1 as const,
+  blocks: content.split("\n\n").map((text) => ({ type: "paragraph" as const, content: [{ text }] })),
+});
+
 const chapter = (number: number, slug: string, content = `${slug} text`, title = slug) => ({
   number,
   slug,
   title,
   content,
   wordCount: content.split(/\s+/).length,
+  blocks: blocksFor(content),
 });
 
-const stored = (items: ReturnType<typeof chapter>[]) => items.map((item) => ({ ...item, id: `id-${item.slug}` }));
+/** Stored as an earlier import with blocks wrote them. */
+const stored = (items: ReturnType<typeof chapter>[]): EditionState["chapters"] =>
+  items.map((item) => ({ ...item, id: `id-${item.slug}` }));
 
 function state(overrides: Partial<EditionState> = {}): EditionState {
   return {
@@ -41,6 +50,7 @@ function state(overrides: Partial<EditionState> = {}): EditionState {
       publicationStatus: "PUBLISHED",
     },
     chapters: stored([chapter(1, "one"), chapter(2, "two"), chapter(3, "three")]),
+    assets: [],
     progressChapterIds: [],
     progressRows: [],
     ...overrides,
@@ -60,15 +70,17 @@ function input(chapters: ReturnType<typeof chapter>[], extra: Partial<PlanInput>
       creators: ["Austen, Jane"],
       coverKey: null,
       chapters,
+      images: [],
     },
+    warnings: [],
     ...extra,
   };
 }
 
 const same = [chapter(1, "one"), chapter(2, "two", "two rewritten"), chapter(3, "three")];
 
-function digestOf(current: EditionState, plan: PlanInput) {
-  return computePlanDigest(current, plan, buildImportDiff(current, plan));
+function digestOf(current: EditionState, plan: PlanInput, acceptWarnings = false) {
+  return computePlanDigest(current, plan, buildImportDiff(current, plan), { acceptWarnings });
 }
 
 test("REVIEW: the plan digest changes with the EPUB bytes, any stored chapter, the progress set and the metadata", () => {
@@ -113,7 +125,7 @@ test("REVIEW: a digest reviewed for one plan is refused for any other plan on a 
     const diff = buildImportDiff(against, plan);
     return evaluateImportPolicy({
       diff,
-      digest: computePlanDigest(against, plan, diff),
+      digest: computePlanDigest(against, plan, diff, flags),
       extractionWarnings: [],
       slugWasExplicit: true,
       flags,
@@ -148,7 +160,7 @@ test("REVIEW: removed chapters and slug changes are listed explicitly, and progr
 
   const violations = evaluateImportPolicy({
     diff,
-    digest: computePlanDigest(current, plan, diff),
+    digest: computePlanDigest(current, plan, diff, defaultImportFlags),
     extractionWarnings: [],
     slugWasExplicit: true,
     flags: { ...defaultImportFlags, allowRemovals: true, allowSlugChanges: true },

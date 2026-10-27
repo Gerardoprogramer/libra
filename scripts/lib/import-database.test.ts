@@ -2,9 +2,17 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { drizzle } from "drizzle-orm/pg-proxy";
+import { drizzle as postgresJsDrizzle } from "drizzle-orm/postgres-js";
+import type { Sql } from "postgres";
 
-import { createOperations, loadState, type Transaction } from "./import-database";
-import { buildImportDiff, type PlanInput } from "./import-plan";
+import {
+  createImportDatabase,
+  createOperations,
+  loadState,
+  WRITE_TRANSACTION,
+  type Transaction,
+} from "./import-database";
+import { buildImportDiff, describeDatabaseTarget, type PlanInput } from "./import-plan";
 import type { EditionState, StateRequest } from "./import-state";
 
 // The real drizzle query builders generate the SQL; a pg-proxy driver records it and returns fixture rows.
@@ -40,7 +48,7 @@ const editionRow = [
   "PUBLIC_DOMAIN_VERIFIED",
   "PUBLISHED",
 ];
-// chapters columns: id, edition_id, number, slug, title, content, word_count, created_at, updated_at
+// chapters columns: id, edition_id, number, slug, title, content, blocks, word_count, created_at, updated_at
 const chapterRow = (id: string, number: number, slug: string, content = `${slug} text`) => [
   id,
   "edition-1",
@@ -48,6 +56,7 @@ const chapterRow = (id: string, number: number, slug: string, content = `${slug}
   slug,
   slug,
   content,
+  null,
   3,
   "2026-01-01T00:00:00Z",
   "2026-01-01T00:00:00Z",
@@ -68,7 +77,7 @@ test("a dry run reads the state without any lock and asks only which chapters ho
 
   const state = await loadState(tx, request, false);
 
-  assert.equal(statements.length, 6);
+  assert.equal(statements.length, 7);
   assert.ok(
     statements.every(({ sql }) => /^select /i.test(sql)),
     "only SELECT statements",
@@ -87,6 +96,15 @@ test("a dry run reads the state without any lock and asks only which chapters ho
     ["one", "two"],
   );
   assert.deepEqual(state.bookAuthors, [{ id: "author-1", slug: "jane-austen", name: "Jane Austen" }]);
+  // The stored blocks are read as they are (here a chapter imported before blocks), with the edition's images.
+  assert.deepEqual(
+    state.chapters.map((chapter) => chapter.blocks),
+    [null, null],
+  );
+  const assets = statements.find(({ sql }) => /from "edition_assets"/.test(sql))!;
+  assert.match(assets.sql, /inner join "image_assets"/);
+  assert.ok(assets.params.includes("edition-1"));
+  assert.deepEqual(state.assets, []);
 });
 
 test("a write reads the edition, its chapters and the saved positions FOR UPDATE", async () => {
@@ -96,6 +114,8 @@ test("a write reads the edition, its chapters and the saved positions FOR UPDATE
 
   const locked = statements.filter(({ sql }) => /for update/i.test(sql));
   assert.equal(locked.length, 3);
+  // Assets may be shared with other editions: read, never locked.
+  assert.ok(!locked.some(({ sql }) => /image_assets|edition_assets/.test(sql)));
   assert.ok(locked.some(({ sql }) => /from "editions"/.test(sql)));
   assert.ok(locked.some(({ sql }) => /from "chapters"/.test(sql)));
   assert.ok(locked.some(({ sql }) => /from "reading_progress"/.test(sql)));
@@ -111,6 +131,7 @@ function stateFixture(overrides: Partial<EditionState> = {}): EditionState {
     creatorAuthors: [],
     edition: null,
     chapters: [],
+    assets: [],
     progressChapterIds: [],
     progressRows: [],
     ...overrides,
@@ -123,6 +144,7 @@ const chapter = (number: number, slug: string, content = `${slug} text`) => ({
   title: slug,
   content,
   wordCount: 3,
+  blocks: { version: 1 as const, blocks: [{ type: "paragraph" as const, content: [{ text: content }] }] },
 });
 
 function input(chapters: ReturnType<typeof chapter>[], extra: Partial<PlanInput["incoming"]> = {}): PlanInput {
@@ -138,12 +160,16 @@ function input(chapters: ReturnType<typeof chapter>[], extra: Partial<PlanInput[
       creators: ["Austen, Jane"],
       coverKey: null,
       chapters,
+      images: [],
       ...extra,
     },
+    warnings: [],
   };
 }
 
 const applyArgs = (state: EditionState, plan: PlanInput, coverUrl: string | null = null) => ({
+  images: plan.incoming.images,
+  verifiedKeys: new Set<string>(),
   state,
   diff: buildImportDiff(state, plan),
   gutenbergId: "7",
@@ -292,4 +318,41 @@ test("edition metadata updates never include the copyright or publication status
   ]) {
     assert.ok(!update.sql.includes(`"${column}"`), `${column} must not be written`);
   }
+});
+
+/** A postgres.js client double: records every statement and answers with no rows. Never connects. */
+function fakePostgresClient() {
+  const statements: string[] = [];
+  const noRows = () => Object.assign(Promise.resolve([]), { values: () => Promise.resolve([]) });
+  const client = {
+    options: { parsers: {}, serializers: {} },
+    unsafe(query: string) {
+      statements.push(query);
+      return noRows();
+    },
+    begin(callback: (transaction: unknown) => Promise<unknown>) {
+      statements.push("begin");
+      return callback(client);
+    },
+  };
+  return { client: client as unknown as Sql, statements };
+}
+
+test("the write transaction is READ COMMITTED, set before the advisory lock; the read stays REPEATABLE READ", async () => {
+  assert.deepEqual(WRITE_TRANSACTION, { isolationLevel: "read committed" });
+  const { client, statements } = fakePostgresClient();
+  const database = createImportDatabase(
+    postgresJsDrizzle(client),
+    describeDatabaseTarget("postgres://libra:not-a-password@127.0.0.1:5432/libra"),
+    async () => {},
+  );
+
+  await database.write(request, async () => "done");
+  assert.equal(statements[0], "begin");
+  assert.equal(statements[1], "set transaction isolation level read committed");
+  assert.match(statements[2], /pg_advisory_xact_lock/);
+
+  statements.length = 0;
+  await database.readState(request);
+  assert.equal(statements[1], "set transaction isolation level repeatable read read only");
 });

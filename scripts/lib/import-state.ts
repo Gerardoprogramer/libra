@@ -33,6 +33,23 @@ export interface ChapterRecord {
   title: string;
   content: string;
   wordCount: number | null;
+  /** chapters.blocks as stored: unvalidated, null for a chapter without blocks. */
+  blocks: unknown;
+}
+
+/** An image the edition uses: its edition_assets row with the image_assets row it points to. */
+export interface EditionAssetRecord {
+  sourcePath: string;
+  assetId: string;
+  sourceSha256: string;
+  codecId: string;
+  maxWidth: number;
+  sha256: string;
+  objectKey: string;
+  mediaType: string;
+  width: number;
+  height: number;
+  byteSize: number;
 }
 
 export interface EditionState {
@@ -45,6 +62,8 @@ export interface EditionState {
   /** Edition created from this Gutenberg source, if it exists. */
   edition: EditionRecord | null;
   chapters: ChapterRecord[];
+  /** Images the edition uses (edition_assets), sorted by source path. */
+  assets: EditionAssetRecord[];
   /** Chapters (of `edition`) that at least one reader has saved progress in. */
   progressChapterIds: string[];
   /**

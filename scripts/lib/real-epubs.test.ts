@@ -18,6 +18,9 @@ const words = (value: string) => value.split(/\s+/).filter(Boolean).length;
 
 // Chapter count and total words of the catalogue EPUBs, measured with the parser that produced the editions
 // published so far (HEAD before the Fortunata fix). Fortunata is the only book whose text was supposed to change.
+// Since chapters gained typed blocks two more changed on purpose: Pride and Prejudice gets back the 59 drop capitals
+// drawn as images (121555 -> 121557 words: "A FEW days" and "“I hope" add one-letter words), and the Wizard of Oz no
+// longer repeats 21 p.caption2 captions as paragraphs (39311 -> 39132); epub-corpus-baseline.json has the detail.
 const pinned: Record<string, { chapters: number; words: number }> = {
   "a-christmas-carol.epub": { chapters: 5, words: 28421 },
   "adventures-of-sherlock-holmes.epub": { chapters: 12, words: 105893 },
@@ -29,11 +32,11 @@ const pinned: Record<string, { chapters: number; words: number }> = {
   "la-isla-del-tesoro.epub": { chapters: 35, words: 88259 },
   "marianela-17340.epub": { chapters: 22, words: 50432 },
   "moby-dick.epub": { chapters: 136, words: 208275 },
-  "pride-and-prejudice.epub": { chapters: 61, words: 121555 },
+  "pride-and-prejudice.epub": { chapters: 61, words: 121557 },
   "the-picture-of-dorian-gray.epub": { chapters: 20, words: 78505 },
   "the-time-machine.epub": { chapters: 17, words: 32311 },
   "the-war-of-the-worlds.epub": { chapters: 27, words: 59738 },
-  "the-wonderful-wizard-of-oz.epub": { chapters: 24, words: 39311 },
+  "the-wonderful-wizard-of-oz.epub": { chapters: 24, words: 39132 },
   "treasure-island.epub": { chapters: 34, words: 67655 },
 };
 

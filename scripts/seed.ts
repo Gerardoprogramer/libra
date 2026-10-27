@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 import { authors, bookAuthors, books, chapters, editions } from "../src/db/schema";
+import { ChapterText } from "../src/lib/chapter-blocks";
 import { formatImportError } from "./lib/import-errors";
 import { assertWriteAllowed, sslFor } from "./lib/write-guard";
 
@@ -136,6 +137,8 @@ async function seed() {
   ];
 
   for (const chapter of chapterData) {
+    // Text only: blocks are written as NULL, so a reseeded text never sits next to blocks of an older one.
+    const text = ChapterText.textOnly(chapter.content);
     await db
       .insert(chapters)
       .values({
@@ -143,16 +146,14 @@ async function seed() {
         number: chapter.number,
         slug: chapter.slug,
         title: chapter.title,
-        content: chapter.content,
-        wordCount: chapter.content.split(/\s+/).length,
+        ...text.columns(),
       })
       .onConflictDoUpdate({
         target: [chapters.editionId, chapters.slug],
         set: {
           number: chapter.number,
           title: chapter.title,
-          content: chapter.content,
-          wordCount: chapter.content.split(/\s+/).length,
+          ...text.columns(),
           updatedAt: new Date(),
         },
       });
