@@ -41,6 +41,7 @@
     "metadataDescription": "Read {title} by {authors} online for free on Libra. Explore this digital edition and its chapters.",
     "metadataDescriptionWithoutAuthors": "Read {title} online for free on Libra. Explore this digital edition and its chapters.",
     "by": "by",
+    "anonymousAuthor": "Anonymous",
     "translatedBy": "Translated by {translator}",
     "chapters": "{count, plural, =0 {No chapters} =1 {# chapter} other {# chapters}}",
     "showAllChapters": "{count, plural, =1 {Show chapter} other {Show all # chapters}}",
