@@ -16,6 +16,13 @@ import {
 } from "./import-collection";
 import { formatImportError } from "./import-errors";
 import { importGutenbergBook, type ImportGutenbergOptions } from "./import-gutenberg";
+import { createSharpCodec } from "./sharp-codec";
+
+// The importer verifies its codec against the approved environments before parsing (only win32-x64 today), so on
+// any other platform it stops there. These tests check the importer without a database or storage, on every
+// platform CI runs on, so they inject the sharp codec unverified; sharp-environment.test.ts covers the verification.
+const unverifiedCodec = { createCodec: async () => createSharpCodec() };
+const importBookOnAnyPlatform = (options: ImportGutenbergOptions) => importGutenbergBook(options, unverifiedCodec);
 
 // Minimal JPEG signature: covers are recognized by their bytes, not by the manifest media type.
 const jpegBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
@@ -346,7 +353,11 @@ test("real dry-run parses chapters and a cover with no DB, R2 or invalidation cr
   });
   const printed: unknown[][] = [];
   t.mock.method(console, "log", (...args: unknown[]) => printed.push(args));
-  const result = await importCollection([dracula], { projectRoot, epubOnly: true });
+  const result = await importCollection(
+    [dracula],
+    { projectRoot, epubOnly: true },
+    { importBook: importBookOnAnyPlatform },
+  );
   assert.equal(result.exitCode, 0);
   assert.equal(result.succeeded, 1);
   assert(printed.some((args) => String(args[0]).includes("Chapters detected: 1")));
@@ -361,15 +372,18 @@ test("an explicit EPUB-only analysis needs no database and says it was not compa
   setEnvironment(t, { DIRECT_DATABASE_URL: undefined, R2_ACCOUNT_ID: undefined });
   const printed: string[] = [];
   t.mock.method(console, "log", (...args: unknown[]) => printed.push(String(args[0])));
-  const outcome = await importGutenbergBook({
-    file,
-    gutenbergId: "345",
-    slug: "dracula",
-    originalTitle: "Dracula",
-    originalLanguage: "en",
-    year: 1897,
-    epubOnly: true,
-  });
+  const outcome = await importGutenbergBook(
+    {
+      file,
+      gutenbergId: "345",
+      slug: "dracula",
+      originalTitle: "Dracula",
+      originalLanguage: "en",
+      year: 1897,
+      epubOnly: true,
+    },
+    unverifiedCodec,
+  );
   assert.deepEqual(outcome, { status: "epub-only" });
   assert(printed.some((line) => line.includes("NOT compared with the database")));
   assert(!printed.some((line) => line.includes("to remove") || line.includes("Plan against")));
@@ -383,13 +397,16 @@ test("a dry run without a database fails instead of pretending nothing would be 
   const printed: string[] = [];
   t.mock.method(console, "log", (...args: unknown[]) => printed.push(String(args[0])));
   await assert.rejects(
-    importGutenbergBook({
-      file,
-      gutenbergId: "345",
-      slug: "dracula",
-      originalTitle: "Dracula",
-      originalLanguage: "en",
-    }),
+    importGutenbergBook(
+      {
+        file,
+        gutenbergId: "345",
+        slug: "dracula",
+        originalTitle: "Dracula",
+        originalLanguage: "en",
+      },
+      unverifiedCodec,
+    ),
     /DIRECT_DATABASE_URL is not defined.*no plan is reported/,
   );
   assert(!printed.some((line) => line.includes("Nothing was written") || line.includes("0 existing")));
@@ -401,7 +418,7 @@ test("a collection dry run reports each book as failed when the database cannot 
   setEnvironment(t, { DIRECT_DATABASE_URL: undefined });
   t.mock.method(console, "log", () => {});
   const { logger, lines } = captureOutput();
-  const result = await importCollection([dracula], { projectRoot }, { logger });
+  const result = await importCollection([dracula], { projectRoot }, { logger, importBook: importBookOnAnyPlatform });
   assert.deepEqual(result, { succeeded: 0, missing: 0, failed: 1, blocked: 0, notProcessed: 0, exitCode: 1 });
   assert(lines.some((line) => line.includes("FAILED") && line.includes("DIRECT_DATABASE_URL is not defined")));
 });
@@ -430,13 +447,16 @@ test("an incomplete EPUB fails before the importer can connect to PostgreSQL or 
 
   for (const apply of [false, true]) {
     await assert.rejects(
-      importGutenbergBook({
-        file,
-        gutenbergId: "345",
-        originalTitle: "Dracula",
-        originalLanguage: "en",
-        apply,
-      }),
+      importGutenbergBook(
+        {
+          file,
+          gutenbergId: "345",
+          originalTitle: "Dracula",
+          originalLanguage: "en",
+          apply,
+        },
+        unverifiedCodec,
+      ),
       /EPUB validation failed: spine document not found: chapter2\.xhtml/,
     );
   }
@@ -449,13 +469,16 @@ test("real apply requires database configuration before attempting any cover upl
   setEnvironment(t, { DIRECT_DATABASE_URL: undefined, R2_ACCOUNT_ID: undefined });
   t.mock.method(console, "log", () => {});
   await assert.rejects(
-    importGutenbergBook({
-      file,
-      gutenbergId: "345",
-      originalTitle: "Dracula",
-      originalLanguage: "en",
-      apply: true,
-    }),
+    importGutenbergBook(
+      {
+        file,
+        gutenbergId: "345",
+        originalTitle: "Dracula",
+        originalLanguage: "en",
+        apply: true,
+      },
+      unverifiedCodec,
+    ),
     /DIRECT_DATABASE_URL is not defined/,
   );
 });
@@ -473,7 +496,11 @@ test("a corrupt EPUB fails individually while the next real dry-run succeeds", a
   await createEpub(path.join(projectRoot, second.file));
   t.mock.method(console, "log", () => {});
   const { logger, lines } = captureOutput();
-  const result = await importCollection([dracula, second], { projectRoot, epubOnly: true }, { logger });
+  const result = await importCollection(
+    [dracula, second],
+    { projectRoot, epubOnly: true },
+    { logger, importBook: importBookOnAnyPlatform },
+  );
   assert.deepEqual(result, { succeeded: 1, missing: 0, failed: 1, blocked: 0, notProcessed: 0, exitCode: 1 });
   assert(lines.some((line) => line.includes("FAILED") && line.includes("zip")));
 });
