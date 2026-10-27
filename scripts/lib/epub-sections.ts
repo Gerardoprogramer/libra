@@ -2,6 +2,20 @@ import path from "node:path";
 
 import { load, type CheerioAPI } from "cheerio";
 
+import {
+  canonicalMarks,
+  deriveChapterContent,
+  inlinePlainText,
+  normalizeInline,
+  type ChapterBlock,
+  type FigureImage,
+  type HeadingLevel,
+  type InlineMark,
+  type InlineText,
+  type TextBlock,
+} from "../../src/lib/chapter-blocks";
+import type { ImageIssue, ImageIssueCode } from "./epub-images";
+
 type DomNode = ReturnType<CheerioAPI>[number];
 type DomElement = Extract<DomNode, { name: string; attribs: Record<string, string> }>;
 
@@ -37,10 +51,53 @@ interface DocumentIndex {
   ids: Map<string, DomElement>;
 }
 
+/** The editorial block a piece of text belongs to, inherited down the tree. */
+interface BlockContext {
+  kind: "paragraph" | "heading" | "listItem";
+  level?: HeadingLevel;
+  ordered?: boolean;
+  quote: boolean;
+}
+
+interface VisitContext {
+  block: BlockContext;
+  marks: InlineMark[];
+  /** Inside a figure container whose images were already emitted. */
+  inFigure: boolean;
+}
+
+/** An illustration found in the text, before its archive path is checked. */
+interface FigureToken {
+  /** The src attribute as written. */
+  reference: string;
+  /** Archive path resolved against the document, or null for an external, data: or escaping reference. */
+  path: string | null;
+  alt: string;
+  caption: InlineText[];
+}
+
+// Every token keeps the plain `text` the content has always been built from; the other fields only describe it, so
+// the blocks are a reading of the same stream and the plain text cannot drift from them.
 interface TextToken {
   position: number;
   text: string;
   heading?: DomElement;
+  marks?: InlineMark[];
+  block?: BlockContext;
+  /** A <br/>: a space in the plain text, a line break in verse. */
+  lineBreak?: boolean;
+  /** An illustration: no text. */
+  figure?: FigureToken;
+  /** An <hr/>: no text. */
+  separator?: boolean;
+}
+
+/** What an archive path resolves to: the image, or why it cannot be used. */
+export type ImageResolver = (path: string) => FigureImage | { unavailable: ImageIssue };
+
+export interface ExtractionOptions {
+  /** Checks figure paths against the archive. Without it every figure keeps its alt and caption but no image. */
+  resolveImage?: ImageResolver;
 }
 
 interface Boundary {
@@ -55,7 +112,22 @@ interface Boundary {
 }
 
 const headings = "h1,h2,h3,h4,h5,h6";
-const captions = "figcaption,.caption,.figcaption,[role='doc-caption']";
+// .caption2/.caption3: ebookmaker's numbered caption classes (the Wizard of Oz uses caption2).
+const captions = "figcaption,.caption,.caption2,.caption3,.figcaption,[role='doc-caption']";
+// Containers whose images form one illustration with its caption: HTML5 figures and ebookmaker's figure divs.
+const figureContainers = "figure,.figcenter,.figleft,.figright,.fig,[role='figure']";
+const smallCapsClasses = new Set(["smcap", "smcaps", "smallcaps", "small-caps", "sc"]);
+const inlineMarkTags: Record<string, InlineMark> = {
+  em: "em",
+  i: "em",
+  cite: "em",
+  dfn: "em",
+  var: "em",
+  strong: "strong",
+  b: "strong",
+  sup: "sup",
+  sub: "sub",
+};
 const excluded = `${captions},script,style,nav,svg,figure,.pg-boilerplate,.x-ebookmaker-pageno,[role='doc-pagebreak']`;
 const excludedTypes = new Set(["toc", "loi", "lot", "titlepage", "copyright-page", "colophon", "cover", "pagebreak"]);
 const blocks = new Set([
@@ -332,6 +404,34 @@ function parseNavigation(source: EpubNavigation): NavigationEntry[] {
 export interface ExtractedSection {
   title: string;
   content: string;
+  /** The same text as typed blocks, plus figures and separators; `content` is always derivable from them. */
+  blocks: ChapterBlock[];
+}
+
+export interface ImageReport {
+  /** Illustrations found in the reading text (decorative heading images and drop capitals excluded). */
+  figures: number;
+  /** Of those, the ones inside retained sections, now figure blocks. */
+  inSections: number;
+  /** Figure blocks whose image resolved to a usable file in the archive. */
+  resolved: number;
+  /**
+   * Figure blocks kept without an image, with the reason; their alt and caption are still kept. `path` is the
+   * archive path the reference resolved to (null when it points outside the EPUB) and `section` the index of the
+   * returned section holding the figure.
+   */
+  unavailable: { reference: string; path: string | null; section: number; code: ImageIssueCode; reason: string }[];
+  /** Drop capitals drawn as images whose letter was restored into the text. */
+  dropCaps: number;
+  /** Images inside headings, left out as decoration. */
+  decorative: number;
+  /**
+   * Ornaments left out of the text: "enlarge" link icons, images marked role="presentation", drop-cap or ornament
+   * classes, deco-* vignettes and ornamental initials whose letter the text already has.
+   */
+  ornaments: number;
+  /** Images of wrapper pages (a page holding only the enlarged version of an image linked from the text). */
+  wrapperImages: number;
 }
 
 export interface DiscardedSection {
@@ -360,6 +460,8 @@ export interface ExtractionReport {
   unresolvedNavigation: string[];
   /** Conditions that need a human decision before the extraction is trusted. */
   warnings: string[];
+  /** Illustrations, drop capitals and decorative images; informational, never a warning yet. */
+  images: ImageReport;
 }
 
 const REVIEW_WORDS = 100;
@@ -372,21 +474,324 @@ function countWords(value: string) {
   return value.split(/\s+/).filter(Boolean).length;
 }
 
-export function extractEpubSections(documents: EpubDocument[], navigation: EpubNavigation[], bookTitle: string) {
-  return extractEpubSectionsWithReport(documents, navigation, bookTitle).sections;
+export function extractEpubSections(
+  documents: EpubDocument[],
+  navigation: EpubNavigation[],
+  bookTitle: string,
+  options: ExtractionOptions = {},
+) {
+  return extractEpubSectionsWithReport(documents, navigation, bookTitle, options).sections;
 }
+
+const paragraphContext: VisitContext = { block: { kind: "paragraph", quote: false }, marks: [], inFigure: false };
+
+/** The formatting and block an element gives the text inside it. */
+function contextFor($: CheerioAPI, element: DomElement, context: VisitContext): VisitContext {
+  const name = element.name.toLowerCase();
+  let { block, marks } = context;
+
+  if (/^h[1-6]$/.test(name)) block = { kind: "heading", level: Number(name[1]) as HeadingLevel, quote: block.quote };
+  else if (name === "li") block = { kind: "listItem", ordered: $(element).parent().is("ol"), quote: block.quote };
+  else if (name === "blockquote") block = { ...block, quote: true };
+
+  const added: InlineMark[] = [];
+  if (inlineMarkTags[name]) added.push(inlineMarkTags[name]);
+  const classes = (element.attribs.class ?? "").toLowerCase().split(/\s+/);
+  if (
+    classes.some((name) => smallCapsClasses.has(name)) ||
+    /font-variant\s*:\s*small-caps/i.test(element.attribs.style ?? "")
+  ) {
+    added.push("smallCaps");
+  }
+  if (added.length) marks = canonicalMarks([...marks, ...added]);
+
+  return block === context.block && marks === context.marks ? context : { ...context, block, marks };
+}
+
+/** All text before `image` inside `paragraph`, in document order. */
+function textBefore(paragraph: DomNode, image: DomNode): string {
+  let text = "";
+  let done = false;
+  function walk(node: DomNode) {
+    if (done) return;
+    if (node === image) {
+      done = true;
+      return;
+    }
+    if (node.type === "text") text += node.data;
+    else if ("children" in node) for (const child of node.children) walk(child);
+  }
+  walk(paragraph);
+  return text;
+}
+
+/**
+ * The image's file name as its author wrote it: decoded, without directories, extension or the "<digits>_" prefix
+ * Project Gutenberg's ebookmaker adds to every file it packages ("6484518377310807417_0033m.jpg" was "0033m.jpg").
+ */
+function originalFileName(reference: string) {
+  let name = reference.split(/[?#]/)[0].split("/").pop() ?? "";
+  try {
+    name = decodeURIComponent(name);
+  } catch {
+    // Keep the name as written.
+  }
+  return name
+    .replace(/^\d+_/, "")
+    .replace(/\.[a-z0-9]+$/i, "")
+    .toLowerCase();
+}
+
+/**
+ * The image's description: its alt text, unless the alt only repeats the file name (with or without its extension,
+ * which ebookmaker writes when a source image has no description), which describes nothing.
+ */
+function imageAlt(image: DomElement) {
+  const alt = cleanText(image.attribs.alt ?? "");
+  const name = originalFileName(image.attribs.src ?? "");
+  const altName = alt.toLowerCase().replace(/\.(?:jpe?g|png|gif|webp|svg)$/, "");
+  return name && altName === name ? "" : alt;
+}
+
+// Class names that mark an image as ornament rather than illustration (ebookmaker and common EPUB conventions),
+// with the numbered variants stylesheets add ("drop-cap2" in The Adventures of Sherlock Holmes).
+const ornamentClass =
+  /^(?:drop[-_]?(?:cap|img|image)s?|dropcap|ornaments?|ornamental|decorations?|decorative|vignettes?|enlarge(?:[-_]?image)?)\d*$/i;
+const ornamentScope = "p,div,li,td,figure,blockquote,section,body";
+
+/**
+ * Why an image is ornament and not an illustration, or null. Only the image and its ancestors up to the block it
+ * stands in are read, so a class on a whole chapter never turns its illustrations into ornaments.
+ */
+function ornamentReason($: CheerioAPI, image: DomElement): string | null {
+  const name = originalFileName(image.attribs.src ?? "");
+  if (/(?:^|[-_])enlarge/.test(name)) return "enlarge icon";
+  if (/^deco-\d/.test(name)) return "decorative vignette";
+
+  const scope = $(image).parents().addBack().toArray().reverse().filter(isDomElement);
+  for (const element of scope) {
+    if (/^(?:presentation|none)$/i.test(element.attribs.role ?? "")) return "presentation";
+    if ((element.attribs.class ?? "").split(/\s+/).some((name) => ornamentClass.test(name))) return "ornament class";
+    if (element !== image && $(element).is(ornamentScope)) break;
+  }
+  return null;
+}
+
+/** The first non-blank text after `image` inside `paragraph`, in document order. */
+function textAfter(paragraph: DomNode, image: DomNode): string {
+  let seen = false;
+  function walk(node: DomNode): string | null {
+    if (node === image) {
+      seen = true;
+      return null;
+    }
+    if (node.type === "text") return seen && node.data.trim() ? node.data.trimStart() : null;
+    if (!("children" in node)) return null;
+    for (const child of node.children) {
+      const found = walk(child);
+      if (found !== null) return found;
+    }
+    return null;
+  }
+  return walk(paragraph) ?? "";
+}
+
+/** Caption runs of an element, with the same formatting rules as the text, normalized like a paragraph. */
+function captionText($: CheerioAPI, element: DomElement): InlineText[] {
+  const runs: InlineText[] = [];
+  function walk(node: DomNode, context: VisitContext) {
+    if (node.type === "text") {
+      runs.push(context.marks.length ? { text: node.data, marks: context.marks } : { text: node.data });
+      return;
+    }
+    if (!isDomElement(node) || $(node).is("img,svg,script,style,.x-ebookmaker-pageno")) return;
+    if (node.name === "br") runs.push({ text: " " });
+    const inner = contextFor($, node, context);
+    for (const child of node.children) walk(child, inner);
+  }
+  walk(element, paragraphContext);
+  return normalizeInline(runs);
+}
+
+/**
+ * Typed blocks for a run of tokens. The text is split into paragraphs exactly as the plain-text extraction splits it
+ * (a blank line, then whitespace collapsed and trimmed), so each text block is one paragraph of that text.
+ */
+function buildBlocks(tokens: TextToken[], resolveImage: ImageResolver, report: ImageReport): ChapterBlock[] {
+  interface Run {
+    start: number;
+    end: number;
+    marks: InlineMark[];
+    block: BlockContext;
+    lineBreak: boolean;
+  }
+  interface Marker {
+    offset: number;
+    token: TextToken;
+  }
+
+  let joined = "";
+  const runs: Run[] = [];
+  const markers: Marker[] = [];
+  for (const token of tokens) {
+    if (token.figure || token.separator) {
+      markers.push({ offset: joined.length, token });
+      continue;
+    }
+    if (!token.text) continue;
+    runs.push({
+      start: joined.length,
+      end: joined.length + token.text.length,
+      marks: token.marks ?? [],
+      block: token.block ?? paragraphContext.block,
+      lineBreak: Boolean(token.lineBreak),
+    });
+    joined += token.text;
+  }
+
+  // Paragraph ranges: what lies between blank lines, as String.split(/\n\s*\n/) would cut it.
+  const pieces: { start: number; end: number }[] = [];
+  let from = 0;
+  for (const match of joined.matchAll(/\n\s*\n/g)) {
+    pieces.push({ start: from, end: match.index });
+    from = match.index + match[0].length;
+  }
+  pieces.push({ start: from, end: joined.length });
+
+  type Item = { key: number; rank: number; sequence: number; block: ChapterBlock };
+  const items: Item[] = [];
+  const placed = new Set<Marker>();
+  let sequence = 0;
+  let runIndex = 0;
+
+  for (const piece of pieces) {
+    const lines: InlineText[][] = [[]];
+    let block: BlockContext | undefined;
+    let textStart = -1;
+    let textEnd = -1;
+
+    while (runIndex < runs.length && runs[runIndex].end <= piece.start) runIndex++;
+    for (let index = runIndex; index < runs.length && runs[index].start < piece.end; index++) {
+      const run = runs[index];
+      const start = Math.max(run.start, piece.start);
+      const end = Math.min(run.end, piece.end);
+      const text = joined.slice(start, end);
+      const firstVisible = text.search(/[^\s ]/);
+      if (firstVisible >= 0) {
+        if (textStart < 0) {
+          textStart = start + firstVisible;
+          block = run.block;
+        }
+        textEnd = start + text.trimEnd().length;
+      }
+      if (run.lineBreak) lines.push([]);
+      lines.at(-1)!.push(run.marks.length ? { text, marks: run.marks } : { text });
+    }
+
+    const plain = cleanText(joined.slice(piece.start, piece.end));
+    if (plain && block) {
+      const normalizedLines = lines.map(normalizeInline).filter((line) => line.length > 0);
+      const content = normalizeInline(lines.flat());
+      let textBlock: TextBlock;
+      if (block.kind === "heading") textBlock = { type: "heading", level: block.level!, content };
+      else if (block.kind === "listItem") textBlock = { type: "listItem", ordered: Boolean(block.ordered), content };
+      else if (normalizedLines.length > 1) textBlock = { type: "verse", lines: normalizedLines };
+      else if (block.quote) textBlock = { type: "quote", content };
+      else textBlock = { type: "paragraph", content };
+
+      const text =
+        textBlock.type === "verse"
+          ? textBlock.lines.map(inlinePlainText).join(" ")
+          : inlinePlainText(textBlock.content);
+      if (text !== plain) {
+        throw new Error(
+          `EPUB extraction failed: a block's text diverges from the plain text (${JSON.stringify(plain)}).`,
+        );
+      }
+      items.push({ key: textStart, rank: 1, sequence: sequence++, block: textBlock });
+    }
+
+    // Markers inside a paragraph go before it when they precede its text, after it otherwise; the rest by position.
+    for (const marker of markers) {
+      if (marker.offset < piece.start || marker.offset > piece.end || placed.has(marker)) continue;
+      placed.add(marker);
+      const key = textStart < 0 || marker.offset <= textStart ? marker.offset : textEnd;
+      const rank = textStart >= 0 && marker.offset <= textStart ? 0 : 2;
+      items.push({ key, rank, sequence: sequence++, block: markerBlock(marker.token, resolveImage, report) });
+    }
+  }
+  // Markers in the blank lines between paragraphs.
+  for (const marker of markers) {
+    if (placed.has(marker)) continue;
+    items.push({
+      key: marker.offset,
+      rank: 0,
+      sequence: sequence++,
+      block: markerBlock(marker.token, resolveImage, report),
+    });
+  }
+
+  items.sort((first, second) => first.key - second.key || first.rank - second.rank || first.sequence - second.sequence);
+
+  // A separator only separates: none at either end, never two in a row.
+  const result: ChapterBlock[] = [];
+  for (const { block } of items) {
+    if (block.type === "separator" && (result.length === 0 || result.at(-1)!.type === "separator")) continue;
+    result.push(block);
+  }
+  while (result.at(-1)?.type === "separator") result.pop();
+  return result;
+}
+
+function markerBlock(token: TextToken, resolveImage: ImageResolver, report: ImageReport): ChapterBlock {
+  if (!token.figure) return { type: "separator" };
+  const { reference, path, alt, caption } = token.figure;
+  report.inSections++;
+  const resolved =
+    path === null
+      ? { unavailable: { code: "outside-epub" as const, message: "not a path inside the EPUB" } }
+      : resolveImage(path);
+  if ("unavailable" in resolved) {
+    // The section is set by sectionBetween, which knows which section these blocks belong to.
+    report.unavailable.push({
+      reference,
+      path,
+      section: -1,
+      code: resolved.unavailable.code,
+      reason: resolved.unavailable.message,
+    });
+    return { type: "figure", image: null, alt, caption };
+  }
+  report.resolved++;
+  return { type: "figure", image: resolved, alt, caption };
+}
+
+const noArchive: ImageResolver = () => ({
+  unavailable: { code: "missing", message: "no archive to resolve images against" },
+});
 
 /** Chapter ranges use one ordered spine stream, so a section can cross XHTML files. */
 export function extractEpubSectionsWithReport(
   documents: EpubDocument[],
   navigation: EpubNavigation[],
   bookTitle: string,
+  { resolveImage = noArchive }: ExtractionOptions = {},
 ): { sections: ExtractedSection[]; report: ExtractionReport } {
   let cursor = 0;
   const unresolvedNavigation: string[] = [];
   const positions = new Map<DomNode, number>();
   const tokens: TextToken[] = [];
   const indexes: DocumentIndex[] = [];
+  const images: ImageReport = {
+    figures: 0,
+    inSections: 0,
+    resolved: 0,
+    unavailable: [],
+    dropCaps: 0,
+    decorative: 0,
+    ornaments: 0,
+    wrapperImages: 0,
+  };
 
   function headingText($: CheerioAPI, element: DomElement, removeCaptions = true) {
     const clone = $(element).clone();
@@ -405,25 +810,148 @@ export function extractEpubSectionsWithReport(
     return Boolean(alt && comparable(alt) === comparable(headingText($, element)));
   }
 
-  function excludedElement($: CheerioAPI, element: DomElement) {
-    const types = ($(element).attr("epub:type") ?? "").split(/\s+/);
-    return $(element).is(excluded) || types.some((type) => excludedTypes.has(type)) || captionHeading($, element);
+  // The element a role="figure" container names as its caption (aria-labelledby), whatever its class.
+  function labelledCaption($: CheerioAPI, element: DomElement) {
+    const id = element.attribs.id;
+    if (!id) return false;
+    const figure = $(element).parent().closest("[role='figure'][aria-labelledby]");
+    return figure.length > 0 && (figure.attr("aria-labelledby") ?? "").split(/\s+/).includes(id);
   }
 
-  for (const document of documents) {
-    // XHTML self-closing anchors are XML, not unclosed HTML <a> elements.
-    const $ = load(document.html, document.xhtml ? { xml: true } : undefined);
+  function excludedElement($: CheerioAPI, element: DomElement) {
+    const types = ($(element).attr("epub:type") ?? "").split(/\s+/);
+    return (
+      $(element).is(excluded) ||
+      types.some((type) => excludedTypes.has(type)) ||
+      captionHeading($, element) ||
+      labelledCaption($, element)
+    );
+  }
+
+  /** One figure token per illustration of a figure container (ornaments left out); the caption goes with the last. */
+  function figureTokens($: CheerioAPI, container: DomElement, documentPath: string): FigureToken[] {
+    const illustrations = $(container)
+      .find("img")
+      .toArray()
+      .filter(isDomElement)
+      .filter((image) => {
+        if (!ornamentReason($, image)) return true;
+        images.ornaments++;
+        return false;
+      });
+    const captionElements = $(container)
+      .find("*")
+      .toArray()
+      .filter(isDomElement)
+      .filter((element) => $(element).is(captions) || labelledCaption($, element));
+    // A caption nested in another caption is read once, with its parent.
+    const outer = captionElements.filter(
+      (element) => !captionElements.some((other) => other !== element && $(other).find(element).length),
+    );
+    const caption = normalizeInline(outer.flatMap((element) => [...captionText($, element), { text: " " }]));
+    return illustrations.map((image, index) => ({
+      ...figureReference(image, documentPath),
+      caption: index === illustrations.length - 1 ? caption : [],
+    }));
+  }
+
+  function figureReference(image: DomElement, documentPath: string): Omit<FigureToken, "caption"> {
+    const reference = image.attribs.src ?? "";
+    const resolved = reference ? resolveEpubHref(documentPath, reference) : null;
+    return {
+      reference,
+      path: resolved && !resolved.fragment ? resolved.path : null,
+      alt: imageAlt(image),
+    };
+  }
+
+  // XHTML self-closing anchors are XML, not unclosed HTML <a> elements.
+  const loaded = documents.map((document) => ({
+    document,
+    $: load(document.html, document.xhtml ? { xml: true } : undefined),
+  }));
+
+  // Wrapper pages: spine documents that an image in another document links to, holding an image and no text but
+  // links (ebookmaker writes one per illustration it can enlarge, with a "back" link). Their image is the enlarged
+  // copy of one already in the text.
+  const isWrapperPage = ($: CheerioAPI) => {
+    const body = $("body");
+    if (!body.find("img").length) return false;
+    const clone = body.clone();
+    clone.find("a").remove();
+    return !cleanText(clone.text());
+  };
+  const wrapperPages = new Set<string>();
+  const loadedByPath = new Map(loaded.map((item) => [item.document.path, item]));
+  for (const { document, $ } of loaded) {
+    for (const link of $("a[href]").toArray().filter(isDomElement)) {
+      if (!$(link).find("img").length) continue;
+      const target = resolveEpubHref(document.path, link.attribs.href);
+      const page = target && target.path !== document.path ? loadedByPath.get(target.path) : undefined;
+      if (page && isWrapperPage(page.$)) wrapperPages.add(target!.path);
+    }
+  }
+
+  for (const { document, $ } of loaded) {
+    const wrapper = wrapperPages.has(document.path);
     const body = $("body").get(0);
     if (!body) {
       throw new Error(`EPUB validation failed: spine document has no readable body: ${document.path}`);
     }
     const index: DocumentIndex = { path: document.path, $, start: cursor, end: cursor, elements: [], ids: new Map() };
 
-    function visit(node: DomNode, heading?: DomElement, hidden = false) {
+    // Images are read where they stand: a drop capital gives back its letter, an image in a heading is decoration,
+    // an ornament is left out, a figure container or a lone image becomes an illustration.
+    function visitImage(node: DomElement, position: number, heading: DomElement | undefined, context: VisitContext) {
+      if (heading) {
+        images.decorative++;
+        return;
+      }
+      if (context.inFigure) return;
+
+      // The drawn letter is read from the alt as written: a letter image is often named after its letter ("t.png").
+      const writtenAlt = cleanText(node.attribs.alt ?? "");
+      const alt = imageAlt(node);
+      const paragraph = $(node).closest("p").get(0);
+      // One or two letters, possibly after punctuation that opens the sentence ("“I" + " hope, my dear").
+      const drawn = writtenAlt.match(/^(\p{P}*)(\p{L}{1,2})$/u);
+      if (paragraph && drawn) {
+        // The letter is drawn: the text goes on with the rest of the word ("T" + "HE discussion"). If the text
+        // already repeats the letter, the image is only ornament and adds nothing; punctuation the text already has
+        // before the image is not repeated.
+        const [, punctuation, letters] = drawn;
+        const following = textAfter(paragraph, node);
+        if (/^\p{L}/u.test(following)) {
+          images.dropCaps++;
+          if (!following.toLowerCase().startsWith(letters.toLowerCase())) {
+            const before = textBefore(paragraph, node).trimEnd();
+            const text = punctuation && before.endsWith(punctuation) ? letters : writtenAlt;
+            tokens.push({ position, text, heading, marks: context.marks, block: context.block });
+          }
+          return;
+        }
+      }
+
+      // An initial drawn without its letter at the start of a paragraph that already has it ("ELIZABETH…").
+      const ornamentalInitial =
+        !alt &&
+        paragraph !== undefined &&
+        /^\p{L}/u.test(textAfter(paragraph, node)) &&
+        !/[\p{L}\p{N}]/u.test(textBefore(paragraph, node));
+      if (ornamentalInitial || ornamentReason($, node)) {
+        images.ornaments++;
+        return;
+      }
+
+      images.figures++;
+      tokens.push({ position, text: "", heading, figure: { ...figureReference(node, document.path), caption: [] } });
+    }
+
+    function visit(node: DomNode, heading?: DomElement, hidden = false, context: VisitContext = paragraphContext) {
       const position = cursor++;
       positions.set(node, position);
       if (node.type === "text") {
-        if (!hidden) tokens.push({ position, text: node.data, heading });
+        if (!hidden) tokens.push({ position, text: node.data, heading, marks: context.marks, block: context.block });
         return;
       }
       if (!("children" in node)) return;
@@ -432,38 +960,72 @@ export function extractEpubSectionsWithReport(
         for (const id of [node.attribs.id, node.name === "a" ? node.attribs.name : undefined]) {
           if (id && !index.ids.has(id)) index.ids.set(id, node);
         }
+        // Before hiding: <figure> itself is excluded markup, but its images are the illustration.
+        if (!hidden && !context.inFigure && $(node).is(figureContainers) && $(node).find("img").length) {
+          if (heading || $(node).closest(headings).length) {
+            images.decorative += $(node).find("img").length;
+          } else {
+            for (const figure of figureTokens($, node, document.path)) {
+              images.figures++;
+              tokens.push({ position, text: "", heading, figure });
+            }
+          }
+          context = { ...context, inFigure: true };
+        }
         hidden ||= excludedElement($, node);
         if ($(node).is(headings)) heading = node;
+        context = contextFor($, node, context);
+        if (!hidden && node.name === "img") visitImage(node, position, heading, context);
+        if (!hidden && node.name === "hr") tokens.push({ position, text: "", heading, separator: true });
         if (!hidden && blocks.has(node.name)) tokens.push({ position, text: "\n\n", heading });
-        if (!hidden && (node.name === "br" || node.name === "td" || node.name === "th"))
-          tokens.push({ position, text: " ", heading });
+        if (!hidden && node.name === "br") {
+          tokens.push({ position, text: " ", heading, lineBreak: true, marks: context.marks, block: context.block });
+        }
+        if (!hidden && (node.name === "td" || node.name === "th")) tokens.push({ position, text: " ", heading });
       }
-      for (const child of node.children) visit(child, heading, hidden);
+      for (const child of node.children) visit(child, heading, hidden, context);
       const end = cursor++;
       if (!hidden && "name" in node && blocks.has(node.name)) tokens.push({ position: end, text: "\n\n", heading });
     }
 
-    visit(body);
+    // A wrapper page is read as hidden markup: neither its image nor its "back" link is part of the text.
+    if (wrapper) images.wrapperImages += $("body img").length;
+    visit(body, undefined, wrapper);
     index.end = cursor;
     indexes.push(index);
   }
 
   const byPath = new Map(indexes.map((document) => [document.path, document]));
+  function tokensBetween(start: number, end: number, omitted?: DomElement[], proseOnly = false) {
+    return tokens.filter(
+      (token) =>
+        token.position >= start &&
+        token.position < end &&
+        !(token.heading && omitted?.includes(token.heading)) &&
+        (!proseOnly || !token.heading),
+    );
+  }
+
   function textBetween(start: number, end: number, omitted?: DomElement[], proseOnly = false) {
-    return tokens
-      .filter(
-        (token) =>
-          token.position >= start &&
-          token.position < end &&
-          !(token.heading && omitted?.includes(token.heading)) &&
-          (!proseOnly || !token.heading),
-      )
+    return tokensBetween(start, end, omitted, proseOnly)
       .map((token) => token.text)
       .join("")
       .split(/\n\s*\n/)
       .map(cleanText)
       .filter(Boolean)
       .join("\n\n");
+  }
+
+  /** The text of a range and its blocks, read from the same tokens; the blocks must give back that exact text. */
+  function sectionBetween(start: number, end: number, section: number, omitted?: DomElement[]) {
+    const text = textBetween(start, end, omitted);
+    const reported = images.unavailable.length;
+    const sectionBlocks = buildBlocks(tokensBetween(start, end, omitted), resolveImage, images);
+    if (deriveChapterContent(sectionBlocks) !== text) {
+      throw new Error("EPUB extraction failed: the chapter blocks do not reproduce the chapter text.");
+    }
+    for (const item of images.unavailable.slice(reported)) item.section = section;
+    return { text, blocks: sectionBlocks };
   }
 
   // Title headings already folded into the boundary of their roman marker; they never start a chapter themselves.
@@ -860,7 +1422,10 @@ export function extractEpubSectionsWithReport(
 
     // A numbered subsection is part of its chapter, not structure to throw away.
     if (open && discard?.reason === "roman-subsection") {
-      open.content += `\n\n${textBetween(boundary.position, end)}`;
+      // `open` is the last section returned.
+      const part = sectionBetween(boundary.position, end, sections.length - 1);
+      open.content += `\n\n${part.text}`;
+      open.blocks.push(...part.blocks);
       keptWords += words;
       mergedSubsections++;
       continue;
@@ -868,15 +1433,17 @@ export function extractEpubSectionsWithReport(
 
     // The closing lines of a part belong to the last chapter of that part, after its text, never to a title.
     if (open && discard && words > 0 && isClosingLine(boundary.title)) {
-      open.content += `\n\n${textBetween(boundary.position, end)}`;
+      // `open` is the last section returned.
+      const part = sectionBetween(boundary.position, end, sections.length - 1);
+      open.content += `\n\n${part.text}`;
+      open.blocks.push(...part.blocks);
       keptWords += words;
       closingLines++;
       continue;
     }
 
-    const content = discard
-      ? ""
-      : textBetween(boundary.position, end, boundary.omit ?? (boundary.heading ? [boundary.heading] : undefined));
+    const omitted = boundary.omit ?? (boundary.heading ? [boundary.heading] : undefined);
+    const content = discard ? "" : textBetween(boundary.position, end, omitted);
 
     if (discard || !content) {
       const reason = discard ?? { reason: "no-prose" as const, definitive: true };
@@ -887,7 +1454,11 @@ export function extractEpubSectionsWithReport(
     }
 
     keptWords += words;
-    open = { title: boundary.title, content };
+    open = {
+      title: boundary.title,
+      content,
+      blocks: sectionBetween(boundary.position, end, sections.length, omitted).blocks,
+    };
     sections.push(open);
   }
 
@@ -937,6 +1508,7 @@ export function extractEpubSectionsWithReport(
       discarded,
       unresolvedNavigation,
       warnings,
+      images,
     },
   };
 }

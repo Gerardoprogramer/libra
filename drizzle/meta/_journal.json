@@ -71,6 +71,13 @@
       "when": 1792024093559,
       "tag": "0009_book_authors_author_index",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793031677226,
+      "tag": "0010_chapter_blocks_image_assets",
+      "breakpoints": true
     }
   ]
 }

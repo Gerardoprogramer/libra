@@ -2,8 +2,10 @@ import { createHash } from "node:crypto";
 
 import { isLocalDatabase } from "../../src/db/tls";
 
+import { readStoredChapterBlocks, type ChapterBlocks } from "../../src/lib/chapter-blocks";
+
 import { matchChapters } from "./reimport-chapters";
-import type { ChapterRecord, EditionState } from "./import-state";
+import type { ChapterRecord, EditionAssetRecord, EditionState } from "./import-state";
 
 export const BOOK_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const MAX_BOOK_SLUG_LENGTH = 251;
@@ -40,6 +42,22 @@ export interface IncomingChapter {
   title: string;
   content: string;
   wordCount: number;
+  /** Typed blocks extracted from the EPUB; written with `content` through ChapterText. */
+  blocks: ChapterBlocks;
+}
+
+/** A normalized image the edition will use, as the plan sees it (the bytes stay with the importer). */
+export interface PlannedImage {
+  sourcePath: string;
+  sourceSha256: string;
+  codecId: string;
+  maxWidth: number;
+  sha256: string;
+  key: string;
+  mediaType: string;
+  width: number;
+  height: number;
+  bytes: number;
 }
 
 export interface PlanInput {
@@ -58,7 +76,11 @@ export interface PlanInput {
     /** Object key the cover would be stored under, or null when the EPUB has no usable cover. */
     coverKey: string | null;
     chapters: IncomingChapter[];
+    /** The normalized image of every figure with an image, one per source path. */
+    images: PlannedImage[];
   };
+  /** Every warning that needs a human decision: the extractor's and the unusable images'. */
+  warnings: string[];
 }
 
 export interface ChapterChange {
@@ -66,7 +88,15 @@ export interface ChapterChange {
   incoming: IncomingChapter;
   existing?: ChapterRecord;
   /** What differs from the stored chapter. Empty for `new` and `unchanged`. */
-  changes: ("title" | "slug" | "number" | "content")[];
+  changes: ("title" | "slug" | "number" | "content" | "blocks")[];
+}
+
+/** One source path of the edition's images: what the import would associate with it, against what it has. */
+export interface ImageChange {
+  sourcePath: string;
+  kind: "new" | "changed" | "unchanged" | "removed";
+  incoming?: PlannedImage;
+  existing?: EditionAssetRecord;
 }
 
 export interface RemovedChapter {
@@ -105,6 +135,8 @@ export interface ImportDiff {
   chapters: ChapterChange[];
   removed: RemovedChapter[];
   orderChanged: boolean;
+  /** Every source path the import would associate or dissociate, sorted. */
+  images: ImageChange[];
   totals: {
     incoming: number;
     new: number;
@@ -115,7 +147,12 @@ export interface ImportDiff {
     slugChanges: number;
     numberChanges: number;
     contentChanges: number;
+    blocksChanges: number;
     removedWithProgress: number;
+    imagesNew: number;
+    imagesChanged: number;
+    imagesUnchanged: number;
+    imagesRemoved: number;
   };
   /** False when applying the plan would write nothing. */
   hasChanges: boolean;
@@ -127,6 +164,69 @@ function countWords(value: string) {
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+/** JSON with object keys sorted at every level: the same value always gives the same text, whatever its key order. */
+export function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, item: unknown) =>
+    item && typeof item === "object" && !Array.isArray(item)
+      ? Object.fromEntries(
+          Object.entries(item).sort(([first], [second]) => (first < second ? -1 : first > second ? 1 : 0)),
+        )
+      : item,
+  );
+}
+
+/** Digest of stored blocks as they are (null when there are none), independent of how jsonb ordered the keys. */
+function storedBlocksDigest(blocks: unknown) {
+  return blocks === null || blocks === undefined ? null : sha256(canonicalJson(blocks));
+}
+
+/** Stored blocks equal the incoming ones only when they are valid, still derive the stored text, and match. */
+function sameBlocks(existing: ChapterRecord, incoming: IncomingChapter) {
+  const stored = readStoredChapterBlocks(existing.blocks, existing.content);
+  return stored.status === "blocks" && canonicalJson(stored.blocks) === canonicalJson(incoming.blocks);
+}
+
+/** The association is unchanged only when it points at an asset of the same identity and the same bytes. */
+function sameImage(existing: EditionAssetRecord, incoming: PlannedImage) {
+  return (
+    existing.sourceSha256 === incoming.sourceSha256 &&
+    existing.codecId === incoming.codecId &&
+    existing.maxWidth === incoming.maxWidth &&
+    existing.sha256 === incoming.sha256 &&
+    existing.objectKey === incoming.key &&
+    existing.mediaType === incoming.mediaType &&
+    existing.width === incoming.width &&
+    existing.height === incoming.height &&
+    existing.byteSize === incoming.bytes
+  );
+}
+
+const byPath = (first: { sourcePath: string }, second: { sourcePath: string }) =>
+  first.sourcePath < second.sourcePath ? -1 : first.sourcePath > second.sourcePath ? 1 : 0;
+
+export function buildImageChanges(existing: readonly EditionAssetRecord[], incoming: readonly PlannedImage[]) {
+  const stored = new Map(existing.map((asset) => [asset.sourcePath, asset]));
+  const wanted = new Map(incoming.map((image) => [image.sourcePath, image]));
+  const changes: ImageChange[] = [];
+  for (const image of wanted.values()) {
+    const asset = stored.get(image.sourcePath);
+    changes.push(
+      !asset
+        ? { sourcePath: image.sourcePath, kind: "new", incoming: image }
+        : {
+            sourcePath: image.sourcePath,
+            kind: sameImage(asset, image) ? "unchanged" : "changed",
+            incoming: image,
+            existing: asset,
+          },
+    );
+  }
+  for (const asset of stored.values()) {
+    if (!wanted.has(asset.sourcePath)) changes.push({ sourcePath: asset.sourcePath, kind: "removed", existing: asset });
+  }
+  return changes.sort(byPath);
 }
 
 export function buildImportDiff(state: EditionState, input: PlanInput): ImportDiff {
@@ -149,9 +249,12 @@ export function buildImportDiff(state: EditionState, input: PlanInput): ImportDi
     if (existing.slug !== incoming.slug) changes.push("slug");
     if (existing.number !== incoming.number) changes.push("number");
     if (existing.content !== incoming.content) changes.push("content");
+    // Also when the text is the same: blocks added to a chapter imported before blocks existed, or new formatting.
+    if (!sameBlocks(existing, incoming)) changes.push("blocks");
 
     return { kind: changes.length ? "modified" : "unchanged", incoming, existing, changes };
   });
+  const images = buildImageChanges(state.assets, input.incoming.images);
 
   const matchedNumbers = chapters.flatMap((change) => (change.existing ? [change.existing.number] : []));
   const orderChanged = matchedNumbers.some((number, index) => index > 0 && number < matchedNumbers[index - 1]);
@@ -202,7 +305,12 @@ export function buildImportDiff(state: EditionState, input: PlanInput): ImportDi
     slugChanges: chapters.filter((change) => change.changes.includes("slug")).length,
     numberChanges: chapters.filter((change) => change.changes.includes("number")).length,
     contentChanges: chapters.filter((change) => change.changes.includes("content")).length,
+    blocksChanges: chapters.filter((change) => change.changes.includes("blocks")).length,
     removedWithProgress: removed.filter((chapter) => progress.has(chapter.id)).length,
+    imagesNew: images.filter((change) => change.kind === "new").length,
+    imagesChanged: images.filter((change) => change.kind === "changed").length,
+    imagesUnchanged: images.filter((change) => change.kind === "unchanged").length,
+    imagesRemoved: images.filter((change) => change.kind === "removed").length,
   };
 
   return {
@@ -231,12 +339,16 @@ export function buildImportDiff(state: EditionState, input: PlanInput): ImportDi
       hasProgress: progress.has(chapter.id),
     })),
     orderChanged,
+    images,
     totals,
     hasChanges:
       !edition ||
       totals.new > 0 ||
       totals.modified > 0 ||
       totals.removed > 0 ||
+      totals.imagesNew > 0 ||
+      totals.imagesChanged > 0 ||
+      totals.imagesRemoved > 0 ||
       metadata.length > 0 ||
       authors.length > 0,
   };
@@ -244,12 +356,20 @@ export function buildImportDiff(state: EditionState, input: PlanInput): ImportDi
 
 /**
  * Fingerprint of "this EPUB against this exact database state". A plan reviewed in a dry run can only be
- * applied if the digest recomputed under lock at write time is identical.
+ * applied if the digest recomputed under lock at write time is identical. It covers the blocks and normalized images
+ * that would be written (with the codec that normalized them), the images the edition has, the warnings and whether
+ * they were accepted: accepting warnings is part of the reviewed plan, so the dry run that gives the digest to
+ * approve takes the same --accept-warnings as the write. Lists are sorted, so their order never changes the digest.
  */
-export function computePlanDigest(state: EditionState, input: PlanInput, diff: ImportDiff): string {
+export function computePlanDigest(
+  state: EditionState,
+  input: PlanInput,
+  diff: ImportDiff,
+  { acceptWarnings }: Pick<ImportFlags, "acceptWarnings">,
+): string {
   return sha256(
     JSON.stringify({
-      v: 2,
+      v: 3,
       gutenbergId: input.gutenbergId,
       bookSlug: input.bookSlug,
       editionId: state.edition?.id ?? null,
@@ -268,14 +388,48 @@ export function computePlanDigest(state: EditionState, input: PlanInput, diff: I
           chapter.slug,
           chapter.title,
           sha256(chapter.content),
+          sha256(canonicalJson(chapter.blocks)),
         ]),
+        images: [...input.incoming.images]
+          .sort(byPath)
+          .map((image) => [
+            image.sourcePath,
+            image.sourceSha256,
+            image.codecId,
+            image.maxWidth,
+            image.sha256,
+            image.key,
+            image.mediaType,
+            image.width,
+            image.height,
+            image.bytes,
+          ]),
       },
       authors: diff.authors.map((author) => [author.slug, author.name, author.action]),
       existing: [...state.chapters]
         .sort((first, second) => first.id.localeCompare(second.id))
-        .map((chapter) => [chapter.id, chapter.number, chapter.slug, chapter.title, sha256(chapter.content)]),
+        .map((chapter) => [
+          chapter.id,
+          chapter.number,
+          chapter.slug,
+          chapter.title,
+          sha256(chapter.content),
+          storedBlocksDigest(chapter.blocks),
+        ]),
+      existingAssets: [...state.assets]
+        .sort(byPath)
+        .map((asset) => [
+          asset.sourcePath,
+          asset.assetId,
+          asset.sourceSha256,
+          asset.codecId,
+          asset.maxWidth,
+          asset.sha256,
+        ]),
       progress: [...state.progressChapterIds].sort(),
       metadata: diff.metadata,
+      warnings: [...input.warnings].sort(),
+      acceptWarnings,
     }),
   ).slice(0, 20);
 }
@@ -323,7 +477,7 @@ export function evaluateImportPolicy({
 
   if (extractionWarnings.length && !flags.acceptWarnings) {
     violations.push(
-      `The EPUB extraction raised ${extractionWarnings.length} warning(s) that need a human decision; review them and pass --accept-warnings.`,
+      `The EPUB extraction raised ${extractionWarnings.length} warning(s) that need a human decision; review them and pass --accept-warnings (to the dry run too, for the digest of the accepted plan).`,
     );
   }
 
@@ -398,7 +552,21 @@ export function formatImportDiff(diff: ImportDiff): string[] {
 
   if (diff.edition.exists) {
     lines.push(
-      `  Changes: ${totals.titleChanges} title, ${totals.slugChanges} slug/URL, ${totals.numberChanges} order number, ${totals.contentChanges} content${diff.orderChanged ? "; the relative order of existing chapters changed" : ""}.`,
+      `  Changes: ${totals.titleChanges} title, ${totals.slugChanges} slug/URL, ${totals.numberChanges} order number, ${totals.contentChanges} content, ${totals.blocksChanges} blocks${diff.orderChanged ? "; the relative order of existing chapters changed" : ""}.`,
+    );
+  }
+  if (diff.images.length) {
+    lines.push(
+      `Images: ${totals.imagesNew} new, ${totals.imagesChanged} changed, ${totals.imagesUnchanged} unchanged, ${totals.imagesRemoved} to dissociate.`,
+      ...capped(
+        diff.images
+          .filter((change) => change.kind !== "unchanged")
+          .map((change) =>
+            change.kind === "removed"
+              ? `  - ${change.sourcePath}`
+              : `  ${change.kind === "new" ? "+" : "~"} ${change.sourcePath} -> ${change.incoming?.key} (${change.incoming?.width}×${change.incoming?.height})`,
+          ),
+      ),
     );
   }
 
@@ -437,6 +605,7 @@ export function formatImportDiff(diff: ImportDiff): string[] {
             if (field === "slug") return `slug ${change.existing?.slug} -> ${change.incoming.slug}`;
             if (field === "title") return `title "${change.existing?.title}" -> "${change.incoming.title}"`;
             if (field === "number") return `number ${change.existing?.number} -> ${change.incoming.number}`;
+            if (field === "blocks") return change.existing?.blocks == null ? "blocks added" : "blocks";
             return `content ${countWords(change.existing?.content ?? "")} -> ${change.incoming.wordCount} words`;
           });
           return `  ~ ${change.incoming.slug}: ${detail.join("; ")}`;

@@ -4,6 +4,24 @@ import { XMLParser, XMLValidator } from "fast-xml-parser";
 import JSZip from "jszip";
 
 import {
+  CHAPTER_BLOCKS_VERSION,
+  deriveChapterContent,
+  parseChapterBlocks,
+  type ChapterBlocks,
+} from "../../src/lib/chapter-blocks";
+import {
+  EditionImageBudget,
+  IMAGE_LIMITS,
+  inspectImage,
+  processImage,
+  type ImageCodec,
+  type ImageInspection,
+  type ImageIssue,
+  type ImageIssueCode,
+  type ImageLimits,
+  type ProcessedImage,
+} from "./epub-images";
+import {
   extractEpubSectionsWithReport,
   type EpubDocument,
   type EpubNavigation,
@@ -14,8 +32,11 @@ export interface ParsedChapter {
   number: number;
   slug: string;
   title: string;
+  /** Plain text derived from `blocks`: one paragraph per text block. The importer stores it together with `blocks`. */
   content: string;
   wordCount: number;
+  /** Typed editorial blocks, validated; figures reference images by their archive path. */
+  blocks: ChapterBlocks;
 }
 
 export interface ParsedEpub {
@@ -27,6 +48,38 @@ export interface ParsedEpub {
   chapters: ParsedChapter[];
   /** What the section extractor kept and discarded; review `warnings` before importing. */
   extraction: ExtractionReport;
+  /**
+   * The normalized image of every figure whose `image` is not null, one per archive path, sorted by path; null when
+   * the EPUB was parsed without a codec (then figure images are inspected but not normalized).
+   */
+  images: NormalizedImage[] | null;
+  /** Figures left without an image (inspection, normalization or reference failed), in reading order. */
+  imageWarnings: ImageWarning[];
+}
+
+/** An image normalized by the codec, ready to be stored: nothing is uploaded or written by the parser. */
+export type NormalizedImage = Omit<Extract<ProcessedImage, { status: "ready" }>, "status"> & {
+  /** The width limit it was normalized under (IMAGE_LIMITS.maxNormalizedWidth): part of its identity. */
+  maxWidth: number;
+};
+
+export interface ImageWarning {
+  /** Number of the chapter holding the figure, and its title. */
+  chapter: number;
+  chapterTitle: string;
+  /** The reference as written in the XHTML, and the archive path it resolves to (null outside the archive). */
+  reference: string;
+  sourcePath: string | null;
+  code: ImageIssueCode;
+  reason: string;
+}
+
+export interface ParseOptions {
+  /**
+   * Normalizes every figure image with this codec; an image it rejects leaves its figure without an image. Imports
+   * pass a codec verified by createVerifiedSharpCodec.
+   */
+  codec?: ImageCodec;
 }
 
 export interface ParsedCover {
@@ -183,6 +236,8 @@ export interface EpubLimits {
   maxTotalBytes: number;
   maxEntries: number;
   maxCoverBytes: number;
+  /** Illustrations: per file, per edition, dimensions (see epub-images.ts). */
+  images: ImageLimits;
 }
 
 export const defaultEpubLimits: EpubLimits = {
@@ -191,7 +246,54 @@ export const defaultEpubLimits: EpubLimits = {
   maxTotalBytes: 600 * 1024 * 1024,
   maxEntries: 20_000,
   maxCoverBytes: 10 * 1024 * 1024,
+  images: IMAGE_LIMITS,
 };
+
+type ManifestImage = { inspection: ImageInspection } | { issue: ImageIssue };
+
+/**
+ * What each image the manifest declares is, by inspectImage (format by bytes, structure, dimensions, size; nothing
+ * decoded): the archive path, checked to stay inside the archive, with its inspection or the issue that rules it out.
+ */
+async function manifestImages(
+  zip: JSZip,
+  opfPath: string,
+  items: ManifestItem[],
+  limits: ImageLimits,
+): Promise<Map<string, ManifestImage>> {
+  const images = new Map<string, ManifestImage>();
+
+  for (const item of items) {
+    const href = item["@_href"];
+    if (!href || !item["@_media-type"]?.startsWith("image/")) continue;
+
+    let imagePath: string;
+    try {
+      imagePath = resolveEpubPath(opfPath, href);
+    } catch {
+      continue;
+    }
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/)/i.test(href) || imagePath === ".." || imagePath.startsWith("../")) continue;
+
+    const file = zip.file(imagePath);
+    if (!file) {
+      images.set(imagePath, {
+        issue: { code: "missing", message: "declared in the manifest but missing from the archive" },
+      });
+      continue;
+    }
+    // The declared size is checked before inflating the entry.
+    if (declaredSize(file) > limits.maxFileBytes) {
+      images.set(imagePath, {
+        issue: { code: "file-too-large", message: `${declaredSize(file)} bytes exceeds ${limits.maxFileBytes}` },
+      });
+      continue;
+    }
+    const result = await inspectImage(await file.async("nodebuffer"), limits);
+    images.set(imagePath, result.ok ? { inspection: result.inspection } : { issue: result.issue });
+  }
+  return images;
+}
 
 // JSZip records the size declared in the central directory; reading it avoids inflating a zip bomb first.
 function declaredSize(file: JSZip.JSZipObject) {
@@ -239,7 +341,14 @@ export function detectCoverImage(data: Buffer): { mediaType: string; extension: 
   return null;
 }
 
-export async function parseEpub(buffer: Buffer, overrides: Partial<EpubLimits> = {}): Promise<ParsedEpub> {
+/** Code-point order, the same everywhere (localeCompare depends on the ICU data of the runtime). */
+export const compareText = (first: string, second: string) => (first < second ? -1 : first > second ? 1 : 0);
+
+export async function parseEpub(
+  buffer: Buffer,
+  overrides: Partial<EpubLimits> = {},
+  options: ParseOptions = {},
+): Promise<ParsedEpub> {
   const limits = { ...defaultEpubLimits, ...overrides };
 
   if (buffer.length > limits.maxFileBytes) {
@@ -514,7 +623,65 @@ export async function parseEpub(buffer: Buffer, overrides: Partial<EpubLimits> =
    * Structural chapter extraction.
    */
 
-  const { sections: rawSections, report: extraction } = extractEpubSectionsWithReport(documents, navigation, title);
+  const images = await manifestImages(zip, opfPath, manifestItems, limits.images);
+
+  /*
+   * With a codec, every image a figure resolves to is normalized, and one the codec rejects is unavailable like one
+   * inspection rejects. Extraction runs again until every admitted image is normalized: a rejected image frees its
+   * place in the per-edition budget, which may admit a later one, normalized in the next pass. Each pass normalizes
+   * at least one new image, so the loop ends. Identical bytes under several paths are normalized once.
+   */
+  const { codec } = options;
+  const normalized = new Map<string, ProcessedImage>();
+  const bySource = new Map<string, ProcessedImage>();
+
+  async function normalize(with_: ImageCodec, imagePath: string, inspection: ImageInspection): Promise<ProcessedImage> {
+    const known = bySource.get(inspection.sourceSha256);
+    if (known) return { ...known, sourcePath: imagePath };
+    const file = zip.file(imagePath);
+    const result: ProcessedImage = file
+      ? await processImage(imagePath, await file.async("nodebuffer"), with_, limits.images)
+      : { status: "rejected", sourcePath: imagePath, issue: { code: "missing", message: "missing from the archive" } };
+    bySource.set(inspection.sourceSha256, result);
+    return result;
+  }
+
+  let extracted: ReturnType<typeof extractEpubSectionsWithReport>;
+  for (;;) {
+    // Figures resolve in reading order, so the per-edition limits refuse the images past them, never earlier ones.
+    const budget = new EditionImageBudget(limits.images);
+    const admitted = new Set<string>();
+    extracted = extractEpubSectionsWithReport(documents, navigation, title, {
+      resolveImage: (imagePath) => {
+        const image = images.get(imagePath);
+        if (!image) {
+          return {
+            unavailable: zip.file(imagePath)
+              ? { code: "undeclared", message: "not declared as an image in the manifest" }
+              : { code: "missing", message: "missing from the archive" },
+          };
+        }
+        if ("issue" in image) return { unavailable: image.issue };
+        const result = normalized.get(imagePath);
+        if (result?.status === "rejected") return { unavailable: result.issue };
+        const refused = budget.admit(imagePath, image.inspection.bytes);
+        if (refused) return { unavailable: refused };
+        admitted.add(imagePath);
+        return { path: imagePath, mediaType: image.inspection.mediaType };
+      },
+    });
+    if (!codec) break;
+
+    const pending = [...admitted].filter((imagePath) => !normalized.has(imagePath));
+    if (!pending.length) break;
+    for (const imagePath of pending) {
+      const image = images.get(imagePath);
+      if (!image || "issue" in image) throw new Error(`EPUB image ${imagePath} was admitted without an inspection`);
+      normalized.set(imagePath, await normalize(codec, imagePath, image.inspection));
+    }
+    if (pending.every((imagePath) => normalized.get(imagePath)?.status === "ready")) break;
+  }
+  const { sections: rawSections, report: extraction } = extracted;
 
   if (rawSections.length === 0) {
     throw new Error("No readable chapters were detected in the EPUB");
@@ -537,16 +704,63 @@ export async function parseEpub(buffer: Buffer, overrides: Partial<EpubLimits> =
     while (usedSlugs.has(slug)) slug = `${baseSlug}-${suffix++}`;
     usedSlugs.add(slug);
 
+    // Validated like stored blocks will be: an extraction can never produce a shape the schema does not allow.
+    const blocks = parseChapterBlocks({ version: CHAPTER_BLOCKS_VERSION, blocks: section.blocks });
+    const content = deriveChapterContent(blocks.blocks);
+
     return {
       number: index + 1,
       slug,
       title: section.title,
-      content: section.content,
-      wordCount: countWords(section.content),
+      content,
+      wordCount: countWords(content),
+      blocks,
     };
   });
 
   extraction.warnings.push(...coverWarnings);
+
+  // Every figure with an image has its normalized image: the blocks never reference one that does not exist.
+  let figureImages: NormalizedImage[] | null = null;
+  if (codec) {
+    const byPath = new Map<string, NormalizedImage>();
+    for (const chapter of chapters) {
+      for (const block of chapter.blocks.blocks) {
+        if (block.type !== "figure" || !block.image || byPath.has(block.image.path)) continue;
+        const result = normalized.get(block.image.path);
+        if (result?.status !== "ready" || result.mediaType !== block.image.mediaType) {
+          throw new Error(`EPUB extraction failed: figure image ${block.image.path} has no normalized image`);
+        }
+        byPath.set(block.image.path, {
+          sourcePath: result.sourcePath,
+          sourceSha256: result.sourceSha256,
+          sha256: result.sha256,
+          key: result.key,
+          mediaType: result.mediaType,
+          width: result.width,
+          height: result.height,
+          bytes: result.bytes,
+          codec: result.codec,
+          data: result.data,
+          maxWidth: limits.images.maxNormalizedWidth,
+        });
+      }
+    }
+    figureImages = [...byPath.values()].sort((first, second) => compareText(first.sourcePath, second.sourcePath));
+  }
+
+  const imageWarnings: ImageWarning[] = extraction.images.unavailable.map((item) => {
+    const chapter = chapters[item.section];
+    if (!chapter) throw new Error(`EPUB extraction failed: unavailable image ${item.reference} has no chapter`);
+    return {
+      chapter: chapter.number,
+      chapterTitle: chapter.title,
+      reference: item.reference,
+      sourcePath: item.path,
+      code: item.code,
+      reason: item.reason,
+    };
+  });
 
   return {
     title,
@@ -556,5 +770,7 @@ export async function parseEpub(buffer: Buffer, overrides: Partial<EpubLimits> =
     cover,
     chapters,
     extraction,
+    images: figureImages,
+    imageWarnings,
   };
 }

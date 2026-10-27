@@ -11,6 +11,7 @@ import { importGutenbergBook, type ImportGutenbergOptions } from "./import-guten
 import { describeDatabaseTarget } from "./import-plan";
 import { ImportBlockedError, type EditionState } from "./import-state";
 import { parseEpub } from "./parse-epub";
+import { createSharpCodec } from "./sharp-codec";
 
 // Everything here runs against an in-memory database double: no PostgreSQL, R2 or network.
 
@@ -68,6 +69,7 @@ const emptyState: EditionState = {
   creatorAuthors: [],
   edition: null,
   chapters: [],
+  assets: [],
   progressChapterIds: [],
   progressRows: [],
 };
@@ -98,6 +100,7 @@ async function stateAfterImporting(
       publicationStatus,
     },
     chapters: parsed.chapters.map((chapter) => ({ ...chapter, id: `chapter-${chapter.slug}` })),
+    assets: [],
     progressChapterIds: [],
     progressRows: [],
     ...overrides,
@@ -168,6 +171,8 @@ function dependencies(database: ImportDatabase) {
     revalidations,
     dependencies: {
       database,
+      // The real sharp codec, unverified: these tests run on any platform, not only the approved one.
+      createCodec: async () => createSharpCodec(),
       uploadCover: async (input: { bookSlug: string }) => {
         uploads.push(input.bookSlug);
         return "https://covers.example/covers/uploaded.jpg";
