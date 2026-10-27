@@ -256,7 +256,7 @@ async function ReaderContent({ params, searchParams }: ReaderPageProps) {
         <ReaderView
           bookSlug={book.slug}
           bookTitle={book.edition.title}
-          author={book.authors.map((author) => author.name).join(", ")}
+          author={book.authors.map((author) => author.name).join(", ") || bookT("anonymousAuthor")}
           contentLanguage={contentLanguage}
           editionId={book.edition.id}
           chapterSlug={currentChapter.slug}

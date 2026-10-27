@@ -41,6 +41,7 @@
     "metadataDescription": "Lee {title} de {authors} gratis en línea en Libra. Explora esta edición digital y sus capítulos.",
     "metadataDescriptionWithoutAuthors": "Lee {title} gratis en línea en Libra. Explora esta edición digital y sus capítulos.",
     "by": "por",
+    "anonymousAuthor": "Anónimo",
     "translatedBy": "Traducción de {translator}",
     "chapters": "{count, plural, =0 {Sin capítulos} =1 {# capítulo} other {# capítulos}}",
     "showAllChapters": "{count, plural, =1 {Mostrar capítulo} other {Mostrar los # capítulos}}",

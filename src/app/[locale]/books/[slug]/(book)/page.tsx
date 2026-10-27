@@ -319,7 +319,7 @@ export default async function BookPage({ params }: BookPageProps) {
 
                       <div className="mx-auto my-5 h-px w-12 bg-white/40" />
 
-                      <p className="text-sm text-white/70">{authors}</p>
+                      <p className="text-sm text-white/70">{authors || t("anonymousAuthor")}</p>
                     </div>
 
                     {(book.edition.publicationYear ?? book.originalPublicationYear) && (
@@ -351,17 +351,24 @@ export default async function BookPage({ params }: BookPageProps) {
               </h1>
 
               <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-x-1 text-lg">
-                <span>{t("by")}</span>
+                {book.authors.length > 0 ? (
+                  <>
+                    <span>{t("by")}</span>
 
-                {book.authors.map((author, index) => (
-                  <span key={author.id}>
-                    <Link href={`/authors/${author.slug}`} className="text-foreground transition hover:underline">
-                      {author.name}
-                    </Link>
+                    {book.authors.map((author, index) => (
+                      <span key={author.id}>
+                        <Link href={`/authors/${author.slug}`} className="text-foreground transition hover:underline">
+                          {author.name}
+                        </Link>
 
-                    {index < book.authors.length - 1 && ","}
-                  </span>
-                ))}
+                        {index < book.authors.length - 1 && ","}
+                      </span>
+                    ))}
+                  </>
+                ) : (
+                  // An anonymous work: a label, not an author page.
+                  <span className="text-foreground">{t("anonymousAuthor")}</span>
+                )}
               </div>
 
               {book.originalPublicationYear !== null && (

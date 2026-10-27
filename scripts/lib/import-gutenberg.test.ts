@@ -492,16 +492,25 @@ test("L04: an existing author is reused as stored, never renamed or merged by th
   assert(printed.some((line) => line.includes("the stored name is kept")));
 });
 
-test("a book whose EPUB names no creator is refused because the catalog would never list it", async (t) => {
-  quiet(t);
+test("a book whose EPUB names no creator is imported as anonymous, without inventing an author", async (t) => {
+  const printed: string[] = [];
+  t.mock.method(console, "log", (...args: unknown[]) => printed.push(String(args[0])));
+  t.mock.method(console, "warn", () => {});
   const file = await writeEpub(t, threeChapters, { creator: "" });
-  const { database } = fakeDatabase(emptyState);
+  const { database, committed } = fakeDatabase(emptyState);
   const { dependencies: deps } = dependencies(database);
 
-  const outcome = await importGutenbergBook(options(file), deps);
+  const dryRun = await importGutenbergBook(options(file), deps);
+  assert.equal(dryRun.status, "planned");
+  assert(printed.some((line) => line.includes("Authors: none") && line.includes("anonymous")));
 
-  assert.equal(outcome.status, "blocked");
-  assert.ok("violations" in outcome && outcome.violations.some((violation) => violation.includes("no creator")));
+  const outcome = await importGutenbergBook(
+    options(file, { apply: true, confirmDatabase: database.target.token }),
+    deps,
+  );
+  assert.equal(outcome.status, "applied");
+  assert.deepEqual(committed[0].diff.authors, []);
+  assert.equal(committed[0].diff.keptAuthors, 0);
 });
 
 test("extraction warnings block the write until they are accepted", async (t) => {

@@ -10,6 +10,7 @@ import { drizzle } from "drizzle-orm/pg-proxy";
 import ts from "typescript";
 
 import * as schema from "../schema";
+import * as bookAuthors from "../../lib/book-authors";
 import * as filters from "../../lib/catalog-filters";
 import * as selection from "../../lib/edition-selection";
 import { isPublicEditionStatus } from "../../lib/editorial-status";
@@ -55,6 +56,7 @@ function queriesWithRows(...responses: Row[][]) {
     "drizzle-orm": orm,
     "drizzle-orm/pg-core": pg,
     "@/db/schema": schema,
+    "@/lib/book-authors": bookAuthors,
     "@/lib/catalog-filters": filters,
     "@/lib/edition-selection": selection,
     "./editorial-visibility": visibility,
@@ -250,6 +252,21 @@ test("multiple editions, authors and categories produce one catalog card per wor
     assertPublicFilter(statements[0]);
     assert.match(statements[0].sql, /exists \(select/);
     assert.ok(statements[0].params.includes("category-1"));
+  }
+});
+
+test("an anonymous work is listed with the anonymous label of the locale, and its authors are left-joined", async () => {
+  const rows = [joinedRow(english, { authorId: null, authorName: null, authorPosition: null })];
+  for (const [locale, label] of [
+    ["es", "Anónimo"],
+    ["en", "Anonymous"],
+  ] as const) {
+    const { queries, statements } = queriesWithRows([...rows]);
+    const result = await queries.getBooks(locale);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].author, label);
+    assert.match(statements[0].sql, /left join "book_authors"/);
+    assert.match(statements[0].sql, /left join "authors"/);
   }
 });
 

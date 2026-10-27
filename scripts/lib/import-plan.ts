@@ -487,12 +487,6 @@ export function evaluateImportPolicy({
     );
   }
 
-  if (diff.keptAuthors === 0 && diff.authors.length === 0) {
-    violations.push(
-      "The EPUB names no creator and the book has no authors: the catalog only lists books with an author, so it would never appear.",
-    );
-  }
-
   const withProgress = diff.removed.filter((chapter) => chapter.hasProgress);
   if (withProgress.length) {
     violations.push(
@@ -585,6 +579,9 @@ export function formatImportDiff(diff: ImportDiff): string[] {
     }
   } else if (diff.keptAuthors) {
     lines.push(`Authors: the book already has ${diff.keptAuthors}; they are not touched.`);
+  } else {
+    // No author record is invented: the catalog shows the work as anonymous.
+    lines.push("Authors: none; the EPUB names no creator, so the work is listed as anonymous.");
   }
 
   const added = diff.chapters.filter((change) => change.kind === "new");

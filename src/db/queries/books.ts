@@ -5,6 +5,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { cacheLife, cacheTag } from "next/cache";
 
 import { db } from "@/db";
+import { formatAuthorNames } from "@/lib/book-authors";
 import { containsPattern, normalizeCategorySlug, normalizeSearchQuery } from "@/lib/catalog-filters";
 import { chooseEdition } from "@/lib/edition-selection";
 
@@ -206,9 +207,10 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
     })
     .from(books)
 
-    .innerJoin(bookAuthors, eq(bookAuthors.bookId, books.id))
+    // Left joins: an anonymous work has no authors and is still listed.
+    .leftJoin(bookAuthors, eq(bookAuthors.bookId, books.id))
 
-    .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
+    .leftJoin(authors, eq(authors.id, bookAuthors.authorId))
 
     .innerJoin(editions, eq(editions.bookId, books.id))
 
@@ -327,11 +329,13 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
       grouped.set(row.bookId, currentBook);
     }
 
-    currentBook.authors.set(row.authorId, {
-      name: row.authorName,
+    if (row.authorId !== null && row.authorName !== null && row.authorPosition !== null) {
+      currentBook.authors.set(row.authorId, {
+        name: row.authorName,
 
-      position: row.authorPosition,
-    });
+        position: row.authorPosition,
+      });
+    }
 
     currentBook.editions.set(row.editionId, {
       slug: row.editionSlug,
@@ -353,10 +357,12 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
       return [];
     }
 
-    const author = Array.from(book.authors.values())
-      .sort((first, second) => first.position - second.position)
-      .map((item) => item.name)
-      .join(", ");
+    const author = formatAuthorNames(
+      Array.from(book.authors.values())
+        .sort((first, second) => first.position - second.position)
+        .map((item) => item.name),
+      locale,
+    );
 
     return [
       {
