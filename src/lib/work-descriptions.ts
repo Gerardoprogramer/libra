@@ -2,6 +2,7 @@ import { isSlug } from "./catalog-filters";
 
 import dracula from "../../content/works/dracula.json";
 import frankenstein from "../../content/works/frankenstein.json";
+import lazarilloDeTormes from "../../content/works/lazarillo-de-tormes.json";
 import marianela from "../../content/works/marianela.json";
 import treasureIsland from "../../content/works/treasure-island.json";
 
@@ -113,6 +114,7 @@ export const WORK_DESCRIPTIONS: ReadonlyMap<string, WorkDescription> = new Map(
   Object.entries({
     dracula,
     frankenstein,
+    "lazarillo-de-tormes": lazarilloDeTormes,
     marianela,
     "treasure-island": treasureIsland,
   }).map(([slug, value]) => [slug, parseWorkDescription(slug, value)]),
