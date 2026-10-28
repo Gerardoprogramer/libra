@@ -256,6 +256,14 @@ pnpm db:seed:categories -- --confirm-database <id>
 Reemplaza las relaciones de categorías de los libros definidos y requiere que todos existan. Tras confirmar, invalida la
 caché editorial. `pnpm db:seed` (semilla de desarrollo) **se niega a escribir en una base remota**, con cualquier flag.
 
+Para añadir categorías a libros nuevos sin tocar los demás, usa `scripts/add-book-categories.ts`, que solo inserta las
+relaciones que faltan en los libros de su lista (nunca borra ni reordena otras, y repetirlo no cambia nada):
+
+```bash
+pnpm db:categories:add                                      # dry-run, transacción READ ONLY
+pnpm db:categories:add -- --apply --confirm-database <id>
+```
+
 ## Migraciones aplicadas
 
 Estas dos migraciones **ya están aplicadas en producción** y registradas en el historial de Drizzle

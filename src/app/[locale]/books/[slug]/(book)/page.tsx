@@ -9,7 +9,6 @@ import { FiBookOpen } from "react-icons/fi";
 import { Badge } from "@/components/ui/badge";
 import { BookReadingAction } from "@/components/books/BookReadingAction";
 import { EditionDetails } from "@/components/books/EditionDetails";
-import { WorkDescription } from "@/components/books/WorkDescription";
 
 import { getBookBySlug, getBookContentLocales, getSitemapContent, type ContentLocale } from "@/db/queries/books";
 import { LibraryButton } from "@/components/books/LibraryButton";
@@ -153,8 +152,9 @@ export default async function BookPage({ params }: BookPageProps) {
   const imageUrl = book.edition.coverUrl ? getAbsolutePublicImageUrl(book.edition.coverUrl) : null;
 
   const workDescription = getWorkDescription(book.slug, interfaceLocale);
-  // Structured data repeats a description shown on the page, in full: the edition's, or else the work's. The work's
-  // is written in the interface language, so it is only used when that is the edition's (the Book's inLanguage).
+  // Descriptions are metadata only, never shown on the page. Structured data takes one in full: the edition's, or else
+  // the work's. The work's is written in the interface language, so it is only used when that is the edition's (the
+  // Book's inLanguage).
   const isContentLocaleMatch = getLanguageCode(book.edition.language) === interfaceLocale;
   const structuredDescription = book.edition.description?.trim() || (isContentLocaleMatch ? workDescription : null);
 
@@ -379,15 +379,6 @@ export default async function BookPage({ params }: BookPageProps) {
 
               <EditionDetails edition={book.edition} chapterCount={book.chapters.length} />
 
-              {book.edition.description && (
-                <p
-                  lang={getLanguageCode(book.edition.language)}
-                  className="text-muted-foreground mt-8 max-w-2xl text-base leading-8"
-                >
-                  {book.edition.description}
-                </p>
-              )}
-
               <div className="mt-9 flex flex-wrap items-start gap-3">
                 {firstChapter && (
                   <BookReadingAction
@@ -430,8 +421,6 @@ export default async function BookPage({ params }: BookPageProps) {
             </div>
           </div>
         </section>
-
-        <WorkDescription description={workDescription} lang={interfaceLocale} />
 
         <section className="mx-auto max-w-4xl px-6 py-14">
           <div className="mb-7 flex flex-wrap items-end justify-between gap-3">

@@ -174,3 +174,28 @@ test("the four pilot works are drafts in both languages, so none is shown yet", 
     assert.ok(work.review.length > 0, slug);
   }
 });
+
+test("Lazarillo de Tormes has its description published in both languages, with sources", () => {
+  const work = WORK_DESCRIPTIONS.get("lazarillo-de-tormes")!;
+  assert.ok(work);
+
+  for (const locale of ["es", "en"] as const) {
+    assert.equal(work[locale].status, "published", locale);
+    assert.equal(getWorkDescription("lazarillo-de-tormes", locale), work[locale].text);
+    const count = countWords(work[locale].text);
+    assert.ok(count >= 120 && count <= 150, `${locale}: ${count} words`);
+  }
+  assert.ok(work.sources.length > 0);
+});
+
+// Descriptions are metadata: only the book page's metadata reads them, never a component, the reader or a query.
+test("only the book page imports the work descriptions", () => {
+  const root = new URL("../", import.meta.url);
+  const importers = (readdirSync(root, { recursive: true }) as string[])
+    .filter((name) => /\.(ts|tsx)$/.test(name) && !/\.test\.tsx?$/.test(name))
+    .filter((name) => readFileSync(new URL(name.split("\\").join("/"), root), "utf8").includes("lib/work-descriptions"))
+    .map((name) => name.split("\\").join("/"))
+    .sort();
+
+  assert.deepEqual(importers, ["app/[locale]/books/[slug]/(book)/page.tsx"]);
+});

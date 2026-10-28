@@ -45,7 +45,6 @@ function translate(locale: Locale, namespace: "book" | "reader" = "book") {
 // Stand-ins for the components the page renders: the element tree keeps their props, which the tests read.
 const stub = (name: string) => Object.assign(() => null, { displayName: name });
 const JsonLd = stub("JsonLd");
-const WorkDescription = stub("WorkDescription");
 
 // Loads page.tsx with its dependencies replaced, so generateMetadata runs without a database or Next.js runtime.
 function loadPage(book: BookFixture, queriesOrOptions: string[] | PageOptions = []) {
@@ -67,7 +66,6 @@ function loadPage(book: BookFixture, queriesOrOptions: string[] | PageOptions = 
     "@/components/ui/badge": { Badge: stub("Badge") },
     "@/components/books/BookReadingAction": { BookReadingAction: stub("BookReadingAction") },
     "@/components/books/EditionDetails": { EditionDetails: stub("EditionDetails") },
-    "@/components/books/WorkDescription": { WorkDescription },
     "@/lib/work-descriptions": works
       ? {
           ...workDescriptions,
@@ -186,7 +184,7 @@ test("F-02: valid slugs, including accented ones, still reach the queries", asyn
   }
 });
 
-// "About this work" (src/lib/work-descriptions.ts).
+// Work and edition descriptions (src/lib/work-descriptions.ts): metadata only, never text on the page.
 
 const workText = {
   es: "Una novela de aventuras publicada como libro en 1883, narrada por un muchacho que se embarca en busca de un tesoro.",
@@ -226,28 +224,34 @@ interface Element {
   props: { children?: unknown; [name: string]: unknown };
 }
 
-// The rendered tree: the elements of the given component, and every text the page itself writes out.
+// The rendered tree: the Book of the structured data, and every string the page renders or hands to a component
+// (the components are stubs, so a description passed to any of them counts as shown). Only JsonLd's data is left out.
 function inspect(tree: unknown) {
   const elements: Element[] = [];
-  const texts: string[] = [];
-  const walk = (node: unknown) => {
-    if (Array.isArray(node)) node.forEach(walk);
-    else if (typeof node === "string") texts.push(node);
-    else if (node && typeof node === "object" && "props" in node) {
-      elements.push(node as Element);
-      walk((node as Element).props.children);
+  const visible: string[] = [];
+  const collect = (value: unknown) => {
+    if (typeof value === "string") visible.push(value);
+    else if (Array.isArray(value)) value.forEach(collect);
+    else if (value && typeof value === "object" && "props" in value) {
+      const element = value as Element;
+      elements.push(element);
+      for (const [name, prop] of Object.entries(element.props)) {
+        if (element.type === JsonLd && name === "data") continue;
+        collect(prop);
+      }
     }
   };
-  walk(tree);
-  const of = (component: unknown) => elements.filter((element) => element.type === component);
-  const [about] = of(WorkDescription);
-  const graph = (of(JsonLd)[0]?.props.data as { "@graph": Record<string, unknown>[] } | undefined)?.["@graph"] ?? [];
+  collect(tree);
+  const graph =
+    (
+      elements.find((element) => element.type === JsonLd)?.props.data as
+        { "@graph": Record<string, unknown>[] } | undefined
+    )?.["@graph"] ?? [];
 
   return {
-    about: about?.props as { description: string | null; lang: string } | undefined,
     structured: graph.find((entry) => entry["@type"] === "Book"),
-    // What a reader sees: the page's own text and the description WorkDescription renders.
-    visible: [...texts, ...(typeof about?.props.description === "string" ? [about.props.description] : [])],
+    visible,
+    shows: (text: string) => visible.some((shown) => shown.includes(text)),
   };
 }
 
@@ -273,33 +277,21 @@ test("metadata takes the edition's description, then the work's published one, t
     const metadata = await generateMetadata({ params: Promise.resolve({ locale: "en", slug: "treasure-island" }) });
 
     assert.equal(metadata.description, expected);
+    // The same description reaches the previews when the page is shared.
+    assert.equal(metadata.openGraph?.description, expected);
+    assert.equal(metadata.twitter?.description, expected);
   }
   assert.ok(workDescriptions.summarizeDescription(long).length <= 160);
 });
 
-test("a pilot description still in draft leaves the template, and no section, in both languages", async () => {
-  for (const locale of ["es", "en"] as const) {
-    // The real content/works, where the four pilot works are drafts.
-    const { generateMetadata } = loadPage(book({ language: locale }));
-    const metadata = await generateMetadata({ params: Promise.resolve({ locale, slug: "treasure-island" }) });
-    assert.equal(
-      metadata.description,
-      translate(locale)("metadataDescription", { title: "Treasure Island", authors: "Robert Louis Stevenson" }),
-    );
-
-    const page = await renderPage(book({ language: locale }), locale);
-    assert.equal(page.about?.description, null);
-    assert.equal(page.structured?.description, undefined);
-  }
-});
-
-test("the work's description is shown in the interface language, whichever edition of the work is served", async () => {
+test("the work's published description is metadata in each interface language, whichever edition is served", async () => {
   for (const locale of ["es", "en"] as const) {
     for (const language of ["en", "es"]) {
       const lookups: string[] = [];
-      const page = await renderPage(book({ language }), locale, { works: workText, lookups });
+      const { generateMetadata } = loadPage(book({ language }), { works: workText, lookups });
+      const metadata = await generateMetadata({ params: Promise.resolve({ locale, slug: "treasure-island" }) });
 
-      assert.deepEqual(page.about, { description: workText[locale], lang: locale }, `${locale} ${language}`);
+      assert.equal(metadata.description, workText[locale], `${locale} ${language}`);
       assert.ok(
         lookups.length > 0 && lookups.every((lookup) => lookup === `treasure-island:${locale}`),
         String(lookups),
@@ -308,37 +300,68 @@ test("the work's description is shown in the interface language, whichever editi
   }
 });
 
-test("structured data describes the book only with text shown on the page", async () => {
-  // The edition's description is shown in the header; it stays the one structured data repeats.
+test("no description is ever shown on the book page, in either language", async () => {
+  for (const locale of ["es", "en"] as const) {
+    for (const language of ["en", "es"]) {
+      const page = await renderPage(book({ language, description: "The edition's own words." }), locale, {
+        works: workText,
+      });
+
+      assert.equal(page.shows(workText.es), false, `${locale} ${language}`);
+      assert.equal(page.shows(workText.en), false, `${locale} ${language}`);
+      assert.equal(page.shows("The edition's own words."), false, `${locale} ${language}`);
+      // The page itself still renders: its title is on it.
+      assert.ok(page.shows("Treasure Island"), `${locale} ${language}`);
+    }
+  }
+});
+
+test("a pilot description still in draft leaves the template and no structured description, in both languages", async () => {
+  // The real content/works, where the four pilot works are drafts.
+  const drafts = (["es", "en"] as const).map(
+    (locale) => workDescriptions.WORK_DESCRIPTIONS.get("treasure-island")![locale],
+  );
+  assert.ok(drafts.every((draft) => draft.status === "draft"));
+
+  for (const locale of ["es", "en"] as const) {
+    const { generateMetadata } = loadPage(book({ language: locale }));
+    const metadata = await generateMetadata({ params: Promise.resolve({ locale, slug: "treasure-island" }) });
+    const template = translate(locale)("metadataDescription", {
+      title: "Treasure Island",
+      authors: "Robert Louis Stevenson",
+    });
+    assert.equal(metadata.description, template);
+    assert.equal(metadata.openGraph?.description, template);
+
+    const page = await renderPage(book({ language: locale }), locale);
+    assert.equal(page.structured?.description, undefined);
+    for (const draft of drafts) assert.equal(page.shows(draft.text), false);
+  }
+});
+
+test("structured data takes the edition's description, else the work's whole, and the page shows neither", async () => {
   let page = await renderPage(book({ language: "en", description: "The edition's own words." }), "en", {
     works: workText,
   });
   assert.equal(page.structured?.description, "The edition's own words.");
-  assert.ok(page.visible.includes(String(page.structured?.description)));
-  assert.equal(page.about?.description, workText.en);
+  assert.equal(page.shows("The edition's own words."), false);
 
-  // Without it, the work's description, whole, as the section shows it.
-  page = await renderPage(book({ language: "en" }), "en", { works: workText });
-  assert.equal(page.structured?.description, workText.en);
-  assert.ok(page.visible.includes(workText.en));
-  // Never the shortened text metadata uses, which the page does not show.
+  // Without it, the work's description, whole: never the shortened text of the meta description.
   const long = `${workText.en} ${"It sails on, chapter after chapter, through storms and calms. ".repeat(4)}`.trim();
   page = await renderPage(book({ language: "en" }), "en", { works: { en: long } });
   assert.equal(page.structured?.description, long);
-  assert.ok(page.visible.includes(long));
+  assert.equal(page.shows(long), false);
 
   // Without either, no description at all.
   page = await renderPage(book({ language: "en" }), "en", { works: {} });
   assert.equal(page.structured?.description, undefined);
-  assert.equal(page.about?.description, null);
 });
 
 test("structured data takes the work's description only in the language of the edition it describes", async () => {
-  // The Spanish interface serves the English edition: the section shows the Spanish text, but the Book is English.
+  // The Spanish interface serves the English edition: the Spanish text does not describe the English Book.
   let page = await renderPage(book({ language: "en" }), "es", { works: workText });
   assert.equal(page.structured?.inLanguage, "en");
   assert.equal(page.structured?.description, undefined);
-  assert.deepEqual(page.about, { description: workText.es, lang: "es" });
 
   // The edition's own description is still the Book's, whatever the interface language.
   page = await renderPage(book({ language: "en", description: "The edition's own words." }), "es", { works: workText });
