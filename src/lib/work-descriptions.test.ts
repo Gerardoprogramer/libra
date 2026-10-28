@@ -188,7 +188,7 @@ test("Lazarillo de Tormes has its description published in both languages, with 
   assert.ok(work.sources.length > 0);
 });
 
-// Descriptions are metadata: only the book page's metadata reads them, never a component, the reader or a query.
+// Only the book page reads the descriptions (it hands its synopsis to BookSynopsis as text), never the reader or a query.
 test("only the book page imports the work descriptions", () => {
   const root = new URL("../", import.meta.url);
   const importers = (readdirSync(root, { recursive: true }) as string[])

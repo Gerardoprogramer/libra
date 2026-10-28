@@ -39,19 +39,20 @@ export default function LoadingBookPage() {
               <Skeleton className="h-4 w-28" />
             </div>
 
-            {/* Description */}
-            <div className="mt-8 max-w-2xl space-y-3">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-11/12" />
-              <Skeleton className="h-4 w-3/4" />
-            </div>
-
             {/* Actions */}
             <div className="mt-9 flex flex-wrap gap-3">
               <Skeleton className="h-11 w-40 rounded-md" />
               <Skeleton className="h-11 w-44 rounded-md" />
               <Skeleton className="size-11 rounded-md" />
+            </div>
+
+            {/* Synopsis */}
+            <div className="mt-10 max-w-2xl space-y-3 border-t pt-8">
+              <Skeleton className="mb-5 h-7 w-32" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-11/12" />
+              <Skeleton className="h-4 w-3/4" />
             </div>
           </div>
         </div>

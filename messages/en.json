@@ -56,6 +56,8 @@
     "share": "Share book",
     "contents": "Contents",
     "chapterList": "Chapters",
+    "synopsis": "Synopsis",
+    "categories": "Categories",
     "originalPublicationYear": "Originally published in {year}",
     "editionDetails": "This edition",
     "editionLanguage": "Language: {language}",

@@ -19,9 +19,10 @@ import treasureIsland from "../../content/works/treasure-island.json";
 import tristana from "../../content/works/tristana.json";
 
 // An editorial description of the work itself, independent of any edition or translation, kept in
-// content/works/<book slug>.json with one text per interface language. It is metadata only (description, Open Graph,
-// Twitter and structured data): never text on the book page or in the reader. Each language has its own status; only
-// a published one is ever used, so a draft stays out of the metadata. The
+// content/works/<book slug>.json with one text per interface language. The book page shows it as its synopsis and uses
+// it in its metadata (description, Open Graph, Twitter and structured data); it is never part of the book, so the
+// reader and the chapters never show it. Each language has its own status; only a published one is ever used, so a
+// draft stays off the page and out of the metadata. The
 // files are imported here rather than read at runtime, so they ship with the build, and every one is validated when
 // this module loads: an invalid file fails the build and the tests instead of reaching a page.
 
