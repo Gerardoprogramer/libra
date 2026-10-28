@@ -49,6 +49,10 @@ const additions: Record<string, string[]> = {
   "la-corte-de-carlos-iv": ["classic-literature"],
 
   "a-tale-of-two-cities": ["classic-literature"],
+
+  "anne-of-green-gables": ["classic-literature"],
+
+  "the-secret-garden": ["classic-literature"],
 };
 
 config({
