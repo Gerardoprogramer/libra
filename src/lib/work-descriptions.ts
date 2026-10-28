@@ -1,15 +1,20 @@
 import { isSlug } from "./catalog-filters";
 
+import aTaleOfTwoCities from "../../content/works/a-tale-of-two-cities.json";
 import dracula from "../../content/works/dracula.json";
+import elAmigoManso from "../../content/works/el-amigo-manso.json";
 import frankenstein from "../../content/works/frankenstein.json";
+import laCorteDeCarlosIv from "../../content/works/la-corte-de-carlos-iv.json";
 import lazarilloDeTormes from "../../content/works/lazarillo-de-tormes.json";
 import littleWomen from "../../content/works/little-women.json";
 import marianela from "../../content/works/marianela.json";
+import miau from "../../content/works/miau.json";
 import persuasion from "../../content/works/persuasion.json";
 import senseAndSensibility from "../../content/works/sense-and-sensibility.json";
 import sotileza from "../../content/works/sotileza.json";
 import theCallOfTheWild from "../../content/works/the-call-of-the-wild.json";
 import treasureIsland from "../../content/works/treasure-island.json";
+import tristana from "../../content/works/tristana.json";
 
 // An editorial description of the work itself, independent of any edition or translation, kept in
 // content/works/<book slug>.json with one text per interface language. It is metadata only (description, Open Graph,
@@ -118,16 +123,21 @@ export function parseWorkDescription(slug: string, value: unknown): WorkDescript
 /** Every work with a description, keyed by its book slug (the file name). */
 export const WORK_DESCRIPTIONS: ReadonlyMap<string, WorkDescription> = new Map(
   Object.entries({
+    "a-tale-of-two-cities": aTaleOfTwoCities,
     dracula,
+    "el-amigo-manso": elAmigoManso,
     frankenstein,
+    "la-corte-de-carlos-iv": laCorteDeCarlosIv,
     "lazarillo-de-tormes": lazarilloDeTormes,
     "little-women": littleWomen,
     marianela,
+    miau,
     persuasion,
     "sense-and-sensibility": senseAndSensibility,
     sotileza,
     "the-call-of-the-wild": theCallOfTheWild,
     "treasure-island": treasureIsland,
+    tristana,
   }).map(([slug, value]) => [slug, parseWorkDescription(slug, value)]),
 );
 

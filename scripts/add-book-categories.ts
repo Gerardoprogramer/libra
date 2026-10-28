@@ -39,6 +39,16 @@ const additions: Record<string, string[]> = {
   "little-women": ["classic-literature"],
 
   "the-call-of-the-wild": ["classic-literature", "adventure"],
+
+  tristana: ["classic-literature"],
+
+  miau: ["classic-literature"],
+
+  "el-amigo-manso": ["classic-literature"],
+
+  "la-corte-de-carlos-iv": ["classic-literature"],
+
+  "a-tale-of-two-cities": ["classic-literature"],
 };
 
 config({
