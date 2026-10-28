@@ -8,6 +8,7 @@ import { FiBookOpen } from "react-icons/fi";
 
 import { Badge } from "@/components/ui/badge";
 import { BookReadingAction } from "@/components/books/BookReadingAction";
+import { BookSynopsis } from "@/components/books/BookSynopsis";
 import { EditionDetails } from "@/components/books/EditionDetails";
 
 import { getBookBySlug, getBookContentLocales, getSitemapContent, type ContentLocale } from "@/db/queries/books";
@@ -152,11 +153,16 @@ export default async function BookPage({ params }: BookPageProps) {
   const imageUrl = book.edition.coverUrl ? getAbsolutePublicImageUrl(book.edition.coverUrl) : null;
 
   const workDescription = getWorkDescription(book.slug, interfaceLocale);
-  // Descriptions are metadata only, never shown on the page. Structured data takes one in full: the edition's, or else
-  // the work's. The work's is written in the interface language, so it is only used when that is the edition's (the
-  // Book's inLanguage).
+  const editionDescription = book.edition.description?.trim() || null;
+  // The page shows one synopsis, in the order the meta description takes it: the edition's, in the edition's
+  // language, or else the work's published one, in the interface language. Never both, and never in the reader.
+  const synopsis = editionDescription
+    ? { text: editionDescription, lang: getLanguageCode(book.edition.language) }
+    : { text: workDescription, lang: interfaceLocale };
+  // Structured data takes a description in full: the edition's, or else the work's. The work's is written in the
+  // interface language, so it is only used when that is the edition's (the Book's inLanguage).
   const isContentLocaleMatch = getLanguageCode(book.edition.language) === interfaceLocale;
-  const structuredDescription = book.edition.description?.trim() || (isContentLocaleMatch ? workDescription : null);
+  const structuredDescription = editionDescription || (isContentLocaleMatch ? workDescription : null);
 
   const authorEntities = siteUrl
     ? book.authors.map((author) => {
@@ -334,13 +340,15 @@ export default async function BookPage({ params }: BookPageProps) {
 
             <div className="flex flex-col justify-center">
               {book.categories.length > 0 && (
-                <div className="mb-5 flex flex-wrap items-center gap-2">
+                <ul aria-label={t("categories")} className="mb-5 flex flex-wrap items-center gap-2">
                   {book.categories.map((category) => (
-                    <Badge key={category.id} variant="secondary" asChild>
-                      <Link href={`/books?category=${category.slug}`}>{category.name}</Link>
-                    </Badge>
+                    <li key={category.id} className="max-w-full">
+                      <Badge variant="secondary" className="max-w-full" asChild>
+                        <Link href={`/books?category=${category.slug}`}>{category.name}</Link>
+                      </Badge>
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
 
               <h1
@@ -418,6 +426,8 @@ export default async function BookPage({ params }: BookPageProps) {
                   errorLabel={t("shareError")}
                 />
               </div>
+
+              <BookSynopsis text={synopsis.text} lang={synopsis.lang} />
             </div>
           </div>
         </section>
