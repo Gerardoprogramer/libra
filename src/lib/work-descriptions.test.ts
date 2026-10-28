@@ -199,3 +199,14 @@ test("only the book page imports the work descriptions", () => {
 
   assert.deepEqual(importers, ["app/[locale]/books/[slug]/(book)/page.tsx"]);
 });
+
+test("every published description has its sources and stays within the editorial target", () => {
+  for (const [slug, work] of WORK_DESCRIPTIONS) {
+    for (const locale of ["es", "en"] as const) {
+      if (work[locale].status !== "published") continue;
+      const count = countWords(work[locale].text);
+      assert.ok(count >= 100 && count <= 150, `${slug} ${locale}: ${count} words`);
+      assert.ok(work.sources.length > 0, slug);
+    }
+  }
+});

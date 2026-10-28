@@ -1,0 +1,19 @@
+{
+  "es": {
+    "status": "published",
+    "text": "Sotileza es una novela costumbrista de José María de Pereda, publicada en 1885, que retrata el Santander marinero de mediados del siglo XIX, un mundo que ya había desaparecido cuando se publicó. Silda, una niña huérfana cuyo padre, pescador, murió en un naufragio, crece maltratada por la familia Mocejón hasta que huye. Acogida por el bondadoso tío Mechelín y la tía Sidora, que empiezan a llamarla Sotileza, se convierte en el centro de una historia en la que se cruzan las vidas de tres pretendientes: Muergo, Andrés y Cleto. La novela recorre las calles, los muelles y las tabernas de los barrios de pescadores, y conserva un vocabulario marinero en buena parte perdido, que el propio Pereda explicó en un glosario al final del libro. Está considerada una de las obras más importantes de su autor."
+  },
+  "en": {
+    "status": "published",
+    "text": "Sotileza is a novel of local customs by José María de Pereda, published in 1885, that portrays the seafaring Santander of the mid-nineteenth century, a world that had already vanished by the time it appeared. Silda, an orphan whose fisherman father died in a shipwreck, grows up mistreated by the Mocejón family until she runs away. Taken in by the kindly tío Mechelín and tía Sidora, who begin to call her Sotileza, she becomes the centre of a story that brings together the lives of three suitors: Muergo, Andrés and Cleto. The novel moves through the streets, docks and taverns of the fishermen's quarters, and it preserves a largely lost maritime vocabulary that Pereda himself explained in a glossary at the end of the book. It is regarded as one of its author's most important works."
+  },
+  "sources": [
+    "Wikipedia (es), «Sotileza», consultada el 2026-10-28: «publicada por primera vez en 1885»; «novela costumbrista»; el Santander marinero de mediados del siglo XIX, «ya desaparecido»; Silda, huérfana de un pescador muerto en un naufragio, maltratada por los Mocejón, de quienes huye; acogida por tío Mechelín y tía Sidora, que la llaman Sotileza; sus pretendientes Muergo, Andrés y Cleto; la calle Alta, el Cabildo de Arriba y el de Abajo, la taberna y los muelles; «intenta conservar un vocabulario marinero en buena parte perdido» y el glosario final del autor; «una de las obras más importantes de la producción de Pereda». https://es.wikipedia.org/wiki/Sotileza",
+    "Edición de Libra: Project Gutenberg, eBook #49388, cuarta edición (Madrid, Viuda é Hijos de Manuel Tello, 1906), versión sin imágenes; el glosario «Significación de algunas voces técnicas y locales» cierra la edición importada."
+  ],
+  "review": [
+    "Publicada en ambos idiomas el 2026-10-28 junto con la edición (Gutenberg #49388, PUBLIC_DOMAIN_VERIFIED). Las notas siguientes quedan como comprobaciones abiertas para una revisión editorial posterior.",
+    "La fuente da 1885 en el texto y «Novelas de 1884» en sus categorías; se usa 1885, el año que figura en el texto. Confirmar con una edición crítica.",
+    "«Novel of local customs» traduce «novela costumbrista»; comprobar si se prefiere «costumbrista novel»."
+  ]
+}

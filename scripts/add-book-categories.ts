@@ -29,6 +29,16 @@ const additions: Record<string, string[]> = {
   niebla: ["classic-literature"],
 
   trafalgar: ["classic-literature"],
+
+  sotileza: ["classic-literature"],
+
+  persuasion: ["classic-literature", "romance"],
+
+  "sense-and-sensibility": ["classic-literature", "romance"],
+
+  "little-women": ["classic-literature"],
+
+  "the-call-of-the-wild": ["classic-literature", "adventure"],
 };
 
 config({

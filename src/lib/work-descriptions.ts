@@ -3,7 +3,12 @@ import { isSlug } from "./catalog-filters";
 import dracula from "../../content/works/dracula.json";
 import frankenstein from "../../content/works/frankenstein.json";
 import lazarilloDeTormes from "../../content/works/lazarillo-de-tormes.json";
+import littleWomen from "../../content/works/little-women.json";
 import marianela from "../../content/works/marianela.json";
+import persuasion from "../../content/works/persuasion.json";
+import senseAndSensibility from "../../content/works/sense-and-sensibility.json";
+import sotileza from "../../content/works/sotileza.json";
+import theCallOfTheWild from "../../content/works/the-call-of-the-wild.json";
 import treasureIsland from "../../content/works/treasure-island.json";
 
 // An editorial description of the work itself, independent of any edition or translation, kept in
@@ -116,7 +121,12 @@ export const WORK_DESCRIPTIONS: ReadonlyMap<string, WorkDescription> = new Map(
     dracula,
     frankenstein,
     "lazarillo-de-tormes": lazarilloDeTormes,
+    "little-women": littleWomen,
     marianela,
+    persuasion,
+    "sense-and-sensibility": senseAndSensibility,
+    sotileza,
+    "the-call-of-the-wild": theCallOfTheWild,
     "treasure-island": treasureIsland,
   }).map(([slug, value]) => [slug, parseWorkDescription(slug, value)]),
 );
