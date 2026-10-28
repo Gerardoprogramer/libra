@@ -1,6 +1,7 @@
 import { isSlug } from "./catalog-filters";
 
 import aTaleOfTwoCities from "../../content/works/a-tale-of-two-cities.json";
+import anneOfGreenGables from "../../content/works/anne-of-green-gables.json";
 import dracula from "../../content/works/dracula.json";
 import elAmigoManso from "../../content/works/el-amigo-manso.json";
 import frankenstein from "../../content/works/frankenstein.json";
@@ -13,6 +14,7 @@ import persuasion from "../../content/works/persuasion.json";
 import senseAndSensibility from "../../content/works/sense-and-sensibility.json";
 import sotileza from "../../content/works/sotileza.json";
 import theCallOfTheWild from "../../content/works/the-call-of-the-wild.json";
+import theSecretGarden from "../../content/works/the-secret-garden.json";
 import treasureIsland from "../../content/works/treasure-island.json";
 import tristana from "../../content/works/tristana.json";
 
@@ -124,6 +126,7 @@ export function parseWorkDescription(slug: string, value: unknown): WorkDescript
 export const WORK_DESCRIPTIONS: ReadonlyMap<string, WorkDescription> = new Map(
   Object.entries({
     "a-tale-of-two-cities": aTaleOfTwoCities,
+    "anne-of-green-gables": anneOfGreenGables,
     dracula,
     "el-amigo-manso": elAmigoManso,
     frankenstein,
@@ -136,6 +139,7 @@ export const WORK_DESCRIPTIONS: ReadonlyMap<string, WorkDescription> = new Map(
     "sense-and-sensibility": senseAndSensibility,
     sotileza,
     "the-call-of-the-wild": theCallOfTheWild,
+    "the-secret-garden": theSecretGarden,
     "treasure-island": treasureIsland,
     tristana,
   }).map(([slug, value]) => [slug, parseWorkDescription(slug, value)]),
