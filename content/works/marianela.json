@@ -1,20 +1,19 @@
 {
   "es": {
-    "status": "draft",
-    "text": "Marianela es una novela de Benito Pérez Galdós publicada en 1878 y suele considerarse la que cierra el conjunto de sus novelas de tesis. Transcurre en una zona de minas, donde la aspereza del paisaje industrial convive con la belleza de la naturaleza que lo rodea. Nela es una muchacha huérfana, pobre y frágil, que en la casa donde la acogen recibe un trato apenas mejor que el de un animal. Su única compañía verdadera es Pablo, un joven ciego de buena posición a quien sirve de guía y que, sin poder juzgarla por su aspecto, comparte con ella una amistad estrecha. La llegada de un médico dispuesto a intentar devolverle la vista amenaza con alterar ese mundo cerrado. Con hondura psicológica y minuciosas descripciones del paisaje, Galdós enfrenta la ciencia y la imaginación, la apariencia y el valor de las personas."
+    "status": "published",
+    "text": "Marianela es una novela de Benito Pérez Galdós publicada en 1878 y suele considerarse la que cierra el conjunto de sus novelas de tesis. Transcurre en las minas de Socartes, donde la aspereza del paisaje industrial convive con la belleza de la naturaleza que lo rodea. Nela es una muchacha huérfana, pobre y frágil, que en la casa donde la acogen recibe un trato apenas mejor que el de un animal. Su única compañía verdadera es Pablo, un joven ciego de buena posición a quien sirve de guía y que, sin poder juzgarla por su aspecto, comparte con ella una amistad estrecha. La llegada de un médico dispuesto a intentar devolverle la vista amenaza con alterar ese mundo cerrado. Con hondura psicológica y minuciosas descripciones del paisaje, Galdós contrapone la apariencia y el verdadero valor de las personas."
   },
   "en": {
-    "status": "draft",
-    "text": "Marianela is a novel by Benito Pérez Galdós, published in 1878 and usually regarded as the work that closes his series of thesis novels. It is set in a mining district, where a harsh industrial landscape sits beside the beauty of the surrounding countryside. Nela is a poor, frail orphan girl who gets little better treatment than an animal in the house that took her in. Her one true companion is Pablo, a blind young man from a well-to-do family, whom she guides on long walks and who, unable to judge her by her looks, shares a close friendship with her. The arrival of a doctor willing to attempt to restore his sight threatens to unsettle that closed world. With psychological depth and detailed descriptions of nature, Galdós sets science against imagination, and appearances against a person's true worth."
+    "status": "published",
+    "text": "Marianela is a novel by Benito Pérez Galdós, published in 1878 and usually regarded as the work that closes his series of thesis novels. It is set in the mines of Socartes, where a harsh industrial landscape sits beside the beauty of the surrounding countryside. Nela is a poor, frail orphan girl who gets little better treatment than an animal in the house that took her in. Her one true companion is Pablo, a blind young man from a well-to-do family, whom she guides on his walks and who, unable to judge her by her looks, shares a close friendship with her. The arrival of a doctor willing to attempt to restore his sight threatens to unsettle that closed world. With psychological depth and detailed descriptions of nature, Galdós sets appearances against a person's true worth."
   },
   "sources": [
     "Wikipedia (es), «Marianela (novela)», consultada el 2026-10-25: publicada en 1878; cierra el conjunto de las novelas de tesis de Galdós; Nela, huérfana acogida por la familia Centeno, que la trata como a un animal; Pablo Penáguilas, ciego y de buena posición, que no la juzga por su apariencia; Teodoro Golfín, médico que se ofrece a devolverle la vista; análisis psicológico y descripciones detalladas de la naturaleza. https://es.wikipedia.org/wiki/Marianela_(novela)",
-    "Edición de Libra: Project Gutenberg, eBook #17340 (metadatos del EPUB local imports/marianela-17340.epub)."
+    "Edición de Libra: Project Gutenberg, eBook #17340 (metadatos del EPUB local imports/marianela-17340.epub). Contrastado con el texto el 2026-10-29: Golfín busca «las famosas minas de Socartes»; Nela vive «con el señor Centeno, capataz de ganado en las minas»; Pablo la llama su «lazarillo» y recuerda «nuestros paseos»."
   ],
   "review": [
-    "Pendiente de revisión editorial humana en ambos idiomas antes de publicar.",
-    "La formulación «enfrenta la ciencia y la imaginación» es una interpretación; la fuente habla de pesimismo, irracionalismo y ficción. Confirmar con un estudio crítico o suavizarla.",
-    "Sin verificar en la fuente consultada: los «largos paseos» de Nela y Pablo; proceden del conocimiento general de la novela.",
-    "No se sitúa la acción en una región concreta: la fuente consultada no menciona Socartes ni Cantabria."
+    "Revisado y publicado en ambos idiomas el 2026-10-29 tras contrastar los datos con la fuente y con el EPUB local. Queda abierta para una revisión editorial humana posterior.",
+    "Se suprimió la interpretación «enfrenta la ciencia y la imaginación», que la fuente no respaldaba; la frase final se limita al contraste entre apariencia y valor, que la fuente sí recoge (Pablo no la juzga por su apariencia).",
+    "Los «largos paseos» pasan a ser «paseos», como en el texto. La acción se sitúa en las minas de Socartes, según el texto; no se nombra la región (Cantabria), que el texto no da."
   ]
 }

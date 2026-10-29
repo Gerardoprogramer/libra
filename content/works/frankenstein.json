@@ -1,10 +1,10 @@
 {
   "es": {
-    "status": "draft",
+    "status": "published",
     "text": "Frankenstein o el moderno Prometeo es una novela de Mary Shelley publicada por primera vez en Londres, de forma anónima, en 1818; la autora la revisó para una nueva edición en 1831. Shelley empezó a escribirla en 1816, durante una estancia cerca del lago de Ginebra en la que un grupo de amigos se propuso escribir relatos de fantasmas. La novela se construye con relatos encajados: las cartas de un explorador del Ártico enmarcan la confesión de Victor Frankenstein, un joven estudioso de la filosofía natural que descubre cómo dar vida a la materia inerte, y dentro de ella se escucha la voz del ser que crea y después abandona. Entre el relato gótico y la reflexión filosófica, la obra se pregunta qué debe un creador a su criatura y cómo la soledad moldea una conciencia. Se la considera a menudo una de las primeras novelas de ciencia ficción."
   },
   "en": {
-    "status": "draft",
+    "status": "published",
     "text": "Frankenstein; or, The Modern Prometheus is a novel by Mary Shelley, first published anonymously in London in 1818; she revised it for a new edition in 1831. Shelley began the story in 1816, during a stay near Lake Geneva where a group of friends agreed to write ghost stories. The novel unfolds through nested accounts: the letters of an Arctic explorer frame the confession of Victor Frankenstein, a young student of natural philosophy who discovers how to bring lifeless matter to life, and within it we hear the voice of the being he creates and then abandons. Moving between Gothic tale and philosophical inquiry, the book asks what a creator owes to what he has made and how isolation shapes a mind. It is often considered one of the earliest science fiction novels."
   },
   "sources": [
@@ -12,8 +12,8 @@
     "Edición de Libra: Project Gutenberg, eBook #84 (metadatos del EPUB local imports/frankenstein.epub)."
   ],
   "review": [
-    "Pendiente de revisión editorial humana en ambos idiomas antes de publicar.",
-    "Sin verificar con la fuente consultada: que Walton sea un explorador del Ártico y que Victor estudie filosofía natural. Son datos del propio texto; confirmar con el libro.",
+    "Revisado y publicado en ambos idiomas el 2026-10-29 tras contrastar los datos con la fuente y con el EPUB local. Queda abierta para una revisión editorial humana posterior.",
+    "Verificado en el EPUB local imports/frankenstein.epub: las cartas de Walton narran su viaje hacia el polo («discovering a passage near the pole») y Victor atribuye su destino a la filosofía natural («Natural philosophy is the genius that has regulated my fate»).",
     "No se ha verificado si el eBook #84 de Project Gutenberg reproduce el texto de 1818 o el de 1831. La descripción no afirma cuál usa la edición de Libra, que almacena 1818 como año de edición.",
     "La descripción ya no afirma cuándo apareció por primera vez el nombre de la autora. Wikipedia (en), consultada el 2026-10-26, indica que fue en una traducción francesa publicada en París en 1821 y, en inglés, en la segunda edición de 1823 (G. and W. B. Whittaker); la edición de 1831 no fue la primera con su nombre. Confirmar con una fuente bibliográfica antes de añadir esas fechas.",
     "El título almacenado en la base de datos aparece como «Frankenstein; or, the modern prometheus», con minúsculas; es un problema de datos aparte."

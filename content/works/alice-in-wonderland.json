@@ -1,0 +1,18 @@
+{
+  "es": {
+    "status": "published",
+    "text": "Alicia en el país de las maravillas es una novela infantil de Lewis Carroll publicada en 1865 con ilustraciones de John Tenniel. Una tarde calurosa, mientras se aburre junto a su hermana, Alicia ve pasar un conejo blanco con chaleco y reloj de bolsillo que se lamenta de llegar tarde. Lo sigue por una madriguera, cae durante largo rato y aterriza en un mundo donde nada se comporta como debería. Una botella que dice «Bébeme» la encoge, un pastel la hace crecer hasta no caber en la habitación, y por el camino se cruza con una oruga que fuma en narguile, un gato que sonríe y desaparece, y el Sombrerero y la Liebre de Marzo en una merienda que nunca termina. Ejemplo clásico de la literatura del sinsentido, juega con la lógica y el lenguaje, y ha divertido por igual a niños y adultos durante generaciones."
+  },
+  "en": {
+    "status": "published",
+    "text": "Alice's Adventures in Wonderland is a children's novel by Lewis Carroll, published in 1865 with illustrations by John Tenniel. Sitting bored beside her sister one afternoon, Alice sees a White Rabbit in a waistcoat hurry past, checking a pocket watch and fretting that he is late. She follows him down a rabbit hole, falls for a very long time and lands in a world where nothing behaves as it should. A bottle labelled “Drink me” shrinks her, a cake makes her grow too big for the room, and along the way she meets a Caterpillar smoking a hookah, a grinning Cat that fades from sight, and the Hatter and the March Hare at a tea party that never ends. A classic of literary nonsense, it plays with logic and language, and it has delighted children and adults alike for generations."
+  },
+  "sources": [
+    "Wikipedia (en), «Alice's Adventures in Wonderland», consultada el 2026-10-29: novela infantil de 1865; 42 grabados de John Tenniel en la edición original; Alicia, aburrida junto a su hermana, sigue a un conejo blanco con reloj y chaleco por una madriguera; botella «Drink me» y pastel «Eat me»; la oruga con narguile, el gato de Cheshire que desaparece dejando su sonrisa, la merienda del Sombrerero y la Liebre de Marzo; ejemplo del género del sinsentido; juega con la lógica y es popular entre niños y adultos. https://en.wikipedia.org/wiki/Alice%27s_Adventures_in_Wonderland",
+    "Edición de Libra: Project Gutenberg, eBook #11. Contrastado con el EPUB local imports/alice-in-wonderland.epub: la etiqueta «DRINK ME» de la botella y «the hot day made her feel very sleepy» en el primer capítulo."
+  ],
+  "review": [
+    "Redactada y publicada en ambos idiomas el 2026-10-29 tras contrastar cada dato con las fuentes indicadas. Queda abierta para una revisión editorial humana posterior.",
+    "La descripción no revela el desenlace."
+  ]
+}

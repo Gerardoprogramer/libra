@@ -1,0 +1,19 @@
+{
+  "es": {
+    "status": "published",
+    "text": "Las aventuras de Tom Sawyer es una novela de Mark Twain publicada en 1876. Transcurre hacia las décadas de 1830 y 1840 en San Petersburgo, un pueblo imaginario a orillas del Misisipi inspirado en Hannibal, Misuri, donde el autor pasó su infancia. Tom es un muchacho huérfano, travieso e ingenioso, que vive con su tía Polly y su medio hermano Sid, y que prefiere ir a nadar antes que a la escuela. Castigado a encalar una valla, convence a los demás chicos de que es un privilegio y les cobra por hacerlo. Se enamora de Becky Thatcher, la niña recién llegada al pueblo, y comparte correrías con Huckleberry Finn, un chico vagabundo envidiado por todos por su libertad. Una noche en el cementerio, los dos amigos presencian algo que no debían ver. Con humor y nostalgia, Twain recrea la infancia y la vida de un pueblo junto al gran río."
+  },
+  "en": {
+    "status": "published",
+    "text": "The Adventures of Tom Sawyer is a novel by Mark Twain, published in 1876. It is set around the 1830s and 1840s in St. Petersburg, an imaginary town on the Mississippi modelled on Hannibal, Missouri, where Twain spent his boyhood. Tom is a mischievous, quick-witted orphan who lives with his Aunt Polly and his half-brother Sid, and who would rather go swimming than go to school. Punished with whitewashing a fence, he persuades the other boys that it is a privilege and has them pay for the chance. He falls for Becky Thatcher, the new girl in town, and runs wild with Huckleberry Finn, a vagrant boy whose freedom all the others envy. One night in the graveyard, the two friends witness something they were never meant to see. With humour and nostalgia, Twain recreates boyhood and the life of a small town beside the great river."
+  },
+  "sources": [
+    "Wikipedia (en), «The Adventures of Tom Sawyer», consultada el 2026-10-29: novela de Mark Twain publicada el 9 de junio de 1876; ambientada en las décadas de 1830 y 1840 en el pueblo ficticio de St. Petersburg, junto al Misisipi, basado en Hannibal (Misuri), donde vivió Twain de niño; Tom, huérfano de 12 o 13 años, vive con su tía Polly y su medio hermano Sid y falta a la escuela para ir a nadar; el castigo de encalar la valla y el trueque con los demás chicos; Becky Thatcher, recién llegada; Huckleberry Finn, chico vagabundo cuya libertad admiran los demás; la visita nocturna al cementerio, donde presencian una profanación de tumbas. https://en.wikipedia.org/wiki/The_Adventures_of_Tom_Sawyer",
+    "Edición de Libra: Project Gutenberg, eBook #74. El EPUB no está en imports/ de este checkout, por lo que los datos no se han contrastado con el texto."
+  ],
+  "review": [
+    "Redactada y publicada en ambos idiomas el 2026-10-29 tras contrastar cada dato con la fuente indicada. Queda abierta para una revisión editorial humana posterior.",
+    "Sin contrastar con el texto de la edición de Libra (EPUB no disponible localmente).",
+    "La descripción alude a lo que ocurre en el cementerio sin revelarlo, para no anticipar la trama principal."
+  ]
+}

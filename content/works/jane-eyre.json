@@ -1,0 +1,19 @@
+{
+  "es": {
+    "status": "published",
+    "text": "Jane Eyre es una novela de Charlotte Brontë publicada en Londres en octubre de 1847 con el seudónimo «Currer Bell» y el subtítulo «Una autobiografía». Narrada por su protagonista, sigue la vida de Jane desde la infancia. Huérfana, crece en Gateshead Hall con su tía, la señora Reed, que la trata como una carga, mientras sus primos la humillan. Enviada después al internado de Lowood, conoce allí la privación y la disciplina, pero también la amistad. Ya adulta, entra como institutriz en Thornfield Hall, una mansión del norte de Inglaterra, y se enamora de su enigmático dueño, el señor Rochester, un hombre sombrío y difícil de descifrar. Novela de formación narrada con una intensidad psicológica nueva, sorprendió por la intensidad con la que da voz a la conciencia de una mujer que defiende su independencia y su dignidad."
+  },
+  "en": {
+    "status": "published",
+    "text": "Jane Eyre is a novel by Charlotte Brontë, published in London in October 1847 under the pen name “Currer Bell” and subtitled “An Autobiography”. Told by its heroine, it follows Jane's life from childhood. An orphan, she grows up at Gateshead Hall with her aunt, Mrs Reed, who treats her as a burden, while her cousins torment her. Sent away to Lowood School, she meets hardship and harsh discipline there, but also friendship. As a young woman she becomes governess at Thornfield Hall, a house in the north of England, and falls in love with its mysterious master, Mr Rochester, a brooding man who is hard to read. A novel of growing up told with a new psychological intensity, it startled readers with the intensity with which it gives voice to the inner life of a woman who stands up for her independence and dignity."
+  },
+  "sources": [
+    "Wikipedia (en), «Jane Eyre», consultada el 2026-10-29: publicada el 19 de octubre de 1847 por Smith, Elder & Co. de Londres con el seudónimo «Currer Bell», originalmente como «Jane Eyre: An Autobiography»; bildungsroman narrado en primera persona; ambientada en el norte de Inglaterra; infancia en Gateshead Hall con su tía, la señora Reed, que la considera una carga, y sus primos; educación en Lowood School, con amistades y privaciones; institutriz en Thornfield Hall, donde se enamora de su misterioso patrón, Edward Rochester; intensidad psicológica e individualismo de la protagonista. https://en.wikipedia.org/wiki/Jane_Eyre",
+    "Edición de Libra: Project Gutenberg, eBook #1260. El EPUB no está en imports/ de este checkout, por lo que los datos no se han contrastado con el texto."
+  ],
+  "review": [
+    "Redactada y publicada en ambos idiomas el 2026-10-29 tras contrastar cada dato con la fuente indicada. Queda abierta para una revisión editorial humana posterior.",
+    "Sin contrastar con el texto de la edición de Libra (EPUB no disponible localmente); la descripción se limita a los datos de la fuente consultada.",
+    "La descripción no revela el secreto de Thornfield ni el desenlace."
+  ]
+}

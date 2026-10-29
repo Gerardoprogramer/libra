@@ -1,10 +1,10 @@
 {
   "es": {
-    "status": "draft",
+    "status": "published",
     "text": "La isla del tesoro es una novela de aventuras de Robert Louis Stevenson. Apareció primero por entregas en la revista Young Folks entre 1881 y 1882, con el seudónimo «Captain George North», y como libro en 1883. Casi toda la historia la narra Jim Hawkins, un muchacho cuya familia regenta una posada en la costa inglesa. Cuando un viejo marinero hospedado allí deja tras de sí un cofre con el mapa del tesoro enterrado de un pirata, Jim se une a una expedición que zarpa en la goleta Hispaniola. A bordo, las lealtades son inciertas, y la travesía se convierte pronto en una prueba de valor y de criterio. Sus personajes memorables y su ritmo ágil contribuyeron a fijar la imagen popular de los piratas, desde los mapas marcados con una X hasta los marineros con una sola pierna y un loro al hombro."
   },
   "en": {
-    "status": "draft",
+    "status": "published",
     "text": "Treasure Island is Robert Louis Stevenson's adventure novel. It first appeared in instalments in the magazine Young Folks in 1881–82, under the pseudonym \"Captain George North\", and was published as a book in 1883. Most of the story is told by Jim Hawkins, a boy whose family runs an inn on the English coast. When an old sailor lodging there leaves behind a sea chest holding the map of a pirate's buried treasure, Jim joins an expedition that sets sail on the schooner Hispaniola. On board, loyalties are uncertain, and the voyage soon becomes a test of courage and judgement. Its memorable characters and brisk storytelling helped fix the popular image of pirates, from maps marked with an X to one-legged seamen with parrots on their shoulders."
   },
   "sources": [
@@ -12,7 +12,7 @@
     "Ediciones de Libra: Project Gutenberg, eBook #120 (inglés) y eBook #45438 (español, traducción de Manuel Caballero, metadatos del EPUB local imports/la-isla-del-tesoro.epub). La descripción trata la obra, no una edición: la traducción ya figura en «Esta edición»."
   ],
   "review": [
-    "Pendiente de revisión editorial humana en ambos idiomas antes de publicar.",
-    "«En la costa inglesa» resume la ubicación de la posada Admiral Benbow; la fuente consultada no la detalla. Confirmar con el texto."
+    "Revisado y publicado en ambos idiomas el 2026-10-29 tras contrastar los datos con la fuente y con los EPUB locales. Queda abierta para una revisión editorial humana posterior.",
+    "«En la costa inglesa»: verificado en el EPUB local imports/treasure-island.epub (eBook #120), donde el viejo marino pasa el día «round the cove or upon the cliffs» junto a la posada, y Jim parte después a Bristol. La traducción española (imports/la-isla-del-tesoro.epub) nombra la posada «Almirante Benbow»."
   ]
 }

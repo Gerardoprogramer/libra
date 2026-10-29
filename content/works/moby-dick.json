@@ -1,0 +1,19 @@
+{
+  "es": {
+    "status": "published",
+    "text": "Moby Dick es una novela del escritor estadounidense Herman Melville publicada en 1851. La narra Ismael, un marinero sin rumbo que abre el libro con una de las frases más célebres de la literatura: «Llamadme Ismael». En busca de trabajo en un ballenero, llega a New Bedford, donde traba una amistad inesperada con Queequeg, un arponero polinesio cubierto de tatuajes, y juntos se enrolan en el Pequod. Cuando el barco ya está en alta mar aparece su capitán, Ahab, que perdió una pierna en un encuentro con Moby Dick, un gigantesco cachalote blanco, y que revela a la tripulación que su verdadero propósito es la venganza. Entre la aventura marítima y la meditación filosófica, el relato alterna la persecución con capítulos sobre las ballenas y la caza. Recibida con frialdad en su tiempo, hoy se la considera una de las grandes novelas estadounidenses."
+  },
+  "en": {
+    "status": "published",
+    "text": "Moby-Dick; or, The Whale is a novel by the American writer Herman Melville, published in 1851. It is narrated by Ishmael, a restless sailor who opens the book with one of literature's most famous lines: “Call me Ishmael.” Looking for a berth on a whaler, he reaches New Bedford, where he strikes up an unlikely friendship with Queequeg, a tattooed Polynesian harpooneer, and together they sign on to the Pequod. Once the ship is at sea its captain appears: Ahab, who lost a leg to Moby Dick, a giant white sperm whale, and who reveals to the crew that his true purpose is revenge. Moving between sea adventure and philosophical meditation, the story sets the chase alongside chapters on whales and whaling. Coolly received in its day, it is now considered one of the great American novels."
+  },
+  "sources": [
+    "Wikipedia (en), «Moby-Dick», consultada el 2026-10-29: novela de 1851 del estadounidense Herman Melville; narración del marinero Ishmael sobre la búsqueda obsesiva de Ahab, capitán del ballenero Pequod, para vengarse de Moby Dick, el cachalote blanco que le arrancó una pierna; frase inicial «Call me Ishmael», entre las más famosas de la literatura; Ishmael viaja a New Bedford, comparte cama con Queequeg, arponero polinesio tatuado, y se enrola en el Pequod; Ahab aparece ya en alta mar y jura venganza; capítulos de cetología; críticas mixtas y fracaso comercial en su tiempo, reconocida como Gran Novela Americana en el siglo XX. https://en.wikipedia.org/wiki/Moby-Dick",
+    "Edición de Libra: Project Gutenberg, eBook #15. Contrastado con el EPUB local imports/moby-dick.epub: índice con los capítulos dedicados al Pequod."
+  ],
+  "review": [
+    "Redactada y publicada en ambos idiomas el 2026-10-29 tras contrastar cada dato con las fuentes indicadas. Queda abierta para una revisión editorial humana posterior.",
+    "El texto español usa las formas habituales «Moby Dick» e «Ismael», y la cita «Llamadme Ismael», traducción corriente de la frase inicial; la ficha muestra el título inglés de la edición.",
+    "La descripción no revela el desenlace."
+  ]
+}

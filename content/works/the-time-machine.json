@@ -1,0 +1,18 @@
+{
+  "es": {
+    "status": "published",
+    "text": "La máquina del tiempo es una novela breve de ciencia ficción de H. G. Wells publicada en 1895. Un científico inglés al que el libro solo llama el Viajero del Tiempo asegura a sus invitados, en una de sus cenas semanales, que ha construido una máquina capaz de moverse a través del tiempo, y les muestra un pequeño modelo que se desvanece ante sus ojos. Una semana después reaparece agotado y maltrecho para contarles lo que ha visto. Su viaje lo ha llevado al año 802.701, a un mundo de jardines y edificios en ruinas habitado por los eloi, unos seres pequeños, dulces y despreocupados que, sin embargo, temen la oscuridad. Pronto descubre que ese aparente paraíso esconde algo más. Obra pionera que popularizó la idea de viajar en el tiempo con una máquina, es también una inquietante reflexión sobre la desigualdad y el futuro de la humanidad."
+  },
+  "en": {
+    "status": "published",
+    "text": "The Time Machine is a science fiction novella by H. G. Wells, published in 1895. An English scientist whom the book calls only the Time Traveller tells the guests at one of his weekly dinners that he has built a machine that can move through time, and shows them a small model that vanishes before their eyes. A week later he returns, exhausted and dishevelled, to tell them what he has seen. His journey has taken him to the year 802,701, to a world of gardens and crumbling buildings inhabited by the Eloi, small, gentle, carefree beings who are nonetheless afraid of the dark. He soon finds that this apparent paradise hides something more. A pioneering work that popularised the idea of travelling through time in a machine, it is also an unsettling reflection on inequality and the future of humankind."
+  },
+  "sources": [
+    "Wikipedia (en), «The Time Machine», consultada el 2026-10-29: novela breve de ciencia ficción de H. G. Wells de 1895; un científico victoriano conocido solo como el Viajero del Tiempo viaja al año 802.701; relato enmarcado: muestra a sus invitados de las cenas semanales un pequeño modelo que desaparece y la semana siguiente, agotado, les cuenta su viaje; los eloi, pequeños e infantiles, viven en edificios en ruinas, parecen felices y despreocupados pero temen la oscuridad; popularizó la idea de viajar en el tiempo con una máquina; lectura moderna como comentario sobre la desigualdad y las clases sociales. https://en.wikipedia.org/wiki/The_Time_Machine",
+    "Edición de Libra: Project Gutenberg, eBook #35. Contrastado con el EPUB local imports/the-time-machine.epub: el año «Eight Hundred and Two Thousand Seven Hundred and One»."
+  ],
+  "review": [
+    "Redactada y publicada en ambos idiomas el 2026-10-29 tras contrastar cada dato con las fuentes indicadas. Queda abierta para una revisión editorial humana posterior.",
+    "La descripción no menciona a los morlocks ni el desenlace, para no anticipar lo que el viajero descubre."
+  ]
+}
