@@ -12,7 +12,8 @@
     "Edición de Libra: Project Gutenberg, eBook #345 (metadatos del EPUB local imports/dracula.epub). Contrastado con el texto el 2026-10-29: capítulos iniciales «Jonathan Harker's Journal», el castillo sobre los Cárpatos y la compra de Carfax, cerca de Purfleet."
   ],
   "review": [
-    "Revisado y publicado en ambos idiomas el 2026-10-29: se contrastaron los datos con la fuente y con el EPUB local, y se suprimió «en Londres» como lugar de la primera publicación por no estar confirmado. Queda abierta para una revisión editorial humana posterior.",
+    "Publicado en ambos idiomas el 2026-10-29 tras una revisión hecha por un asistente de IA (Claude), no por una persona: contrastó los datos con la fuente y con el EPUB local, y suprimió «en Londres» como lugar de la primera publicación por no estar confirmado. Pendiente de confirmación editorial humana por el propietario.",
+    "Verificado en el EPUB local el 2026-10-29: Mina escribe que Jonathan es «a solicitor» (abogado); el castillo de Drácula está en los Cárpatos; la casa comprada es Carfax, cerca de Purfleet. La descripción no revela nada posterior al viaje de Harker.",
     "La ficha almacena 1897 como año de la edición de Libra, aunque el texto procede del eBook de Project Gutenberg; ese dato no se usa en esta descripción."
   ]
 }
