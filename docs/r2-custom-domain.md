@@ -39,13 +39,20 @@ De [Default cache behavior](https://developers.cloudflare.com/cache/concepts/def
 - Se cachea una respuesta con `Cache-Control: public` y `max-age` mayor que 0, sin `Set-Cookie` y para `GET`; en los
   planes Free, Pro y Business se respeta el `Cache-Control` del origen.
 
+De [Cache responses](https://developers.cloudflare.com/cache/concepts/cache-responses/): `HIT` se sirvió de la caché;
+`MISS` era cacheable pero no estaba; `DYNAMIC` no era apto para caché y fue al origen sin consultarla; `BYPASS` el
+origen respondió algo no cacheable.
+
 De [R2 pricing](https://developers.cloudflare.com/r2/pricing/): Clase B $0,36 por millón con 10 millones gratis al mes;
-salida de datos gratuita.
+`GetObject` y `HeadObject` son Clase B; salida de datos gratuita.
 
 ## Supuestos (por comprobar en la fase 2)
 
 - Que un acierto de la caché de Cloudflare no cuenta como operación de R2. La documentación de precios no lo dice
-  explícitamente; se comprobará con las métricas del bucket antes y después.
+  explícitamente; se comprobará con las métricas del bucket antes y después. La caché es por centro de datos y no
+  garantiza conservar un objeto poco pedido: un `HIT` en una prueba no implica que todas las lecturas eviten R2.
+- Que las peticiones `HEAD` no se cachean igual que `GET` (en el foro de Cloudflare se informa `DYNAMIC` para `HEAD`
+  en dominios de R2; no está en la documentación). Por eso la caché se comprueba siempre con `GET`.
 - Que el certificado del subdominio se emite automáticamente al conectar el dominio (la página no lo detalla); se
   comprueba en la fase 1 con una petición HTTPS.
 - Que no hace falta ninguna regla de caché: las portadas son `.jpg`/`.png` con `max-age` de un año. Si
@@ -74,8 +81,11 @@ Nada cambia para los lectores: la aplicación sigue usando r2.dev.
 
 ### 2. Caché
 
-1. Pedir la misma portada dos o tres veces: la primera puede dar `cf-cache-status: MISS`, las siguientes deben dar
-   `HIT` con `cache-control: public, max-age=31536000, immutable`.
+1. Pedir la misma portada con `GET` dos o tres veces, unos segundos aparte, y leer solo las cabeceras:
+   `curl -s -o /dev/null -D - https://covers.alyvenor.com/covers/dracula-345-2c05b012cd42.jpg | grep -iE '^(cf-cache-status|age|cache-control):'`.
+   La primera puede dar `cf-cache-status: MISS` sin `Age`; las siguientes deben dar `HIT`, un `Age` que crece entre
+   peticiones y `cache-control: public, max-age=31536000, immutable`. `DYNAMIC` o `BYPASS` indican que no se cachea:
+   entonces se valora la Cache Rule acotada de los supuestos.
 2. Comparar el SHA-256 del cuerpo con el de r2.dev.
 3. Anotar los contadores de Clase B del bucket y repetir las peticiones con `HIT` para comprobar que no suben.
 
