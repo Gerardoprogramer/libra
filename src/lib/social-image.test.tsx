@@ -14,6 +14,8 @@ import * as metadata from "./social-metadata";
 
 // Exercise the real ImageResponse renderer while isolating Next's cache runtime
 // and the remote cover. These tests never connect to PostgreSQL or R2.
+// The cache lifetimes the module asks for, in order (the runtime that would honour them is replaced).
+const cacheLives: string[] = [];
 const loadImageModule = compileFunction(
   ts.transpileModule(readFileSync(new URL("./social-image.tsx", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
@@ -26,7 +28,12 @@ const dependencies: Record<string, unknown> = {
   "node:path": path,
   "react/jsx-runtime": jsx,
   "next/og": og,
-  "next/cache": { cacheLife() {}, cacheTag() {} },
+  "next/cache": {
+    cacheLife(profile: string) {
+      cacheLives.push(profile);
+    },
+    cacheTag() {},
+  },
   "@/components/seo/SocialCard": { SocialCard },
   "@/lib/site-url": urls,
   "@/lib/social-metadata": metadata,
@@ -96,4 +103,53 @@ test("real cover bytes change the card; unavailable and corrupt images fall back
   const calls = fetchMock.mock.callCount();
   await png(await moduleExports.createSocialImage({ ...details, coverUrl: "https://untrusted.example/cover.png" }));
   assert.equal(fetchMock.mock.callCount(), calls, "Only the configured R2 media base may be fetched");
+});
+
+// Each cover read is an R2 operation. A content-addressed cover is cached for the longest lifetime, and a failed read
+// throws out of the cached function, so the fallback card is never what gets cached.
+test("a cover read is cached for the longest lifetime, and a failed read is not", async (context) => {
+  const original = process.env.R2_PUBLIC_URL;
+  process.env.R2_PUBLIC_URL = "https://covers.example/books";
+  context.after(() => {
+    if (original === undefined) delete process.env.R2_PUBLIC_URL;
+    else process.env.R2_PUBLIC_URL = original;
+  });
+  const withCover = { ...details, coverUrl: "https://covers.example/books/covers/historia-1-abc123.png" };
+  const image = readFileSync("public/icons/libra-192.png");
+
+  cacheLives.length = 0;
+  const fetchMock = context.mock.method(
+    globalThis,
+    "fetch",
+    async () => new Response(image, { headers: { "Content-Type": "image/png" } }),
+  );
+  await png(await moduleExports.createSocialImage(withCover));
+  assert.equal(fetchMock.mock.callCount(), 1);
+  assert.deepEqual(
+    cacheLives,
+    ["max"],
+    "the cover is cached with the longest built-in lifetime, not the editorial one",
+  );
+
+  // The cached function rejects on failure (a "use cache" result is only stored when it resolves); the card falls back.
+  for (const failure of [
+    async () => new Response(null, { status: 503 }),
+    async () => new Response("<html>", { headers: { "Content-Type": "text/html" } }),
+    async () => {
+      throw new Error("network unavailable");
+    },
+  ]) {
+    fetchMock.mock.mockImplementation(failure);
+    cacheLives.length = 0;
+    const card = await png(await moduleExports.createSocialImage(withCover));
+    assert.ok(card.length > 0);
+    assert.deepEqual(cacheLives, ["max"]);
+  }
+
+  // Covers outside the configured R2 base are never fetched, so they never reach the cached function at all.
+  cacheLives.length = 0;
+  const calls = fetchMock.mock.callCount();
+  await png(await moduleExports.createSocialImage({ ...details, coverUrl: "https://untrusted.example/cover.png" }));
+  assert.equal(fetchMock.mock.callCount(), calls);
+  assert.deepEqual(cacheLives, []);
 });
