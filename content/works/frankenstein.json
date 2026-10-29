@@ -12,9 +12,10 @@
     "Edición de Libra: Project Gutenberg, eBook #84 (metadatos del EPUB local imports/frankenstein.epub)."
   ],
   "review": [
-    "Revisado y publicado en ambos idiomas el 2026-10-29 tras contrastar los datos con la fuente y con el EPUB local. Queda abierta para una revisión editorial humana posterior.",
+    "Publicado en ambos idiomas el 2026-10-29 tras una revisión hecha por un asistente de IA (Claude), no por una persona, que contrastó los datos con la fuente y con el EPUB local. Pendiente de confirmación editorial humana por el propietario.",
     "Verificado en el EPUB local imports/frankenstein.epub: las cartas de Walton narran su viaje hacia el polo («discovering a passage near the pole») y Victor atribuye su destino a la filosofía natural («Natural philosophy is the genius that has regulated my fate»).",
-    "No se ha verificado si el eBook #84 de Project Gutenberg reproduce el texto de 1818 o el de 1831. La descripción no afirma cuál usa la edición de Libra, que almacena 1818 como año de edición.",
+    "No se ha verificado si el eBook #84 de Project Gutenberg reproduce el texto de 1818 o el de 1831. Indicio (2026-10-29): el EPUB local no contiene la introducción de la autora de 1831 (no menciona a Byron ni la propuesta de escribir relatos de fantasmas). La descripción no afirma cuál usa la edición de Libra, que almacena 1818 como año de edición; los datos de 1816 y del lago de Ginebra proceden de la fuente, no del EPUB.",
+    "La frase «la voz del ser que crea y después abandona» alude al capítulo 5, al comienzo de la novela; no revela el desenlace. Confirmar que se acepta como parte de la premisa.",
     "La descripción ya no afirma cuándo apareció por primera vez el nombre de la autora. Wikipedia (en), consultada el 2026-10-26, indica que fue en una traducción francesa publicada en París en 1821 y, en inglés, en la segunda edición de 1823 (G. and W. B. Whittaker); la edición de 1831 no fue la primera con su nombre. Confirmar con una fuente bibliográfica antes de añadir esas fechas.",
     "El título almacenado en la base de datos aparece como «Frankenstein; or, the modern prometheus», con minúsculas; es un problema de datos aparte."
   ]

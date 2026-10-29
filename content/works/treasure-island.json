@@ -12,7 +12,8 @@
     "Ediciones de Libra: Project Gutenberg, eBook #120 (inglés) y eBook #45438 (español, traducción de Manuel Caballero, metadatos del EPUB local imports/la-isla-del-tesoro.epub). La descripción trata la obra, no una edición: la traducción ya figura en «Esta edición»."
   ],
   "review": [
-    "Revisado y publicado en ambos idiomas el 2026-10-29 tras contrastar los datos con la fuente y con los EPUB locales. Queda abierta para una revisión editorial humana posterior.",
+    "Publicado en ambos idiomas el 2026-10-29 tras una revisión hecha por un asistente de IA (Claude), no por una persona, que contrastó los datos con la fuente y con los EPUB locales. Pendiente de confirmación editorial humana por el propietario.",
+    "«A bordo, las lealtades son inciertas» anticipa el conflicto de la travesía sin revelar quién ni cómo; decidir si se mantiene o se suprime. El EPUB local confirma el mapa de una isla con cruces que marcan el tesoro («a map of an island, that there's crosses on the map to show where treasure is»).",
     "«En la costa inglesa»: verificado en el EPUB local imports/treasure-island.epub (eBook #120), donde el viejo marino pasa el día «round the cove or upon the cliffs» junto a la posada, y Jim parte después a Bristol. La traducción española (imports/la-isla-del-tesoro.epub) nombra la posada «Almirante Benbow»."
   ]
 }
