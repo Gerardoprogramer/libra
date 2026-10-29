@@ -3,28 +3,32 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
+// R2_PUBLIC_URL is the base of the covers. R2_PUBLIC_URL_PREVIOUS, optional, is the base they had before a move to a
+// new domain (docs/r2-custom-domain.md): it keeps the stored URLs working until they are migrated, then is removed.
 function getR2RemotePatterns() {
-  const configuredUrl = process.env.R2_PUBLIC_URL;
+  return (["R2_PUBLIC_URL", "R2_PUBLIC_URL_PREVIOUS"] as const).flatMap((name) => {
+    const configuredUrl = process.env[name];
 
-  if (!configuredUrl) {
-    return [];
-  }
+    if (!configuredUrl) {
+      return [];
+    }
 
-  const publicUrl = new URL(configuredUrl);
+    const publicUrl = new URL(configuredUrl);
 
-  if (
-    publicUrl.protocol !== "https:" ||
-    publicUrl.username ||
-    publicUrl.password ||
-    publicUrl.search ||
-    publicUrl.hash
-  ) {
-    throw new Error("R2_PUBLIC_URL must be an HTTPS URL without credentials, query or fragment.");
-  }
+    if (
+      publicUrl.protocol !== "https:" ||
+      publicUrl.username ||
+      publicUrl.password ||
+      publicUrl.search ||
+      publicUrl.hash
+    ) {
+      throw new Error(`${name} must be an HTTPS URL without credentials, query or fragment.`);
+    }
 
-  const baseUrl = `${publicUrl.origin}${publicUrl.pathname.replace(/\/$/, "")}`;
+    const baseUrl = `${publicUrl.origin}${publicUrl.pathname.replace(/\/$/, "")}`;
 
-  return [new URL(`${baseUrl}/**`)];
+    return [new URL(`${baseUrl}/**`)];
+  });
 }
 
 const nextConfig: NextConfig = {

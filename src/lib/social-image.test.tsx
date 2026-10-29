@@ -105,6 +105,46 @@ test("real cover bytes change the card; unavailable and corrupt images fall back
   assert.equal(fetchMock.mock.callCount(), calls, "Only the configured R2 media base may be fetched");
 });
 
+// During a move to a custom domain both bases serve the same objects: covers under either one are read, any other
+// origin still is not. Without R2_PUBLIC_URL_PREVIOUS only the current base is allowed, as before.
+test("during a domain move, covers under the previous base are still read", async (context) => {
+  const saved = { current: process.env.R2_PUBLIC_URL, previous: process.env.R2_PUBLIC_URL_PREVIOUS };
+  process.env.R2_PUBLIC_URL = "https://covers.example.com";
+  process.env.R2_PUBLIC_URL_PREVIOUS = "https://pub-0123.r2.dev";
+  context.after(() => {
+    for (const [name, value] of [
+      ["R2_PUBLIC_URL", saved.current],
+      ["R2_PUBLIC_URL_PREVIOUS", saved.previous],
+    ] as const) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+  const image = readFileSync("public/icons/libra-192.png");
+  const fetchMock = context.mock.method(
+    globalThis,
+    "fetch",
+    async () => new Response(image, { headers: { "Content-Type": "image/png" } }),
+  );
+
+  for (const coverUrl of [
+    "https://covers.example.com/covers/historia-1-abc123.png",
+    "https://pub-0123.r2.dev/covers/historia-1-abc123.png",
+  ]) {
+    const before = fetchMock.mock.callCount();
+    await png(await moduleExports.createSocialImage({ ...details, coverUrl }));
+    assert.equal(fetchMock.mock.callCount(), before + 1, coverUrl);
+  }
+
+  const before = fetchMock.mock.callCount();
+  await png(
+    await moduleExports.createSocialImage({ ...details, coverUrl: "https://pub-0123.r2.dev.evil.example/x.png" }),
+  );
+  delete process.env.R2_PUBLIC_URL_PREVIOUS;
+  await png(await moduleExports.createSocialImage({ ...details, coverUrl: "https://pub-0123.r2.dev/covers/x.png" }));
+  assert.equal(fetchMock.mock.callCount(), before, "other origins, and the previous base once removed, are not read");
+});
+
 // Each cover read is an R2 operation. A content-addressed cover is cached for the longest lifetime, and a failed read
 // throws out of the cached function, so the fallback card is never what gets cached.
 test("a cover read is cached for the longest lifetime, and a failed read is not", async (context) => {

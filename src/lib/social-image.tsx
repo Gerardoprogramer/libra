@@ -54,13 +54,19 @@ async function fetchCover(url: string, slug: string): Promise<string> {
 
 async function loadCover(value: string, slug: string): Promise<string | null> {
   const imageUrl = getAbsolutePublicImageUrl(value);
-  const base = process.env.R2_PUBLIC_URL;
-  if (!imageUrl || !base) return null;
+  // The current base, and during a move to a new domain the previous one (as in next.config.ts).
+  const bases = [process.env.R2_PUBLIC_URL, process.env.R2_PUBLIC_URL_PREVIOUS].filter(
+    (base): base is string => !!base,
+  );
+  if (!imageUrl || bases.length === 0) return null;
 
   const url = new URL(imageUrl);
-  const allowed = new URL(base);
-  const prefix = `${allowed.pathname.replace(/\/$/, "")}/`;
-  if (url.origin !== allowed.origin || !url.pathname.startsWith(prefix)) return null;
+  const isAllowed = bases.some((base) => {
+    const allowed = new URL(base);
+    const prefix = `${allowed.pathname.replace(/\/$/, "")}/`;
+    return url.origin === allowed.origin && url.pathname.startsWith(prefix);
+  });
+  if (!isAllowed) return null;
 
   try {
     return await fetchCover(url.href, slug);
