@@ -10,7 +10,8 @@ import { LOCALE_HEADER, resolveNotFoundLocale } from "../lib/not-found-locale";
 
 // Any URL that matches no route is rendered here. The root layout lives under the dynamic [locale] segment, so
 // Next.js has no layout to render it in and would answer with its own unlocalized error shell. This document is
-// complete on its own (<html>, header and message) and keeps the real 404 status; Next.js adds noindex to it.
+// complete on its own (<html>, header and message) and keeps the real 404 status. It declares noindex itself: Next.js
+// adds it when the page renders per request, but not to the prerendered copy that Vercel serves for /_not-found.
 //
 // Reading the request header makes the page render per request, which Next.js reports as a blocking prerender at
 // build time unless the route opts out, the same way src/app/[locale]/layout.tsx does.
@@ -25,7 +26,7 @@ async function getLocale() {
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getLocale();
 
-  return { title: `${messages[locale].errors.notFoundTitle} — Libra` };
+  return { title: `${messages[locale].errors.notFoundTitle} — Libra`, robots: { index: false } };
 }
 
 export default async function GlobalNotFound() {

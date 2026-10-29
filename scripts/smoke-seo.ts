@@ -4,6 +4,7 @@ import { load } from "cheerio";
 
 import en from "../messages/en.json";
 import es from "../messages/es.json";
+import { resolveStreamedSegments } from "./lib/streamed-html";
 
 const input = process.argv.slice(2).find((argument) => argument !== "--") ?? "http://localhost:3000";
 const base = new URL(input);
@@ -63,7 +64,8 @@ async function main() {
   const pageRoutes = ["/es", "/en", "/es/books", "/en/books", ...samples];
 
   for (const path of pageRoutes) {
-    const html = load(await (await request(path)).text());
+    const received = await (await request(path)).text();
+    const html = load(received);
     const locale = path.split("/")[1];
     assert.equal(html("html").attr("lang"), locale);
     const head = html("head");
@@ -124,7 +126,25 @@ async function main() {
       assert.equal(book.url, `${canonicalOrigin}${path}`);
       assert.equal(page.inLanguage, locale);
       assert.ok(meta("og:title")?.includes(String(book.name)));
-      if (book.description) assert.ok(html("main").text().includes(String(book.description)));
+      // The title is readable in the initial HTML, without running any script.
+      assert.equal(html("main h1").text(), book.name, `${path}: title in the initial main`);
+      // A crawler render streams late parts of the page into hidden divs at the end of the body, which inline
+      // scripts move into place. Read the page as laid out, and require every streamed part to have found its place.
+      const { $: laidOut } = resolveStreamedSegments(received);
+      assert.equal(laidOut('div[hidden][id^="S:"]').length, 0, `${path}: a streamed segment has no placeholder`);
+      if (book.description) {
+        const description = String(book.description);
+        // Shown once, as the page's synopsis inside main: not merely somewhere in the document.
+        const synopsis = laidOut('main [aria-labelledby="book-synopsis"] p');
+        assert.equal(synopsis.length, 1, `${path}: synopsis count in main`);
+        assert.equal(synopsis.text(), description, `${path}: the synopsis is the structured description`);
+        assert.equal(laidOut("main").text().split(description).length, 2, `${path}: the synopsis appears once in main`);
+        // The meta descriptions come from it (whole or cut with an ellipsis), never from the generic template.
+        const metaDescription = meta("description")!;
+        assert.ok(description.startsWith(metaDescription.replace(/…$/, "")), `${path}: meta description`);
+        assert.equal(meta("og:description"), metaDescription, `${path}: og:description`);
+        assert.equal(meta("twitter:description"), metaDescription, `${path}: twitter:description`);
+      }
       if (book.image) {
         const cover = new URL(html("main img").first().attr("src")!, base);
         assert.equal(cover.searchParams.get("url") ?? cover.href, book.image);
