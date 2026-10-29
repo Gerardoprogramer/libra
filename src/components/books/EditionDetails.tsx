@@ -34,8 +34,8 @@ export function EditionDetails({ edition, chapterCount }: EditionDetailsProps) {
   const sourceLabel = edition.sourceName ?? identifier ?? t("viewSource");
 
   return (
-    <section aria-labelledby="edition-details" className="text-muted-foreground mt-6 border-l-2 pl-4 text-sm">
-      <h2 id="edition-details" className="mb-2 text-xs tracking-[0.15em] uppercase">
+    <section aria-labelledby="edition-details" className="text-muted-foreground mt-7 border-l-2 pl-4 text-sm leading-6">
+      <h2 id="edition-details" className="mb-1.5 text-xs tracking-[0.15em] uppercase">
         {t("editionDetails")}
       </h2>
 
