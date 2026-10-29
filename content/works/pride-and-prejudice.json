@@ -1,0 +1,18 @@
+{
+  "es": {
+    "status": "published",
+    "text": "Orgullo y prejuicio es una novela de Jane Austen publicada en 1813. Los Bennet viven en Longbourn, una finca de Hertfordshire que solo puede heredar un varón, de modo que el futuro de sus cinco hijas depende de que alguna se case bien, y la señora Bennet no piensa en otra cosa. La llegada del señor Bingley, un soltero rico que alquila la vecina Netherfield, despierta todas las esperanzas, sobre todo cuando muestra interés por Jane, la hija mayor. Con él viene su amigo, el señor Darcy, aún más rico y tan orgulloso que en el primer baile desprecia a Elizabeth, la segunda de las hermanas, inteligente y de lengua afilada. Desde entonces, ella lo juzga con severidad. Comedia de costumbres llena de ironía, retrata el matrimonio, el dinero y las apariencias, y muestra lo fácil que es equivocarse con las primeras impresiones."
+  },
+  "en": {
+    "status": "published",
+    "text": "Pride and Prejudice is a novel by Jane Austen, published in 1813. The Bennets live at Longbourn, an estate in Hertfordshire that can pass only to a male heir, so the future of their five daughters depends on at least one of them marrying well, and Mrs Bennet thinks of little else. The arrival of Mr Bingley, a wealthy bachelor who rents neighbouring Netherfield, raises every hope, especially when he shows an interest in Jane, the eldest. With him comes his friend Mr Darcy, richer still and so proud that at the first ball he slights Elizabeth, the second sister, clever and quick-tongued. From then on she judges him severely. A comedy of manners full of irony, it portrays marriage, money and appearances, and shows how easily first impressions can mislead."
+  },
+  "sources": [
+    "Wikipedia (en), «Pride and Prejudice», consultada el 2026-10-29: novela de Jane Austen publicada en 1813; novela de costumbres centrada en Elizabeth Bennet, que aprende las consecuencias de los juicios precipitados; el señor Bennet, dueño de Longbourn en Hertfordshire, tiene cinco hijas y la finca solo se hereda por línea masculina, por lo que es imperativo que alguna se case bien; el deseo de la señora Bennet de casarlas; el señor Bingley, soltero rico que alquila Netherfield, se interesa por Jane; el señor Darcy se niega a bailar con Elizabeth («not handsome enough») y ella queda ofendida; el prejuicio de Elizabeth contra Darcy. https://en.wikipedia.org/wiki/Pride_and_Prejudice",
+    "Edición de Libra: Project Gutenberg, eBook #1342. Contrastado con el EPUB local imports/pride-and-prejudice.epub: «Netherfield Park is let» en el primer capítulo; Bingley, «four or five thousand a year», y Darcy, «ten thousand a year» (por eso «aún más rico»)."
+  ],
+  "review": [
+    "Redactada y publicada en ambos idiomas el 2026-10-29 tras contrastar cada dato con las fuentes indicadas. Queda abierta para una revisión editorial humana posterior.",
+    "La descripción no revela el desenlace."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "es": {
+    "status": "published",
+    "text": "Niebla es una novela de Miguel de Unamuno escrita en 1907 y publicada en 1914 por la Editorial Renacimiento. Su autor no quiso llamarla novela, sino «nivola», para marcar su libertad frente a las reglas del género. Augusto Pérez es un joven rico, licenciado en Derecho, hijo único de una madre viuda, que lleva una vida rutinaria y tranquila, sin grandes preocupaciones. Todo cambia cuando se enamora de Eugenia, mientras Rosario, la joven que le plancha la ropa, despierta en él otros sentimientos. Entre el amor y las largas conversaciones con su amigo Víctor Goti, Augusto empieza a preguntarse qué es amar, qué es vivir y qué sentido tiene su propia existencia. Con humor, ironía y hondura filosófica, Niebla convierte una historia de amores en una reflexión sobre la identidad y la libertad."
+  },
+  "en": {
+    "status": "published",
+    "text": "Mist (Niebla) is a novel by Miguel de Unamuno, written in 1907 and published in 1914 by Editorial Renacimiento. Unamuno refused to call it a novel and named it a “nivola” instead, to mark its freedom from the rules of the genre. Augusto Pérez is a wealthy young law graduate, the only son of a widowed mother, who leads a quiet, routine life without great concerns. Everything changes when he falls in love with Eugenia, while Rosario, the girl who irons his clothes, stirs other feelings in him. Between love and long conversations with his friend Víctor Goti, Augusto begins to ask himself what it means to love, what it means to live and what meaning his own existence has. With humour, irony and philosophical depth, Mist turns a tale of love into a reflection on identity and freedom."
+  },
+  "sources": [
+    "Wikipedia (es), «Niebla (novela)», consultada el 2026-10-29: «nivola» escrita por Miguel de Unamuno en 1907 y publicada por primera vez en 1914 por la Editorial Renacimiento; Augusto Pérez, joven rico licenciado en Derecho, hijo único de una madre viuda; vida rutinaria y tranquila; el amor y las conversaciones con su amigo Víctor Goti le llevan a preguntarse qué es amar, qué es vivir y cuál es la finalidad de la existencia; su novia Eugenia y Rosario, la muchacha que le plancha la ropa; concepción de la vida y el destino. https://es.wikipedia.org/wiki/Niebla_(novela)",
+    "Edición de Libra: Project Gutenberg, eBook #49836. El EPUB no está en imports/ de este checkout, por lo que los datos no se han contrastado con el texto."
+  ],
+  "review": [
+    "Redactada y publicada en ambos idiomas el 2026-10-29 tras contrastar cada dato con la fuente indicada. Queda abierta para una revisión editorial humana posterior.",
+    "Sin contrastar con el texto de la edición de Libra (EPUB no disponible localmente); la descripción se limita a los datos de la fuente consultada.",
+    "El título inglés «Mist» es el de las traducciones publicadas; la ficha muestra el título español de la edición.",
+    "La descripción no revela el encuentro de Augusto con Unamuno ni el desenlace."
+  ]
+}

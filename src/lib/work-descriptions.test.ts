@@ -158,18 +158,72 @@ test("every file in content/works is registered under its file name, and valid",
   }
 });
 
-test("the four pilot works are drafts in both languages, so none is shown yet", () => {
+test("the four pilot works, once reviewed, are published in both languages", () => {
   for (const slug of pilots) {
     const work = WORK_DESCRIPTIONS.get(slug)!;
     assert.ok(work, slug);
 
     for (const locale of ["es", "en"] as const) {
-      assert.equal(work[locale].status, "draft", `${slug} ${locale}`);
-      assert.equal(getWorkDescription(slug, locale), null, `${slug} ${locale}`);
+      assert.equal(work[locale].status, "published", `${slug} ${locale}`);
+      assert.equal(getWorkDescription(slug, locale), work[locale].text, `${slug} ${locale}`);
       // The editorial target, inside the wider validation limits.
       const count = countWords(work[locale].text);
       assert.ok(count >= 100 && count <= 150, `${slug} ${locale}: ${count} words`);
     }
+    assert.ok(work.sources.length > 0, slug);
+    assert.ok(work.review.length > 0, slug);
+  }
+});
+
+// The 33 works published on 2026-10-29, audited one by one: each has a reviewed description in both interface
+// languages, since its page exists in both. A work added to the catalog later starts without one until it is written.
+const catalog = [
+  "a-christmas-carol",
+  "a-tale-of-two-cities",
+  "adventures-of-sherlock-holmes",
+  "alice-in-wonderland",
+  "anne-of-green-gables",
+  "dracula",
+  "el-amigo-manso",
+  "fortunata-y-jacinta",
+  "frankenstein",
+  "great-expectations",
+  "jane-eyre",
+  "jekyll-and-hyde",
+  "la-corte-de-carlos-iv",
+  "lazarillo-de-tormes",
+  "little-women",
+  "marianela",
+  "miau",
+  "moby-dick",
+  "niebla",
+  "persuasion",
+  "pride-and-prejudice",
+  "sense-and-sensibility",
+  "sotileza",
+  "the-adventures-of-tom-sawyer",
+  "the-call-of-the-wild",
+  "the-picture-of-dorian-gray",
+  "the-secret-garden",
+  "the-time-machine",
+  "the-war-of-the-worlds",
+  "the-wonderful-wizard-of-oz",
+  "trafalgar",
+  "treasure-island",
+  "tristana",
+];
+
+test("every audited work of the catalog has its description published in both languages, with notes", () => {
+  for (const slug of catalog) {
+    const work = WORK_DESCRIPTIONS.get(slug);
+    assert.ok(work, `${slug}: no description`);
+
+    for (const locale of ["es", "en"] as const) {
+      assert.equal(work[locale].status, "published", `${slug} ${locale}`);
+      assert.equal(getWorkDescription(slug, locale), work[locale].text, `${slug} ${locale}`);
+    }
+    // The two languages are two texts, not one copied into the other.
+    assert.notEqual(work.es.text, work.en.text, slug);
     assert.ok(work.sources.length > 0, slug);
     assert.ok(work.review.length > 0, slug);
   }

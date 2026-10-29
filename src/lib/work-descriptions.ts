@@ -1,20 +1,36 @@
 import { isSlug } from "./catalog-filters";
 
+import aChristmasCarol from "../../content/works/a-christmas-carol.json";
 import aTaleOfTwoCities from "../../content/works/a-tale-of-two-cities.json";
+import adventuresOfSherlockHolmes from "../../content/works/adventures-of-sherlock-holmes.json";
+import aliceInWonderland from "../../content/works/alice-in-wonderland.json";
 import anneOfGreenGables from "../../content/works/anne-of-green-gables.json";
 import dracula from "../../content/works/dracula.json";
 import elAmigoManso from "../../content/works/el-amigo-manso.json";
+import fortunataYJacinta from "../../content/works/fortunata-y-jacinta.json";
 import frankenstein from "../../content/works/frankenstein.json";
+import greatExpectations from "../../content/works/great-expectations.json";
+import janeEyre from "../../content/works/jane-eyre.json";
+import jekyllAndHyde from "../../content/works/jekyll-and-hyde.json";
 import laCorteDeCarlosIv from "../../content/works/la-corte-de-carlos-iv.json";
 import lazarilloDeTormes from "../../content/works/lazarillo-de-tormes.json";
 import littleWomen from "../../content/works/little-women.json";
 import marianela from "../../content/works/marianela.json";
 import miau from "../../content/works/miau.json";
+import mobyDick from "../../content/works/moby-dick.json";
+import niebla from "../../content/works/niebla.json";
 import persuasion from "../../content/works/persuasion.json";
+import prideAndPrejudice from "../../content/works/pride-and-prejudice.json";
 import senseAndSensibility from "../../content/works/sense-and-sensibility.json";
 import sotileza from "../../content/works/sotileza.json";
+import theAdventuresOfTomSawyer from "../../content/works/the-adventures-of-tom-sawyer.json";
 import theCallOfTheWild from "../../content/works/the-call-of-the-wild.json";
+import thePictureOfDorianGray from "../../content/works/the-picture-of-dorian-gray.json";
 import theSecretGarden from "../../content/works/the-secret-garden.json";
+import theTimeMachine from "../../content/works/the-time-machine.json";
+import theWarOfTheWorlds from "../../content/works/the-war-of-the-worlds.json";
+import theWonderfulWizardOfOz from "../../content/works/the-wonderful-wizard-of-oz.json";
+import trafalgar from "../../content/works/trafalgar.json";
 import treasureIsland from "../../content/works/treasure-island.json";
 import tristana from "../../content/works/tristana.json";
 
@@ -126,21 +142,37 @@ export function parseWorkDescription(slug: string, value: unknown): WorkDescript
 /** Every work with a description, keyed by its book slug (the file name). */
 export const WORK_DESCRIPTIONS: ReadonlyMap<string, WorkDescription> = new Map(
   Object.entries({
+    "a-christmas-carol": aChristmasCarol,
     "a-tale-of-two-cities": aTaleOfTwoCities,
+    "adventures-of-sherlock-holmes": adventuresOfSherlockHolmes,
+    "alice-in-wonderland": aliceInWonderland,
     "anne-of-green-gables": anneOfGreenGables,
     dracula,
     "el-amigo-manso": elAmigoManso,
+    "fortunata-y-jacinta": fortunataYJacinta,
     frankenstein,
+    "great-expectations": greatExpectations,
+    "jane-eyre": janeEyre,
+    "jekyll-and-hyde": jekyllAndHyde,
     "la-corte-de-carlos-iv": laCorteDeCarlosIv,
     "lazarillo-de-tormes": lazarilloDeTormes,
     "little-women": littleWomen,
     marianela,
     miau,
+    "moby-dick": mobyDick,
+    niebla,
     persuasion,
+    "pride-and-prejudice": prideAndPrejudice,
     "sense-and-sensibility": senseAndSensibility,
     sotileza,
+    "the-adventures-of-tom-sawyer": theAdventuresOfTomSawyer,
     "the-call-of-the-wild": theCallOfTheWild,
+    "the-picture-of-dorian-gray": thePictureOfDorianGray,
     "the-secret-garden": theSecretGarden,
+    "the-time-machine": theTimeMachine,
+    "the-war-of-the-worlds": theWarOfTheWorlds,
+    "the-wonderful-wizard-of-oz": theWonderfulWizardOfOz,
+    trafalgar,
     "treasure-island": treasureIsland,
     tristana,
   }).map(([slug, value]) => [slug, parseWorkDescription(slug, value)]),

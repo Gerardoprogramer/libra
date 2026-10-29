@@ -26,6 +26,8 @@ interface PageOptions {
   siteUrl?: string | null;
   // Replaces the published work descriptions, recording each lookup; without it the real content/works is read.
   works?: Partial<Record<Locale, string>>;
+  // Replaces the files of content/works but keeps the real lookup, so a draft is filtered as on the site.
+  workFiles?: ReadonlyMap<string, workDescriptions.WorkDescription>;
   lookups?: string[];
 }
 
@@ -51,7 +53,7 @@ const Link = stub("Link");
 // Loads page.tsx with its dependencies replaced, so generateMetadata runs without a database or Next.js runtime.
 function loadPage(book: BookFixture, queriesOrOptions: string[] | PageOptions = []) {
   const options = Array.isArray(queriesOrOptions) ? { queries: queriesOrOptions } : queriesOrOptions;
-  const { queries = [], locale: requestLocale = "en", siteUrl = null, works, lookups = [] } = options;
+  const { queries = [], locale: requestLocale = "en", siteUrl = null, works, workFiles, lookups = [] } = options;
   const dependencies: Record<string, unknown> = {
     "react/jsx-runtime": jsxRuntime,
     "next/image": { default: stub("Image") },
@@ -77,7 +79,13 @@ function loadPage(book: BookFixture, queriesOrOptions: string[] | PageOptions = 
             works[locale] ?? null
           ),
         }
-      : workDescriptions,
+      : workFiles
+        ? {
+            ...workDescriptions,
+            getWorkDescription: (slug: string, locale: Locale) =>
+              workDescriptions.getWorkDescription(slug, locale, workFiles),
+          }
+        : workDescriptions,
     "@/db/queries/books": {
       getBookBySlug: async (slug: string) => (queries.push(`getBookBySlug:${slug}`), book),
       getBookContentLocales: async (slug: string) => (
@@ -378,15 +386,24 @@ test("the categories are shown once each, as links to the filtered catalog, in t
   assert.equal(uncategorized.structured?.genre, undefined);
 });
 
-test("a pilot description still in draft leaves the template and no structured description, in both languages", async () => {
-  // The real content/works, where the four pilot works are drafts.
-  const drafts = (["es", "en"] as const).map(
-    (locale) => workDescriptions.WORK_DESCRIPTIONS.get("treasure-island")![locale],
-  );
-  assert.ok(drafts.every((draft) => draft.status === "draft"));
+test("a description still in draft leaves the template and no structured description, in both languages", async () => {
+  // A file of content/works whose two languages are drafts, read through the real lookup.
+  const draftText = (locale: Locale) =>
+    `${locale === "es" ? "Borrador" : "Draft"} ${"sobre una isla, un mapa y un tesoro enterrado ".repeat(14)}`.trim();
+  const drafts = new Map([
+    [
+      "treasure-island",
+      workDescriptions.parseWorkDescription("treasure-island", {
+        es: { status: "draft", text: draftText("es") },
+        en: { status: "draft", text: draftText("en") },
+        sources: [],
+        review: ["Pendiente de revisión."],
+      }),
+    ],
+  ]);
 
   for (const locale of ["es", "en"] as const) {
-    const { generateMetadata } = loadPage(book({ language: locale }));
+    const { generateMetadata } = loadPage(book({ language: locale }), { workFiles: drafts });
     const metadata = await generateMetadata({ params: Promise.resolve({ locale, slug: "treasure-island" }) });
     const template = translate(locale)("metadataDescription", {
       title: "Treasure Island",
@@ -395,10 +412,28 @@ test("a pilot description still in draft leaves the template and no structured d
     assert.equal(metadata.description, template);
     assert.equal(metadata.openGraph?.description, template);
 
-    const page = await renderPage(book({ language: locale }), locale);
+    const page = await renderPage(book({ language: locale }), locale, { workFiles: drafts });
     assert.equal(page.structured?.description, undefined);
     assert.deepEqual(page.synopses, [{ text: null, lang: locale }]);
-    for (const draft of drafts) assert.equal(page.shows(draft.text), false);
+    for (const draft of ["es", "en"] as const) assert.equal(page.shows(draftText(draft)), false);
+  }
+});
+
+test("a reviewed pilot description, now published, is the synopsis and the metadata in both languages", async () => {
+  // The real content/works, where Treasure Island has been reviewed and published in both languages.
+  for (const locale of ["es", "en"] as const) {
+    const text = workDescriptions.WORK_DESCRIPTIONS.get("treasure-island")![locale].text;
+    assert.equal(workDescriptions.getWorkDescription("treasure-island", locale), text);
+
+    const { generateMetadata } = loadPage(book({ language: locale }));
+    const metadata = await generateMetadata({ params: Promise.resolve({ locale, slug: "treasure-island" }) });
+    assert.equal(metadata.description, workDescriptions.summarizeDescription(text));
+    assert.equal(metadata.openGraph?.description, workDescriptions.summarizeDescription(text));
+
+    const page = await renderPage(book({ language: locale }), locale);
+    assert.deepEqual(page.synopses, [{ text, lang: locale }]);
+    // In the edition's language, structured data takes it whole.
+    assert.equal(page.structured?.description, text);
   }
 });
 

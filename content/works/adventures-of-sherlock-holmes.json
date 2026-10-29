@@ -1,0 +1,19 @@
+{
+  "es": {
+    "status": "published",
+    "text": "Las aventuras de Sherlock Holmes es una colección de doce relatos de Arthur Conan Doyle publicada como libro en octubre de 1892. Los cuentos habían aparecido antes, uno al mes, en la revista The Strand Magazine entre julio de 1891 y junio de 1892, y fueron los primeros relatos breves protagonizados por el célebre detective consultor de Baker Street. Todos los narra su amigo y compañero, el doctor Watson, que asiste asombrado a los métodos de Holmes: la observación minuciosa, la deducción y una confianza absoluta en los detalles que los demás pasan por alto. Por sus páginas desfilan clientes de toda condición, desde un rey en apuros hasta un prestamista engañado o una joven aterrorizada, y casos que van del chantaje al robo y al crimen. En la colección figuran «Escándalo en Bohemia», con Irene Adler, y «La banda de lunares», el favorito del propio autor."
+  },
+  "en": {
+    "status": "published",
+    "text": "The Adventures of Sherlock Holmes is a collection of twelve stories by Arthur Conan Doyle, published as a book in October 1892. The stories had first appeared, one a month, in The Strand Magazine between July 1891 and June 1892, and they were the earliest short stories to feature the famous consulting detective of Baker Street. All of them are told by his friend and companion, Dr Watson, who watches in wonder as Holmes works: close observation, deduction and an unshakeable faith in the details everyone else overlooks. Through the pages pass clients of every kind, from a king in difficulties to a deceived pawnbroker and a terrified young woman, with cases ranging from blackmail to robbery and crime. The collection includes “A Scandal in Bohemia”, with Irene Adler, and “The Adventure of the Speckled Band”, which the author himself counted as his favourite."
+  },
+  "sources": [
+    "Wikipedia (en), «The Adventures of Sherlock Holmes», consultada el 2026-10-29: colección de relatos publicada el 14 de octubre de 1892; los doce relatos se publicaron antes en doce números mensuales de The Strand Magazine, de julio de 1891 a junio de 1892; primeros relatos breves de Holmes, «consulting detective»; todos narrados en primera persona por el doctor Watson; «A Scandal in Bohemia» con Irene Adler; Doyle eligió «The Adventure of the Speckled Band» como su favorito. https://en.wikipedia.org/wiki/The_Adventures_of_Sherlock_Holmes",
+    "Edición de Libra: Project Gutenberg, eBook #48320 (edición ilustrada de Harper & Brothers, 1892). Contrastado con el EPUB local imports/adventures-of-sherlock-holmes.epub: índice de doce relatos que empieza por «A Scandal in Bohemia» y «The Red-Headed League», y la casa de Holmes en Baker Street."
+  ],
+  "review": [
+    "Redactada y publicada en ambos idiomas el 2026-10-29 tras contrastar cada dato con las fuentes indicadas. Queda abierta para una revisión editorial humana posterior.",
+    "Los ejemplos de clientes (un rey, un prestamista, una joven aterrorizada) proceden de «A Scandal in Bohemia», «The Red-Headed League» y «The Speckled Band»; no se nombran para no anticipar las soluciones.",
+    "Los títulos españoles de los relatos siguen traducciones habituales; «La banda de lunares» también circula como «La banda moteada»."
+  ]
+}

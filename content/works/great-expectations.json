@@ -1,0 +1,19 @@
+{
+  "es": {
+    "status": "published",
+    "text": "Grandes esperanzas es una novela de Charles Dickens publicada por entregas en su revista semanal All the Year Round entre diciembre de 1860 y agosto de 1861, y en tres volúmenes en octubre de 1861. Narrada en primera persona, sigue la formación de Pip, un niño huérfano que vive en las marismas de Kent con su hermana, de carácter violento, y con el marido de esta, Joe Gargery, un herrero bondadoso. Una Nochebuena, en el cementerio donde están enterrados sus padres, un presidiario fugado lo obliga a traerle comida y una lima. Poco después, Pip empieza a visitar a la señorita Havisham, una dama rica y excéntrica que aún lleva su viejo vestido de novia, y se enamora de Estella, su fría y hermosa hija adoptiva. Cuando un benefactor anónimo le ofrece la oportunidad de convertirse en caballero en Londres, Pip deberá descubrir qué vale de verdad en una persona."
+  },
+  "en": {
+    "status": "published",
+    "text": "Great Expectations is a novel by Charles Dickens, serialised in his weekly periodical All the Year Round from December 1860 to August 1861 and published in three volumes in October 1861. Told in the first person, it follows the growing up of Pip, an orphan who lives on the Kent marshes with his hot-tempered sister and her husband, Joe Gargery, a kindly blacksmith. One Christmas Eve, in the churchyard where his parents are buried, an escaped convict forces him to bring food and a file. Soon afterwards Pip begins to visit Miss Havisham, a rich and eccentric recluse who still wears her old wedding dress, and falls in love with Estella, her cold and beautiful adopted daughter. When an anonymous benefactor offers him the chance to become a gentleman in London, Pip must learn what truly gives a person their worth."
+  },
+  "sources": [
+    "Wikipedia (en), «Great Expectations», consultada el 2026-10-29: publicada por entregas en All the Year Round del 1 de diciembre de 1860 a agosto de 1861 y en tres volúmenes por Chapman & Hall en octubre de 1861; bildungsroman narrado en primera persona; Pip, huérfano, vive con su hermana de mal carácter y con Joe Gargery, herrero bondadoso, en las marismas de Kent; en Nochebuena, junto a las tumbas de sus padres, un presidiario fugado le exige comida y herramientas y Pip le lleva una lima; la señorita Havisham, rica y recluida, con su vestido de novia; Estella, su hija adoptiva, fría con Pip; un benefactor anónimo le permite convertirse en caballero y marchar a Londres. https://en.wikipedia.org/wiki/Great_Expectations",
+    "Edición de Libra: Project Gutenberg, eBook #1400 (la ficha almacena 1867 como año de la edición). El EPUB no está en imports/ de este checkout, por lo que los datos no se han contrastado con el texto."
+  ],
+  "review": [
+    "Redactada y publicada en ambos idiomas el 2026-10-29 tras contrastar cada dato con la fuente indicada. Queda abierta para una revisión editorial humana posterior.",
+    "Sin contrastar con el texto de la edición de Libra (EPUB no disponible localmente). La frase final («qué vale de verdad en una persona») es una formulación temática, no un hecho; la fuente cita la riqueza y la pobreza, el amor y el rechazo.",
+    "La descripción no revela la identidad del benefactor."
+  ]
+}

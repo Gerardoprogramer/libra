@@ -1,0 +1,19 @@
+{
+  "es": {
+    "status": "published",
+    "text": "El extraño caso del doctor Jekyll y el señor Hyde es una novela breve de terror gótico del escritor escocés Robert Louis Stevenson, publicada en 1886. Su protagonista es el señor Utterson, un abogado londinense reservado y de moral intachable. Durante uno de sus paseos, su primo Enfield le cuenta cómo vio a un hombre de aspecto repugnante, Edward Hyde, pisotear a una niña sin el menor remordimiento y pagar después con un cheque firmado por un caballero respetable. Utterson sabe más de lo que quisiera: su viejo amigo y cliente, el doctor Henry Jekyll, ha hecho un testamento que deja todos sus bienes a ese tal Hyde. Convencido de que Jekyll es víctima de un chantaje, el abogado empieza a investigar qué une a los dos hombres. Breve, tensa y envuelta en la niebla de Londres, es una de las obras fundamentales de la literatura gótica."
+  },
+  "en": {
+    "status": "published",
+    "text": "Strange Case of Dr Jekyll and Mr Hyde is a Gothic horror novella by the Scottish writer Robert Louis Stevenson, published in 1886. Its central figure is Mr Utterson, a reserved and upright London lawyer. On one of their walks, his cousin Enfield tells him how he saw a repellent man, Edward Hyde, trample a young girl without the least remorse and then pay with a cheque signed by a respectable gentleman. Utterson knows more than he would like: his old friend and client, Dr Henry Jekyll, has made a will leaving everything to this Hyde. Convinced that Jekyll is being blackmailed, the lawyer sets out to discover what binds the two men together. Short, tense and wrapped in London fog, it is one of the defining works of Gothic fiction."
+  },
+  "sources": [
+    "Wikipedia (en), «Strange Case of Dr Jekyll and Mr Hyde», consultada el 2026-10-29: novela breve de terror gótico de 1886 del escocés Robert Louis Stevenson; Utterson, abogado londinense reservado y de moral recta, investiga los extraños sucesos entre su viejo amigo, el doctor Henry Jekyll, y Edward Hyde; en su paseo semanal, su primo Enfield le cuenta que vio a Hyde pisotear a una niña y pagar con un cheque firmado por Jekyll; el testamento de Jekyll a favor de Hyde; Utterson teme un chantaje; considerada una obra definitoria del género gótico. https://en.wikipedia.org/wiki/Strange_Case_of_Dr_Jekyll_and_Mr_Hyde",
+    "Edición de Libra: Project Gutenberg, eBook #43. Contrastado con el EPUB local imports/jekyll-and-hyde.epub: primer capítulo «Story of the Door», que presenta a «Mr. Utterson the lawyer»."
+  ],
+  "review": [
+    "Redactada y publicada en ambos idiomas el 2026-10-29 tras contrastar cada dato con las fuentes indicadas. Queda abierta para una revisión editorial humana posterior.",
+    "«Envuelta en la niebla de Londres» es una formulación atmosférica; la niebla aparece en varios capítulos del EPUB local («the first fog of the season», «a fog rolled over the city»).",
+    "La descripción no revela la relación entre Jekyll y Hyde, aunque sea conocida; el texto la mantiene oculta hasta el final."
+  ]
+}

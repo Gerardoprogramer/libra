@@ -1,0 +1,19 @@
+{
+  "es": {
+    "status": "published",
+    "text": "Canción de Navidad es una novela breve de Charles Dickens publicada en Londres en diciembre de 1843 y dividida en cinco capítulos que el autor llamó «estrofas». En una fría Nochebuena londinense, Ebenezer Scrooge, un viejo comerciante avaro, desprecia la Navidad: rechaza la invitación a cenar de su sobrino Fred, despide sin nada a dos caballeros que piden para los pobres y apenas concede el día libre a su empleado, Bob Cratchit. Esa noche lo visita el fantasma de Jacob Marley, su socio, muerto hace siete años, que arrastra pesadas cadenas y le anuncia la llegada de tres espíritus. De la mano de los fantasmas de las Navidades pasadas, presentes y futuras, Scrooge se verá obligado a mirar su propia vida y la de quienes lo rodean. Inquietante, tierna y llena de humor, es a la vez un cuento de fantasmas y una defensa de la compasión."
+  },
+  "en": {
+    "status": "published",
+    "text": "A Christmas Carol is a short novel by Charles Dickens, published in London in December 1843 and divided into five chapters that Dickens called “staves”. On a bleak Christmas Eve in London, Ebenezer Scrooge, an ageing and tight-fisted man of business, scorns the season: he refuses his nephew Fred's invitation to dinner, turns away two gentlemen collecting for the poor and only grudgingly gives his clerk, Bob Cratchit, the day off. That night he is visited by the ghost of Jacob Marley, his partner, dead these seven years, who drags heavy chains and warns him that three spirits will follow. Led by the Ghosts of Christmas Past, Present and Yet to Come, Scrooge is made to look at his own life and at the lives of those around him. Eerie, tender and full of humour, it is both a ghost story and a plea for compassion."
+  },
+  "sources": [
+    "Wikipedia (en), «A Christmas Carol», consultada el 2026-10-29: novela breve publicada en Londres por Chapman & Hall el 19 de diciembre de 1843; dividida en cinco «staves»; Nochebuena en Londres, siete años después de la muerte de Jacob Marley; Scrooge, avaro, rechaza la invitación de su sobrino Fred, despide a dos caballeros que piden para los pobres y concede de mala gana el día libre a Bob Cratchit; visita del fantasma de Marley con cadenas y anuncio de tres espíritus (Navidades pasadas, presentes y futuras); el trato a los pobres como tema central. https://en.wikipedia.org/wiki/A_Christmas_Carol",
+    "Edición de Libra: Project Gutenberg, eBook #46. Contrastado con el EPUB local imports/a-christmas-carol.epub: índice con «STAVE I. Marley's Ghost» y la frase «Mr. Marley has been dead these seven years»."
+  ],
+  "review": [
+    "Redactada y publicada en ambos idiomas el 2026-10-29 tras contrastar cada dato con las fuentes indicadas. Queda abierta para una revisión editorial humana posterior.",
+    "El título español «Canción de Navidad» es una de las traducciones habituales («Cuento de Navidad», «Un cuento de Navidad»); la ficha muestra el título inglés de la edición. Revisar si se prefiere otra forma.",
+    "La descripción no revela el desenlace (la transformación de Scrooge)."
+  ]
+}
