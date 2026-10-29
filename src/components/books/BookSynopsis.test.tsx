@@ -9,6 +9,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import en from "../../../messages/en.json";
 import es from "../../../messages/es.json";
 import { BookSynopsis } from "./BookSynopsis";
+import { getSynopsisView } from "./SynopsisText";
 
 function render(text: string | null, locale: "en" | "es", lang: string = locale) {
   return renderToStaticMarkup(
@@ -33,8 +34,35 @@ test("a synopsis gets its own titled section, headed in the interface language",
     assert.equal(section.find("p").length, 1);
     assert.equal(section.find("p").text(), text);
     assert.equal(section.find("p").attr("lang"), locale);
-    // Visible as it is: no button, disclosure or dialog to open first.
-    assert.equal($("button, details, dialog, [hidden], [aria-hidden]").length, 0);
+    // Never behind a disclosure, a dialog or anything hidden: the whole text is in the HTML.
+    assert.equal($("details, dialog, [hidden], p[aria-hidden]").length, 0);
+  }
+});
+
+test("a long synopsis starts clamped, with a toggle labelled in the interface language", () => {
+  const long = "Una frase larga sobre el libro que se repite para llenar varias líneas. ".repeat(12).trim();
+
+  for (const [locale, more] of [
+    ["es", "Leer más"],
+    ["en", "Read more"],
+  ] as const) {
+    const $ = load(render(long, locale));
+    const text = $("p");
+    const toggle = $("button");
+
+    // Clamped by CSS, never cut: every word of the synopsis is still in the markup for search engines.
+    assert.ok(text.attr("class")?.split(" ").includes("line-clamp-4"));
+    assert.equal(text.text(), long);
+
+    assert.equal(toggle.length, 1);
+    assert.equal(toggle.attr("type"), "button");
+    assert.equal(toggle.text(), more);
+    assert.equal(toggle.attr("aria-expanded"), "false");
+    // The toggle names the text it controls.
+    assert.ok(text.attr("id"));
+    assert.equal(toggle.attr("aria-controls"), text.attr("id"));
+    // Its icon is decoration: the label alone is read.
+    assert.equal(toggle.find("svg").attr("aria-hidden"), "true");
   }
 });
 
@@ -63,4 +91,35 @@ test("only the book page renders the synopsis", () => {
     .sort();
 
   assert.deepEqual(renderers, ["app/[locale]/books/[slug]/(book)/page.tsx"]);
+});
+
+test("the synopsis expands and collapses, offering the toggle only when the text needs it", () => {
+  // Collapsed and longer than its lines: clamped, with "Read more".
+  assert.deepEqual(getSynopsisView(false, true), { clamped: true, showToggle: true, label: "more" });
+  // Expanded: the whole text, with "Read less" to collapse it again, whatever the clamped text measured.
+  assert.deepEqual(getSynopsisView(true, true), { clamped: false, showToggle: true, label: "less" });
+  assert.deepEqual(getSynopsisView(true, false), { clamped: false, showToggle: true, label: "less" });
+  // A short text that fits in its lines: no toggle to offer.
+  assert.deepEqual(getSynopsisView(false, false), { clamped: true, showToggle: false, label: "more" });
+});
+
+test("the labels of the toggle exist in every language", () => {
+  assert.equal(es.book.readMore, "Leer más");
+  assert.equal(es.book.readLess, "Leer menos");
+  assert.equal(en.book.readMore, "Read more");
+  assert.equal(en.book.readLess, "Read less");
+});
+
+// The paragraph and its toggle belong to the synopsis section alone, never to the reader or a chapter.
+test("only the synopsis section renders the expandable text", () => {
+  const root = new URL("../../", import.meta.url);
+  const renderers = (readdirSync(root, { recursive: true }) as string[])
+    .map((name) => name.split("\\").join("/"))
+    .filter((name) => /\.(ts|tsx)$/.test(name) && !/\.test\.tsx?$/.test(name))
+    .filter((name) =>
+      /from "\.\/SynopsisText"|components\/books\/SynopsisText/.test(readFileSync(new URL(name, root), "utf8")),
+    )
+    .sort();
+
+  assert.deepEqual(renderers, ["components/books/BookSynopsis.tsx"]);
 });

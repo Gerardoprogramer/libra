@@ -343,7 +343,11 @@ export default async function BookPage({ params }: BookPageProps) {
                 <ul aria-label={t("categories")} className="mb-5 flex flex-wrap items-center gap-2">
                   {book.categories.map((category) => (
                     <li key={category.id} className="max-w-full">
-                      <Badge variant="secondary" className="max-w-full" asChild>
+                      <Badge
+                        variant="secondary"
+                        className="h-auto min-h-6 max-w-full py-1 text-left wrap-break-word whitespace-normal"
+                        asChild
+                      >
                         <Link href={`/books?category=${category.slug}`}>{category.name}</Link>
                       </Badge>
                     </li>
@@ -380,7 +384,7 @@ export default async function BookPage({ params }: BookPageProps) {
               </div>
 
               {book.originalPublicationYear !== null && (
-                <p className="text-muted-foreground mt-2 text-sm">
+                <p className="text-muted-foreground mt-3 text-sm">
                   {t("originalPublicationYear", { year: book.originalPublicationYear })}
                 </p>
               )}

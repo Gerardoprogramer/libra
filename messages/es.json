@@ -57,6 +57,8 @@
     "contents": "Contenido",
     "chapterList": "Capítulos",
     "synopsis": "Sinopsis",
+    "readMore": "Leer más",
+    "readLess": "Leer menos",
     "categories": "Categorías",
     "originalPublicationYear": "Publicada originalmente en {year}",
     "editionDetails": "Esta edición",

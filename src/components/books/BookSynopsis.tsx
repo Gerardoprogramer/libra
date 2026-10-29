@@ -1,5 +1,7 @@
 import { useTranslations } from "next-intl";
 
+import { SynopsisText } from "./SynopsisText";
+
 interface BookSynopsisProps {
   /** The one description the book page shows (the edition's, or else the work's published one), or null. */
   text: string | null;
@@ -15,14 +17,12 @@ export function BookSynopsis({ text, lang }: BookSynopsisProps) {
   if (!text?.trim()) return null;
 
   return (
-    <section aria-labelledby="book-synopsis" className="mt-10 max-w-2xl border-t pt-8">
+    <section aria-labelledby="book-synopsis" className="mt-10 max-w-2xl border-t pt-8 md:mt-12">
       <h2 id="book-synopsis" className="font-serif text-2xl">
         {t("synopsis")}
       </h2>
 
-      <p lang={lang} className="mt-4 text-base leading-7 text-pretty wrap-break-word md:leading-8">
-        {text.trim()}
-      </p>
+      <SynopsisText text={text.trim()} lang={lang} moreLabel={t("readMore")} lessLabel={t("readLess")} />
     </section>
   );
 }
