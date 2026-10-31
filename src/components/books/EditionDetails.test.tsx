@@ -130,7 +130,8 @@ test("only the preferred edition for each locale is presented and reading retain
         </NextIntlClientProvider>,
       ),
     );
-    assert.equal(action("a").attr("href"), `/${locale}/books/dracula/chapter-1?edition=edition-1`);
+    // The clean chapter URL: in this locale it resolves the same edition, so ?edition= would only duplicate it.
+    assert.equal(action("a").attr("href"), `/${locale}/books/dracula/chapter-1`);
   }
 });
 

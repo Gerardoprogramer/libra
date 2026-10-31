@@ -12,8 +12,12 @@ import {
   readAllScopedReadingProgress,
   saveReadingProgress,
   calculateBookProgress,
+  readerChapterHref,
+  readingProgressHref,
   type ReadingProgress,
 } from "./reading-progress";
+
+const editionUuid = "29e40d31-1e34-4382-a7f9-64b082806fe0";
 
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 
@@ -200,4 +204,26 @@ test("L19: clearing the cache tolerates unavailable storage", () => {
   });
 
   assert.equal(clearSyncedScopedReadingProgress({ type: "user", userId: "alice" }), 0);
+});
+
+test("a chapter link is the clean URL unless an edition is given", () => {
+  assert.equal(readingProgressHref({ bookSlug: "dracula", chapterSlug: "chapter-i" }), "/books/dracula/chapter-i");
+  assert.equal(
+    readingProgressHref({ bookSlug: "dracula", chapterSlug: "chapter-i", editionId: editionUuid }),
+    `/books/dracula/chapter-i?edition=${editionUuid}`,
+  );
+});
+
+test("reader links between chapters keep ?edition= only when the page was requested with a valid one", () => {
+  // Default reading: the clean URL resolves the same edition, so no duplicate URL is linked.
+  assert.equal(readerChapterHref("dracula", "chapter-ii", undefined), "/books/dracula/chapter-ii");
+  // An explicitly requested edition stays the one being read on the next chapter.
+  assert.equal(
+    readerChapterHref("dracula", "chapter-ii", editionUuid),
+    `/books/dracula/chapter-ii?edition=${editionUuid}`,
+  );
+  // Anything that cannot name an edition never reaches a link.
+  for (const invalid of ["not-a-uuid", "", [editionUuid, editionUuid]]) {
+    assert.equal(readerChapterHref("dracula", "chapter-ii", invalid), "/books/dracula/chapter-ii");
+  }
 });

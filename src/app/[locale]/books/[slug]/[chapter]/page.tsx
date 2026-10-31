@@ -20,7 +20,7 @@ import { readingFontVariables } from "@/lib/fonts/reading";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getAbsolutePublicImageUrl, getConfiguredSiteUrl } from "@/lib/site-url";
-import { readingProgressHref } from "@/lib/reading-progress";
+import { readerChapterHref } from "@/lib/reading-progress";
 
 interface ReaderPageProps {
   searchParams: Promise<{ edition?: string | string[] }>;
@@ -266,16 +266,8 @@ async function ReaderContent({ params, searchParams }: ReaderPageProps) {
           chapterIndex={chapterIndex}
           totalChapters={book.chapters.length}
           fontVariables={readingFontVariables}
-          previousHref={
-            previous
-              ? readingProgressHref({ bookSlug: book.slug, chapterSlug: previous.slug, editionId: book.edition.id })
-              : undefined
-          }
-          nextHref={
-            next
-              ? readingProgressHref({ bookSlug: book.slug, chapterSlug: next.slug, editionId: book.edition.id })
-              : undefined
-          }
+          previousHref={previous ? readerChapterHref(book.slug, previous.slug, requestedEdition) : undefined}
+          nextHref={next ? readerChapterHref(book.slug, next.slug, requestedEdition) : undefined}
           languageSwitcher={
             <LanguageSwitcher
               locale={interfaceLocale}
@@ -287,7 +279,7 @@ async function ReaderContent({ params, searchParams }: ReaderPageProps) {
             slug: item.slug,
             number: item.number,
             title: item.title,
-            href: readingProgressHref({ bookSlug: book.slug, chapterSlug: item.slug, editionId: book.edition.id }),
+            href: readerChapterHref(book.slug, item.slug, requestedEdition),
           }))}
         >
           {paragraphs.map((paragraph, index) => (

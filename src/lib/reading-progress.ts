@@ -1,3 +1,5 @@
+import { isUuid } from "./catalog-filters";
+
 export const READING_PROGRESS_PREFIX = "libra:progress:";
 export const READING_PROGRESS_CHANGE_EVENT = "libra:reading-progress-change";
 
@@ -306,6 +308,19 @@ export function parseReadingProgress(value: string | null): ReadingProgress | nu
 export function readingProgressHref(progress: Pick<ReadingProgress, "bookSlug" | "chapterSlug" | "editionId">) {
   const pathname = `/books/${encodeURIComponent(progress.bookSlug)}/${encodeURIComponent(progress.chapterSlug)}`;
   return progress.editionId ? `${pathname}?edition=${encodeURIComponent(progress.editionId)}` : pathname;
+}
+
+/**
+ * A link of the reader to another chapter. The clean URL resolves the edition the locale shows, so ?edition= is kept
+ * only when the page itself was requested with a valid one: that edition is the one being read, and a clean link could
+ * land in another. Otherwise it would only add a duplicate URL of each chapter for crawlers.
+ */
+export function readerChapterHref(bookSlug: string, chapterSlug: string, requestedEdition: unknown) {
+  return readingProgressHref({
+    bookSlug,
+    chapterSlug,
+    editionId: isUuid(requestedEdition) ? requestedEdition : undefined,
+  });
 }
 
 export function calculateBookProgress(progress: ReadingProgress) {

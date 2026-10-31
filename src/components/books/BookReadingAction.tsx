@@ -48,7 +48,9 @@ export function BookReadingAction({
   return (
     <div className="min-h-20 min-w-0">
       <Button size="lg" asChild>
-        <Link href={readingProgressHref({ bookSlug, editionId, chapterSlug })}>
+        {/* No ?edition=: the book page shows the edition the clean URL selects in this locale, and the progress used
+            here is that edition's, so a separate edition URL would only be a duplicate for crawlers. */}
+        <Link href={readingProgressHref({ bookSlug, chapterSlug })}>
           <FiBookOpen aria-hidden="true" />
           <span className="grid">
             <span className="col-start-1 row-start-1">{label}</span>
