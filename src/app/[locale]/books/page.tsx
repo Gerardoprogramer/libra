@@ -2,16 +2,17 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 
 import { getLocale, getTranslations } from "next-intl/server";
+import { notFound } from "next/navigation";
 import { FiSearch } from "react-icons/fi";
 
 import { BookCard } from "@/components/books/BookCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { getBooks, getCategories, type ContentLocale } from "@/db/queries/books";
+import { getBooks, getCategories, type CategoryListItem, type ContentLocale } from "@/db/queries/books";
 
 import { Link } from "@/i18n/navigation";
-import { normalizeCategorySlug, normalizeSearchQuery } from "@/lib/catalog-filters";
+import { getCatalogCategoryPath, normalizeCategorySlug, normalizeSearchQuery } from "@/lib/catalog-filters";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
 
 interface BooksPageProps {
@@ -31,36 +32,96 @@ interface BooksContentProps {
   }>;
 }
 
+// The category named by ?category=, among those with public books; null when it names none. getCategories is cached,
+// so the metadata and the page share one query.
+async function findCatalogCategory(locale: ContentLocale, slug: string): Promise<CategoryListItem | null> {
+  return (await getCategories(locale)).find((category) => category.slug === slug) ?? null;
+}
+
 export async function generateMetadata({ params, searchParams }: BooksPageProps): Promise<Metadata> {
   const { locale: routeLocale } = await params;
-  const { q } = await searchParams;
+  const { q, category } = await searchParams;
 
   const locale: ContentLocale = routeLocale === "en" ? "en" : "es";
+  const categorySlug = normalizeCategorySlug(category);
 
-  const t = await getTranslations({
-    locale,
-    namespace: "catalog",
-  });
+  const [t, errors, selectedCategory] = await Promise.all([
+    getTranslations({
+      locale,
+      namespace: "catalog",
+    }),
+    getTranslations({
+      locale,
+      namespace: "errors",
+    }),
+    categorySlug ? findCatalogCategory(locale, categorySlug) : null,
+  ]);
+
+  if (categorySlug && !selectedCategory) {
+    // The page raises notFound(), and the head of that 404 comes from src/app/[locale]/not-found.tsx: Next.js does not
+    // use this metadata for a not-found render. It stays noindex without canonical so nothing here can index the URL.
+    return createLocalizedMetadata({
+      locale,
+      pathname: "/books",
+      title: errors("notFoundTitle"),
+      robots: {
+        index: false,
+        follow: true,
+      },
+      alternateLocales: false,
+    });
+  }
 
   const hasSearchQuery =
     typeof q === "string" ? q.trim().length > 0 : Array.isArray(q) && q.some((value) => value.trim().length > 0);
+
+  // A search, with or without a category, is never indexed and announces no language versions.
+  if (hasSearchQuery) {
+    return createLocalizedMetadata({
+      locale,
+      pathname: "/books",
+      title: t("booksMetadataTitle"),
+      description: t("booksMetadataDescription"),
+      robots: {
+        index: false,
+        follow: true,
+      },
+      alternateLocales: false,
+    });
+  }
+
+  if (selectedCategory) {
+    // The category is its own page: its canonical keeps the filter. The slug is shared by every locale, so the
+    // language versions are the locales the category has a translated name in, and only if this is one of them.
+    const languageVersions = selectedCategory.locales.includes(locale) ? selectedCategory.locales : [];
+
+    return createLocalizedMetadata({
+      locale,
+      pathname: getCatalogCategoryPath(selectedCategory.slug),
+      title: t("categoryMetadataTitle", { category: selectedCategory.name }),
+      description: t("categoryMetadataDescription", { category: selectedCategory.name }),
+      alternateLocales: languageVersions.length > 1 ? languageVersions : false,
+    });
+  }
 
   return createLocalizedMetadata({
     locale,
     pathname: "/books",
     title: t("booksMetadataTitle"),
     description: t("booksMetadataDescription"),
-    robots: hasSearchQuery
-      ? {
-          index: false,
-          follow: true,
-        }
-      : undefined,
-    alternateLocales: hasSearchQuery ? false : undefined,
   });
 }
 
-export default function BooksPage({ searchParams }: BooksContentProps) {
+export default async function BooksPage({ searchParams }: BooksContentProps) {
+  // A category that names none raises notFound() before the Suspense boundary below. Googlebot (htmlLimitedBots) gets a
+  // blocking render and a real 404; a browser has already received the prerendered shell with a 200, so it gets the
+  // not-found page in that 200 (docs/seo.md, "Categorías inexistentes: limitación conocida").
+  const category = normalizeCategorySlug((await searchParams).category);
+
+  if (category && !(await findCatalogCategory((await getLocale()) as ContentLocale, category))) {
+    notFound();
+  }
+
   return (
     <Suspense fallback={<BooksPageFallback />}>
       <BooksContent searchParams={searchParams} />

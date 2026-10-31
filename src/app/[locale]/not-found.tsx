@@ -1,7 +1,23 @@
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
+
+// When Next.js renders this boundary in place of a page, it builds the head from the layouts and this file only: the
+// page's generateMetadata is not used (next/dist/lib/metadata/resolve-metadata.js, errorConvention). Without its own
+// metadata the 404 would keep the layout's title and its `index, follow`, contradicting the noindex Next.js adds.
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("errors");
+
+  return {
+    title: `${t("notFoundTitle")} — Libra`,
+    robots: {
+      index: false,
+      follow: true,
+    },
+  };
+}
 
 export default async function LocaleNotFound() {
   const [t, catalog] = await Promise.all([getTranslations("errors"), getTranslations("catalog")]);

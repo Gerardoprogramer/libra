@@ -6,6 +6,7 @@ import {
   MAX_SEARCH_LENGTH,
   containsPattern,
   escapeLikePattern,
+  getCatalogCategoryPath,
   isSlug,
   isUuid,
   normalizeCategorySlug,
@@ -66,4 +67,9 @@ test("only stored-looking slugs can name a book or chapter", () => {
   ]) {
     assert.equal(isSlug(value), false, String(value));
   }
+});
+
+test("a category's catalog path keeps the filter as its only, encoded parameter", () => {
+  assert.equal(getCatalogCategoryPath("adventure"), "/books?category=adventure");
+  assert.equal(getCatalogCategoryPath("ficción-gótica"), "/books?category=ficci%C3%B3n-g%C3%B3tica");
 });

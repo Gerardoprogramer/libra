@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import type { ContentLocale } from "@/db/queries/books";
+import { getCatalogCategoryPath } from "@/lib/catalog-filters";
 
 const locales: ContentLocale[] = ["en", "es"];
 const staticPaths = ["/", "/books", "/authors", "/categories"];
@@ -24,6 +25,10 @@ export function createPublicSitemap(
       locale: ContentLocale;
     }[];
     authorSlugs: readonly string[];
+    categories?: readonly {
+      slug: string;
+      locales: readonly ContentLocale[];
+    }[];
   },
 ): MetadataRoute.Sitemap {
   if (!siteUrl) {
@@ -61,6 +66,25 @@ export function createPublicSitemap(
       localizedEntries.set(url, {
         url,
         ...(book.locales.length > 1 ? { alternates: { languages } } : {}),
+      });
+    }
+  }
+
+  // A category is the filtered catalog (getCatalogCategoryPath), listed only in the locales it has a translated name in.
+  for (const category of content.categories ?? []) {
+    const languages = Object.fromEntries(
+      category.locales.map((locale) => [
+        locale,
+        getLocalizedUrl(siteUrl, locale, getCatalogCategoryPath(category.slug)),
+      ]),
+    );
+
+    for (const locale of category.locales) {
+      const url = languages[locale];
+
+      localizedEntries.set(url, {
+        url,
+        ...(category.locales.length > 1 ? { alternates: { languages } } : {}),
       });
     }
   }

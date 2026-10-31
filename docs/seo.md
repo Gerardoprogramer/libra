@@ -86,6 +86,41 @@ inglesa, la ficha española puede mostrarla y compartirse, pero mantiene `noinde
 en hreflang o sitemap. Si existen ediciones públicas en ambos idiomas, se emiten alternates recíprocos.
 No se añade `x-default` a los libros ni una traducción inexistente.
 
+## Categorías del catálogo
+
+Una categoría es el catálogo filtrado: `/{locale}/books?category={slug}`. El slug es el mismo en ambos idiomas
+(`categories.slug`); solo el nombre se traduce (`category_translations`).
+
+- Una categoría con libros públicos tiene canonical propio con `?category=`, hreflang hacia los idiomas en los que
+  tiene nombre traducido (solo si el idioma de la página es uno de ellos) y título y descripción propios. Aparece en el
+  sitemap en esos mismos idiomas.
+- Cualquier URL con `q`, con o sin categoría, es `noindex, follow`, sin canonical ni hreflang, y no está en el sitemap.
+
+### Categorías inexistentes: limitación conocida
+
+Una categoría que no existe (`/es/books?category=x`, `/en/books?category=Adventure`) llama a `notFound()` en la
+página, antes de su límite de `Suspense`. Eso no basta para un 404 HTTP universal:
+
+- **Navegadores normales: HTTP 200.** Con Cache Components, Next.js envía primero el shell prerenderizado de
+  `/[locale]/books` (layout y cabecera) y después la parte que depende de `searchParams`, que solo existe en la
+  petición. Cuando la página llega a `notFound()`, el estado 200 ya se envió y no puede cambiarse; la página termina
+  renderizando el estado not-found dentro de ese 200 (véase "The HTTP contract" en
+  `node_modules/next/dist/docs/01-app/02-guides/streaming.md`).
+- **Googlebot: HTTP 404 real.** Pertenece a `htmlLimitedBots` (`next.config.ts`), por lo que no recibe el shell
+  prerenderizado sino un render bloqueante, y `notFound()` llega antes de las cabeceras.
+
+En ambos casos la respuesta lleva el título de página no encontrada (`src/app/[locale]/not-found.tsx`), `noindex,
+follow` (además del `noindex` que añade Next.js) y ningún canonical ni hreflang. Ese archivo declara su propia
+metadata porque, al renderizar la convención not-found, Next.js compone el `<head>` con los layouts y ese archivo, sin
+la `generateMetadata` de la página; sin ella quedarían el título del layout y su `index, follow`.
+
+Es una limitación conocida de la arquitectura actual, no un 404 HTTP universal, y no garantiza un impacto SEO nulo:
+otros rastreadores que no estén en `htmlLimitedBots`, herramientas de auditoría o clientes que solo miren el código de
+estado ven un 200. Un 404 para todos exigiría decidir antes de las cabeceras: un `proxy` que conozca las categorías o
+una ruta con la categoría como parámetro (por ejemplo `/[locale]/categories/[slug]`), que cambiaría las URLs.
+`pnpm smoke:seo` comprueba los dos comportamientos por separado: 404 con Googlebot y, para el navegador, el 200
+señalado como `KNOWN LIMITATION`, con el mismo `<head>` de no encontrado.
+
 ## Probar localmente
 
 Configurar `DATABASE_URL`, `R2_PUBLIC_URL` y `SITE_URL`. Para desarrollo, `SITE_URL=http://localhost:3000`

@@ -355,10 +355,32 @@ test("category counts use unique Books across editions and locale translations",
   for (const locale of ["es", "en"] as const) {
     const { queries, statements } = queriesWithRows(rows);
     assert.deepEqual(await queries.getCategories(locale), [
-      { id: "classic", slug: "classics", name: locale === "es" ? "Clásicos" : "Classics", bookCount: 2 },
+      {
+        id: "classic",
+        slug: "classics",
+        name: locale === "es" ? "Clásicos" : "Classics",
+        bookCount: 2,
+        locales: ["en", "es"],
+      },
     ]);
     assertPublicFilter(statements[0]);
   }
+});
+
+test("a category lists as language versions only the locales it has a translated name in", async () => {
+  const rows = [
+    { categoryId: "classic", categorySlug: "classics", translationLocale: "en", translationName: "Classics" },
+    { categoryId: "untranslated", categorySlug: "untranslated", translationLocale: null, translationName: null },
+  ].map((row) => ({ ...row, bookId: "book-1" }));
+  const { queries } = queriesWithRows(rows);
+  const result = await queries.getCategories("es");
+  assert.deepEqual(
+    result.map(({ slug, name, locales }) => ({ slug, name, locales })),
+    [
+      { slug: "classics", name: "Classics", locales: ["en"] },
+      { slug: "untranslated", name: "untranslated", locales: [] },
+    ],
+  );
 });
 
 test("the author listing counts distinct public Books in SQL, not joined editions", async () => {

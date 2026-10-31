@@ -183,3 +183,35 @@ test("robots remains useful in development without SITE_URL and does not block r
   assert.equal(robots.sitemap, undefined);
   assert.ok(!rules.disallow?.some((path) => path.includes("_next")));
 });
+
+test("sitemap lists each category as the filtered catalog in the locales it is translated into", () => {
+  const sitemap = createPublicSitemap(new URL("https://libra.example"), {
+    books: [],
+    chapters: [],
+    authorSlugs: [],
+    categories: [
+      { slug: "adventure", locales: ["en", "es"] },
+      { slug: "gothic-fiction", locales: ["en"] },
+    ],
+  });
+
+  const urls = sitemap.map(({ url }) => url);
+  const adventure = sitemap.find(({ url }) => url === "https://libra.example/es/books?category=adventure");
+  const gothic = sitemap.find(({ url }) => url === "https://libra.example/en/books?category=gothic-fiction");
+
+  assert.ok(urls.includes("https://libra.example/en/books?category=adventure"));
+  assert.deepEqual(adventure?.alternates?.languages, {
+    en: "https://libra.example/en/books?category=adventure",
+    es: "https://libra.example/es/books?category=adventure",
+  });
+
+  // No Spanish version is invented for a category without a Spanish name.
+  assert.ok(gothic);
+  assert.equal(gothic.alternates, undefined);
+  assert.ok(!urls.includes("https://libra.example/es/books?category=gothic-fiction"));
+
+  // Only the categories given (those with public books) appear, and never a search.
+  assert.equal(urls.filter((url) => url.includes("category=")).length, 3);
+  assert.ok(urls.every((url) => !url.includes("q=")));
+  assert.equal(new Set(urls).size, urls.length);
+});

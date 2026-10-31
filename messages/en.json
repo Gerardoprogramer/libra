@@ -114,6 +114,8 @@
     "booksMetadataDescription": "Discover timeless books, authors and stories available to read on Libra.",
     "categoriesMetadataTitle": "Categories — Libra",
     "categoriesMetadataDescription": "Browse the library by genre and literary category.",
+    "categoryMetadataTitle": "{category} — Books on Libra",
+    "categoryMetadataDescription": "Books in the {category} category available to read on Libra.",
     "exploreCategory": "Explore",
     "searchLabel": "Search books by title or author",
     "categoryFilterLabel": "Filter books by category",

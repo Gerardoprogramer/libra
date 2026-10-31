@@ -114,6 +114,8 @@
     "booksMetadataDescription": "Descubre libros, autores e historias atemporales disponibles para leer en Libra.",
     "categoriesMetadataTitle": "Categorías — Libra",
     "categoriesMetadataDescription": "Explora la biblioteca por género y categoría literaria.",
+    "categoryMetadataTitle": "{category} — Libros en Libra",
+    "categoryMetadataDescription": "Libros de la categoría {category} disponibles para leer en Libra.",
     "exploreCategory": "Explorar",
     "searchLabel": "Buscar libros por título o autor",
     "categoryFilterLabel": "Filtrar libros por categoría",

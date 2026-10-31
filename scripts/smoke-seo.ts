@@ -330,6 +330,96 @@ async function main() {
   console.log(
     "PASS sitemap, robots, crawler HTML, distinct images, icons, manifest, missing-page noindex, real 404s and image 404",
   );
+
+  await checkCatalogFilters(urls, canonicalOrigin, robotsTokens);
+}
+
+const googlebot = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
+
+// Category pages are the filtered catalog (/books?category=…): their own canonical and hreflang, listed in the sitemap.
+// A search is never indexed, and a category that does not exist is a real 404 for browsers and crawlers alike.
+async function checkCatalogFilters(
+  urls: string[],
+  canonicalOrigin: string,
+  robotsTokens: (html: ReturnType<typeof load>) => string[],
+) {
+  const categoryUrls = urls.filter((url) => new URL(url).searchParams.has("category"));
+  assert.ok(categoryUrls.length, "No category pages in the sitemap");
+  assert.ok(
+    urls.every((url) => !new URL(url).searchParams.has("q")),
+    "Searches must not be in the sitemap",
+  );
+
+  for (const locale of ["es", "en"]) {
+    const url = categoryUrls.find((item) => new URL(item).pathname === `/${locale}/books`);
+    assert.ok(url, `No ${locale} category in the sitemap`);
+    const target = new URL(url);
+    const html = load(await (await request(`${target.pathname}${target.search}`, googlebot)).text());
+    assert.equal(html('head link[rel="canonical"]').attr("href"), url, `${url}: canonical keeps the category`);
+    assert.equal(html(`head link[hreflang="${locale}"]`).attr("href"), url, `${url}: hreflang names itself`);
+    assert.ok(!robotsTokens(html).includes("noindex"), `${url}: a category is indexable`);
+    console.log(`PASS ${target.pathname}${target.search}: own canonical, hreflang and indexable`);
+  }
+
+  const category = new URL(categoryUrls[0]).searchParams.get("category");
+  for (const search of ["?q=dracula", `?q=dracula&category=${category}`]) {
+    const html = load(await (await request(`/es/books${search}`, googlebot)).text());
+    assert.deepEqual(robotsTokens(html), ["noindex", "follow"], `${search}: a search is noindex, follow`);
+    assert.equal(html('link[rel="canonical"]').length, 0, `${search}: a search has no canonical`);
+    assert.equal(html("link[hreflang]").length, 0, `${search}: a search has no hreflang`);
+    console.log(`PASS /es/books${search}: noindex, follow without canonical or hreflang`);
+  }
+
+  // A missing category is only a real 404 for HTML-limited bots such as Googlebot, which get a blocking render. A
+  // browser receives the prerendered shell first, so the status is already 200 when the page reaches notFound(): a
+  // known limitation of the architecture (docs/seo.md, "Categorías inexistentes"), checked as such and never reported
+  // as a 404. Both get the same not-found head. Every failure is collected, so one run reports each URL and agent.
+  const failures: string[] = [];
+  const notFoundTitles = { es: `${es.errors.notFoundTitle} — Libra`, en: `${en.errors.notFoundTitle} — Libra` };
+  for (const path of ["/es/books?category=x", "/en/books?category=Adventure"]) {
+    const locale = path.split("/")[1] as "es" | "en";
+    for (const [agent, userAgent, expectedStatus] of [
+      ["Googlebot", googlebot, 404],
+      ["browser", "Mozilla/5.0", 200],
+    ] as const) {
+      const response = await fetch(new URL(path, base), {
+        headers: { "User-Agent": userAgent },
+        redirect: "manual",
+        signal: AbortSignal.timeout(30_000),
+      });
+      const html = load(await response.text());
+      const tokens = robotsTokens(html);
+      const googlebotTokens = html('meta[name="googlebot"]')
+        .toArray()
+        .flatMap((element) => (html(element).attr("content") ?? "").split(/\s*,\s*/));
+      const titles = html("title")
+        .toArray()
+        .map((element) => html(element).text());
+      const problems = [
+        response.status !== expectedStatus && `HTTP ${response.status}, expected ${expectedStatus}`,
+        !(tokens.includes("noindex") && tokens.includes("follow")) &&
+          `robots ${JSON.stringify(tokens)}, not noindex, follow`,
+        (tokens.includes("index") || googlebotTokens.includes("index")) && "an `index` directive contradicts noindex",
+        html('link[rel="canonical"]').length > 0 && `canonical ${html('link[rel="canonical"]').attr("href")}`,
+        (titles.length === 0 || titles.some((title) => title !== notFoundTitles[locale])) &&
+          `title ${JSON.stringify(titles)}`,
+      ].filter(Boolean);
+      if (problems.length) failures.push(`${path} (${agent}): ${problems.join("; ")}`);
+      else if (expectedStatus === 404) {
+        console.log(`PASS ${path} (${agent}): HTTP 404, not-found title, noindex, follow, no canonical`);
+      } else {
+        console.log(
+          `KNOWN LIMITATION ${path} (${agent}): HTTP 200, not a 404 (streamed prerendered shell); ` +
+            "the head is still the not-found title, noindex, follow and no canonical",
+        );
+      }
+    }
+  }
+  assert.deepEqual(failures, [], `A missing category must get the not-found head:\n${failures.join("\n")}`);
+  console.log(
+    `PASS catalog filters: categories, searches and the missing-category head; HTTP 404 for Googlebot only ` +
+      `(canonical origin ${canonicalOrigin})`,
+  );
 }
 
 main().catch((error: unknown) => {

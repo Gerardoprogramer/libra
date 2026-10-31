@@ -48,6 +48,8 @@ export interface BookListItem {
 
 export interface CategoryListItem extends BookCategory {
   bookCount: number;
+  /** Locales with a translated name. The slug is shared, so these are the category's real language versions. */
+  locales: ContentLocale[];
 }
 
 export interface BookDetails {
@@ -462,6 +464,8 @@ export async function getCategories(locale: ContentLocale): Promise<CategoryList
       name: category.translations.get(locale) ?? category.translations.get("en") ?? category.slug,
 
       bookCount: category.books.size,
+
+      locales: (["en", "es"] as ContentLocale[]).filter((item) => category.translations.has(item)),
     }))
 
     .sort((first, second) => first.name.localeCompare(second.name));

@@ -36,6 +36,11 @@ export function normalizeCategorySlug(value: unknown): string {
   return value.trim().slice(0, MAX_CATEGORY_LENGTH);
 }
 
+/** The catalog filtered by one category, without the locale prefix: its canonical, hreflang and sitemap path. */
+export function getCatalogCategoryPath(slug: string): string {
+  return `/books?category=${encodeURIComponent(slug)}`;
+}
+
 /** Makes `%`, `_` and the escape character itself match literally in a LIKE/ILIKE pattern. */
 export function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, (character) => `\\${character}`);
