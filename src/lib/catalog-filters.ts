@@ -36,9 +36,41 @@ export function normalizeCategorySlug(value: unknown): string {
   return value.trim().slice(0, MAX_CATEGORY_LENGTH);
 }
 
+/** Books per catalog page. Changing it only changes which books each page holds; no URL depends on it. */
+export const CATALOG_PAGE_SIZE = 30;
+
+// One to four digits without a leading zero: page 1 to 9999. Bounded, so it never makes an unbounded cache key.
+const pagePattern = /^[1-9]\d{0,3}$/;
+
+/**
+ * The catalog page named by ?page=. Absent is page 1; anything else must be one plain number in range. Arrays (a
+ * repeated parameter), zero, negatives, decimals, text and leading zeros are null: a page that does not exist.
+ */
+export function parseCatalogPage(value: unknown): number | null {
+  if (value === undefined) return 1;
+
+  return typeof value === "string" && pagePattern.test(value) ? Number(value) : null;
+}
+
+/**
+ * A catalog URL without the locale prefix. The parameters always come in the same order (category, q, page) and page 1
+ * is never written, so each listing has exactly one URL: the one its canonical, hreflang and links use.
+ */
+export function getCatalogPath({ category, query, page = 1 }: { category?: string; query?: string; page?: number }) {
+  const parameters = new URLSearchParams();
+
+  if (category) parameters.set("category", category);
+  if (query) parameters.set("q", query);
+  if (page > 1) parameters.set("page", String(page));
+
+  const search = parameters.toString();
+
+  return search ? `/books?${search}` : "/books";
+}
+
 /** The catalog filtered by one category, without the locale prefix: its canonical, hreflang and sitemap path. */
 export function getCatalogCategoryPath(slug: string): string {
-  return `/books?category=${encodeURIComponent(slug)}`;
+  return getCatalogPath({ category: slug });
 }
 
 /** Makes `%`, `_` and the escape character itself match literally in a LIKE/ILIKE pattern. */

@@ -6,30 +6,31 @@ import { notFound } from "next/navigation";
 import { FiSearch } from "react-icons/fi";
 
 import { BookCard } from "@/components/books/BookCard";
+import { CatalogPagination } from "@/components/books/CatalogPagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { getBooks, getCategories, type CategoryListItem, type ContentLocale } from "@/db/queries/books";
+import { getBookPage, getCategories, type CategoryListItem, type ContentLocale } from "@/db/queries/books";
 
 import { Link } from "@/i18n/navigation";
-import { getCatalogCategoryPath, normalizeCategorySlug, normalizeSearchQuery } from "@/lib/catalog-filters";
+import { getCatalogPath, normalizeCategorySlug, normalizeSearchQuery, parseCatalogPage } from "@/lib/catalog-filters";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
+
+interface CatalogSearchParams {
+  q?: string | string[];
+  category?: string | string[];
+  page?: string | string[];
+}
 
 interface BooksPageProps {
   params: Promise<{
     locale: string;
   }>;
-  searchParams: Promise<{
-    q?: string | string[];
-    category?: string | string[];
-  }>;
+  searchParams: Promise<CatalogSearchParams>;
 }
 
 interface BooksContentProps {
-  searchParams: Promise<{
-    q?: string | string[];
-    category?: string | string[];
-  }>;
+  searchParams: Promise<CatalogSearchParams>;
 }
 
 // The category named by ?category=, among those with public books; null when it names none. getCategories is cached,
@@ -38,14 +39,37 @@ async function findCatalogCategory(locale: ContentLocale, slug: string): Promise
   return (await getCategories(locale)).find((category) => category.slug === slug) ?? null;
 }
 
+/**
+ * The listing a request names, or null when it names none: a category without public books, a page that is not a
+ * plain number, or a page past the last. Page 1 always exists, so it needs no count. The query arguments are the ones
+ * the page renders with, so the count here and the books shown come from the same cache entry.
+ */
+async function resolveCatalogListing(locale: ContentLocale, searchParams: CatalogSearchParams) {
+  const page = parseCatalogPage(searchParams.page);
+  const query = normalizeSearchQuery(searchParams.q);
+  const categorySlug = normalizeCategorySlug(searchParams.category);
+
+  if (page === null) return null;
+
+  const category = categorySlug ? await findCatalogCategory(locale, categorySlug) : null;
+
+  if (categorySlug && !category) return null;
+
+  if (page > 1 && page > (await getBookPage(locale, { query, category: categorySlug, page })).totalPages) {
+    return null;
+  }
+
+  return { page, query, category };
+}
+
 export async function generateMetadata({ params, searchParams }: BooksPageProps): Promise<Metadata> {
   const { locale: routeLocale } = await params;
-  const { q, category } = await searchParams;
+  const requested = await searchParams;
+  const { q } = requested;
 
   const locale: ContentLocale = routeLocale === "en" ? "en" : "es";
-  const categorySlug = normalizeCategorySlug(category);
 
-  const [t, errors, selectedCategory] = await Promise.all([
+  const [t, errors, listing] = await Promise.all([
     getTranslations({
       locale,
       namespace: "catalog",
@@ -54,10 +78,10 @@ export async function generateMetadata({ params, searchParams }: BooksPageProps)
       locale,
       namespace: "errors",
     }),
-    categorySlug ? findCatalogCategory(locale, categorySlug) : null,
+    resolveCatalogListing(locale, requested),
   ]);
 
-  if (categorySlug && !selectedCategory) {
+  if (!listing) {
     // The page raises notFound(), and the head of that 404 comes from src/app/[locale]/not-found.tsx: Next.js does not
     // use this metadata for a not-found render. It stays noindex without canonical so nothing here can index the URL.
     return createLocalizedMetadata({
@@ -72,15 +96,19 @@ export async function generateMetadata({ params, searchParams }: BooksPageProps)
     });
   }
 
+  const { page, category } = listing;
+  // From page 2 each page has a title of its own; page 1 keeps the listing's.
+  const withPage = (title: string) => (page > 1 ? `${title} — ${t("pageTitleSuffix", { page })}` : title);
+
   const hasSearchQuery =
     typeof q === "string" ? q.trim().length > 0 : Array.isArray(q) && q.some((value) => value.trim().length > 0);
 
-  // A search, with or without a category, is never indexed and announces no language versions.
+  // A search, with or without a category, on any page, is never indexed and announces no language versions.
   if (hasSearchQuery) {
     return createLocalizedMetadata({
       locale,
       pathname: "/books",
-      title: t("booksMetadataTitle"),
+      title: withPage(t("booksMetadataTitle")),
       description: t("booksMetadataDescription"),
       robots: {
         index: false,
@@ -90,35 +118,35 @@ export async function generateMetadata({ params, searchParams }: BooksPageProps)
     });
   }
 
-  if (selectedCategory) {
+  // Each page is its own canonical URL (page 1 without ?page=). Its language versions are the same page in the other
+  // locale: the order does not depend on the locale, so the same page number holds the same books.
+  if (category) {
     // The category is its own page: its canonical keeps the filter. The slug is shared by every locale, so the
     // language versions are the locales the category has a translated name in, and only if this is one of them.
-    const languageVersions = selectedCategory.locales.includes(locale) ? selectedCategory.locales : [];
+    const languageVersions = category.locales.includes(locale) ? category.locales : [];
 
     return createLocalizedMetadata({
       locale,
-      pathname: getCatalogCategoryPath(selectedCategory.slug),
-      title: t("categoryMetadataTitle", { category: selectedCategory.name }),
-      description: t("categoryMetadataDescription", { category: selectedCategory.name }),
+      pathname: getCatalogPath({ category: category.slug, page }),
+      title: withPage(t("categoryMetadataTitle", { category: category.name })),
+      description: t("categoryMetadataDescription", { category: category.name }),
       alternateLocales: languageVersions.length > 1 ? languageVersions : false,
     });
   }
 
   return createLocalizedMetadata({
     locale,
-    pathname: "/books",
-    title: t("booksMetadataTitle"),
+    pathname: getCatalogPath({ page }),
+    title: withPage(t("booksMetadataTitle")),
     description: t("booksMetadataDescription"),
   });
 }
 
 export default async function BooksPage({ searchParams }: BooksContentProps) {
-  // A category that names none raises notFound() before the Suspense boundary below. Googlebot (htmlLimitedBots) gets a
-  // blocking render and a real 404; a browser has already received the prerendered shell with a 200, so it gets the
-  // not-found page in that 200 (docs/seo.md, "Categorías inexistentes: limitación conocida").
-  const category = normalizeCategorySlug((await searchParams).category);
-
-  if (category && !(await findCatalogCategory((await getLocale()) as ContentLocale, category))) {
+  // A category or page that names none raises notFound() before the Suspense boundary below. Googlebot
+  // (htmlLimitedBots) gets a blocking render and a real 404; a browser has already received the prerendered shell with
+  // a 200, so it gets the not-found page in that 200 (docs/seo.md, "Categorías inexistentes: limitación conocida").
+  if (!(await resolveCatalogListing((await getLocale()) as ContentLocale, await searchParams))) {
     notFound();
   }
 
@@ -135,17 +163,22 @@ async function BooksContent({ searchParams }: BooksContentProps) {
 
   const params = await searchParams;
 
-  // Bounded here as well as in the query: each distinct value would otherwise be its own cache entry.
+  // Bounded here as well as in the query: each distinct value would otherwise be its own cache entry. BooksPage has
+  // already refused a page that does not exist; the same arguments reuse the cache entry it counted with.
   const query = normalizeSearchQuery(params.q);
   const selectedCategory = normalizeCategorySlug(params.category);
+  const page = parseCatalogPage(params.page) ?? 1;
 
-  const [books, categories] = await Promise.all([
-    getBooks(locale, {
+  const [{ books, total, pageSize, totalPages }, categories] = await Promise.all([
+    getBookPage(locale, {
       query,
       category: selectedCategory,
+      page,
     }),
     getCategories(locale),
   ]);
+
+  const firstShown = (page - 1) * pageSize + 1;
 
   const hasFilters = Boolean(query || selectedCategory);
 
@@ -207,7 +240,7 @@ async function BooksContent({ searchParams }: BooksContentProps) {
       <div className="mt-8 mb-8 flex items-center justify-between">
         <p className="text-muted-foreground text-sm">
           {t("results", {
-            count: books.length,
+            count: total,
           })}
         </p>
       </div>
@@ -229,6 +262,29 @@ async function BooksContent({ searchParams }: BooksContentProps) {
           <p className="text-muted-foreground">{t("noResults")}</p>
         </div>
       )}
+
+      {books.length > 0 && (
+        <p className="text-muted-foreground mt-10 text-sm">
+          {t("resultsRange", { from: firstShown, to: firstShown + books.length - 1, total })}
+        </p>
+      )}
+
+      <CatalogPagination
+        page={page}
+        totalPages={totalPages}
+        category={selectedCategory}
+        query={query}
+        labels={{
+          navigation: t("pagination"),
+          previous: t("previous"),
+          next: t("next"),
+          previousPage: t("previousPage"),
+          nextPage: t("nextPage"),
+          goToPage: (target) => t("goToPage", { page: target }),
+          currentPage: (target) => t("currentPage", { page: target }),
+          pageOf: (current, pages) => t("pageOf", { page: current, totalPages: pages }),
+        }}
+      />
     </main>
   );
 }

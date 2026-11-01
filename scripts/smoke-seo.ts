@@ -337,7 +337,8 @@ async function main() {
 const googlebot = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 
 // Category pages are the filtered catalog (/books?category=…): their own canonical and hreflang, listed in the sitemap.
-// A search is never indexed, and a category that does not exist is a real 404 for browsers and crawlers alike.
+// A search is never indexed. A category or page that does not exist is a 404 for Googlebot and, as a known
+// limitation, a 200 with the not-found head for browsers (docs/seo.md).
 async function checkCatalogFilters(
   urls: string[],
   canonicalOrigin: string,
@@ -370,13 +371,23 @@ async function checkCatalogFilters(
     console.log(`PASS /es/books${search}: noindex, follow without canonical or hreflang`);
   }
 
+  await checkCatalogPages(urls, canonicalOrigin, robotsTokens);
+
   // A missing category is only a real 404 for HTML-limited bots such as Googlebot, which get a blocking render. A
   // browser receives the prerendered shell first, so the status is already 200 when the page reaches notFound(): a
   // known limitation of the architecture (docs/seo.md, "Categorías inexistentes"), checked as such and never reported
   // as a 404. Both get the same not-found head. Every failure is collected, so one run reports each URL and agent.
   const failures: string[] = [];
   const notFoundTitles = { es: `${es.errors.notFoundTitle} — Libra`, en: `${en.errors.notFoundTitle} — Libra` };
-  for (const path of ["/es/books?category=x", "/en/books?category=Adventure"]) {
+  for (const path of [
+    "/es/books?category=x",
+    "/en/books?category=Adventure",
+    // Pages that do not exist: not a plain number, or past the last (9999 is the largest page number accepted).
+    "/es/books?page=0",
+    "/en/books?page=abc",
+    "/es/books?page=01",
+    "/en/books?page=9999",
+  ]) {
     const locale = path.split("/")[1] as "es" | "en";
     for (const [agent, userAgent, expectedStatus] of [
       ["Googlebot", googlebot, 404],
@@ -415,11 +426,95 @@ async function checkCatalogFilters(
       }
     }
   }
-  assert.deepEqual(failures, [], `A missing category must get the not-found head:\n${failures.join("\n")}`);
+  assert.deepEqual(failures, [], `A missing category or page must get the not-found head:\n${failures.join("\n")}`);
   console.log(
-    `PASS catalog filters: categories, searches and the missing-category head; HTTP 404 for Googlebot only ` +
+    `PASS catalog filters: categories, searches, pages and the not-found head; HTTP 404 for Googlebot only ` +
       `(canonical origin ${canonicalOrigin})`,
   );
+}
+
+// The catalog is walked page by page through its own links, as a crawler would: every book once, the same books in
+// the same order in both locales, each page with its canonical and the same page as its language version.
+async function checkCatalogPages(
+  urls: string[],
+  canonicalOrigin: string,
+  robotsTokens: (html: ReturnType<typeof load>) => string[],
+) {
+  assert.ok(
+    urls.every((url) => !new URL(url).searchParams.has("page")),
+    "Later catalog pages must not be in the sitemap",
+  );
+
+  const walked: Record<string, string[]> = {};
+  for (const locale of ["es", "en"] as const) {
+    const books: string[] = [];
+    let path: string | undefined = `/${locale}/books`;
+    let expected = 0;
+
+    for (let page = 1; path; page++) {
+      // Read as laid out: on a first, uncached render the cards and pagination links arrive as streamed segments.
+      const { $: html } = resolveStreamedSegments(await (await request(path, googlebot)).text());
+      assert.equal(html('div[hidden][id^="S:"]').length, 0, `${path}: a streamed segment has no placeholder`);
+      const canonical: string = `${canonicalOrigin}${path}`;
+      const other = locale === "es" ? "en" : "es";
+
+      assert.equal(html('head link[rel="canonical"]').attr("href"), canonical, `${path}: own canonical`);
+      assert.equal(html(`head link[hreflang="${locale}"]`).attr("href"), canonical, `${path}: hreflang names itself`);
+      assert.equal(
+        html(`head link[hreflang="${other}"]`).attr("href"),
+        `${canonicalOrigin}/${other}${path.slice(3)}`,
+        `${path}: the same page in the other locale`,
+      );
+      assert.ok(!robotsTokens(html).includes("noindex"), `${path}: every catalog page is indexable`);
+      if (page > 1) assert.ok(html("title").text().includes(String(page)), `${path}: page number in the title`);
+
+      if (page === 1) {
+        const counted = html("main p")
+          .toArray()
+          .map((element) => /^(\d+) (?:libros?|books?)$/.exec(html(element).text().trim())?.[1])
+          .find(Boolean);
+        assert.ok(counted, `${path}: the results count`);
+        expected = Number(counted);
+      }
+      books.push(
+        ...html("main a[href]")
+          .toArray()
+          .map((element) => html(element).attr("href") ?? "")
+          .filter((href) => new RegExp(`^/${locale}/books/[^/?]+$`).test(href)),
+      );
+
+      const pagination = html(`nav[aria-label="${(locale === "es" ? es : en).catalog.pagination}"]`);
+      if (pagination.length) {
+        assert.equal(
+          pagination.find('[aria-current="page"]').text(),
+          String(page),
+          `${path}: the current page is marked`,
+        );
+      }
+      const next: string | undefined = pagination.find('a[rel="next"]').attr("href");
+      if (next) assert.equal(next, `/${locale}/books?page=${page + 1}`, `${path}: next page link`);
+      if (page > 1) {
+        assert.equal(
+          pagination.find('a[rel="prev"]').attr("href"),
+          page === 2 ? `/${locale}/books` : `/${locale}/books?page=${page - 1}`,
+          `${path}: previous page link without ?page=1`,
+        );
+      }
+      path = next;
+    }
+
+    assert.equal(new Set(books).size, books.length, `/${locale}/books: a book appears on two pages`);
+    assert.equal(books.length, expected, `/${locale}/books: the pages hold every book counted`);
+    walked[locale] = books.map((href) => href.slice(3));
+    console.log(
+      `PASS /${locale}/books: ${books.length} books over its pages, each once, canonical and hreflang per page`,
+    );
+  }
+  assert.deepEqual(walked.es, walked.en, "The catalog order must not depend on the locale");
+
+  const firstPage = load(await (await request("/es/books?page=1", googlebot)).text());
+  assert.equal(firstPage('head link[rel="canonical"]').attr("href"), `${canonicalOrigin}/es/books`);
+  console.log("PASS /es/books?page=1: canonical without ?page=");
 }
 
 main().catch((error: unknown) => {

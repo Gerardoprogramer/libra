@@ -5,12 +5,15 @@ import {
   MAX_CATEGORY_LENGTH,
   MAX_SEARCH_LENGTH,
   containsPattern,
+  CATALOG_PAGE_SIZE,
   escapeLikePattern,
+  getCatalogPath,
   getCatalogCategoryPath,
   isSlug,
   isUuid,
   normalizeCategorySlug,
   normalizeSearchQuery,
+  parseCatalogPage,
 } from "./catalog-filters";
 
 test("L11: LIKE wildcards and the escape character match literally", () => {
@@ -72,4 +75,54 @@ test("only stored-looking slugs can name a book or chapter", () => {
 test("a category's catalog path keeps the filter as its only, encoded parameter", () => {
   assert.equal(getCatalogCategoryPath("adventure"), "/books?category=adventure");
   assert.equal(getCatalogCategoryPath("ficción-gótica"), "/books?category=ficci%C3%B3n-g%C3%B3tica");
+});
+
+test("a catalog page is one plain number from 1 to 9999, and absent is page 1", () => {
+  assert.equal(CATALOG_PAGE_SIZE, 30);
+  assert.equal(parseCatalogPage(undefined), 1);
+
+  for (const [value, page] of [
+    ["1", 1],
+    ["2", 2],
+    ["42", 42],
+    ["9999", 9999],
+  ] as const) {
+    assert.equal(parseCatalogPage(value), page, value);
+  }
+
+  for (const value of [
+    "",
+    "0",
+    "-1",
+    "1.5",
+    "abc",
+    "01",
+    "002",
+    "10000",
+    "1e3",
+    " 2",
+    "2 ",
+    "+2",
+    "0x2",
+    ["2"],
+    ["2", "3"],
+    2,
+    null,
+  ]) {
+    assert.equal(parseCatalogPage(value), null, JSON.stringify(value));
+  }
+});
+
+test("catalog paths keep category and search in a fixed order and never write page 1", () => {
+  assert.equal(getCatalogPath({}), "/books");
+  assert.equal(getCatalogPath({ page: 1 }), "/books");
+  assert.equal(getCatalogPath({ page: 2 }), "/books?page=2");
+  assert.equal(getCatalogPath({ category: "adventure", page: 1 }), "/books?category=adventure");
+  assert.equal(getCatalogPath({ category: "adventure", page: 3 }), "/books?category=adventure&page=3");
+  assert.equal(
+    getCatalogPath({ page: 2, query: "las aventuras", category: "adventure" }),
+    "/books?category=adventure&q=las+aventuras&page=2",
+  );
+  assert.equal(getCatalogPath({ query: "50% & más", page: 2 }), "/books?q=50%25+%26+m%C3%A1s&page=2");
+  assert.equal(getCatalogPath({ category: "", query: "", page: 2 }), "/books?page=2");
 });

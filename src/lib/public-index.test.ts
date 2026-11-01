@@ -213,5 +213,7 @@ test("sitemap lists each category as the filtered catalog in the locales it is t
   // Only the categories given (those with public books) appear, and never a search.
   assert.equal(urls.filter((url) => url.includes("category=")).length, 3);
   assert.ok(urls.every((url) => !url.includes("q=")));
+  // Later catalog pages are found through their links, never listed.
+  assert.ok(urls.every((url) => !url.includes("page=")));
   assert.equal(new Set(urls).size, urls.length);
 });

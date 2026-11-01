@@ -462,3 +462,105 @@ test("L11: search wildcards match literally and the pattern is bounded", async (
     if (typeof value === "string") assert.ok(value.length <= 110, "no unbounded value reaches SQL");
   }
 });
+
+// A work with two authors and two categories in two editions: 8 joined rows that must still make one card.
+function fannedOutRows(bookId: string, bookSlug: string) {
+  return [english, preferred].flatMap((item) =>
+    [0, 1].flatMap((authorPosition) =>
+      [0, 1].map((categoryPosition) =>
+        joinedRow(item, {
+          bookId,
+          bookSlug,
+          authorId: `author-${authorPosition}`,
+          authorName: `Author ${authorPosition}`,
+          authorPosition,
+          categoryId: `category-${categoryPosition}`,
+          categorySlug: `category-${categoryPosition}`,
+          categoryPosition,
+        }),
+      ),
+    ),
+  );
+}
+
+test("a catalog page chooses distinct books in SQL, in a locale-independent order, and counts them in the same statement", async () => {
+  const { queries, statements, assertConsumed } = queriesWithRows(
+    [
+      { id: "book-b", total: 31 },
+      { id: "book-a", total: 31 },
+    ],
+    // The details come back in another order and fanned out; the page keeps the order of the ids.
+    [...fannedOutRows("book-a", "work-a"), ...fannedOutRows("book-b", "work-b")],
+  );
+  const result = await queries.getBookPage("es", { page: 1 });
+
+  assert.deepEqual(
+    result.books.map((item) => item.slug),
+    ["work-b", "work-a"],
+  );
+  assert.equal(result.books[0].author, "Author 0, Author 1");
+  assert.deepEqual(
+    { ...result, books: undefined },
+    { books: undefined, total: 31, page: 1, pageSize: 30, totalPages: 2 },
+  );
+
+  const [pageStatement, detailStatement] = statements;
+  // The page is chosen on books alone: no join can multiply it, and every filter is an EXISTS (only those join).
+  assert.match(pageStatement.sql, /^select "id", count\(\*\) over\(\) from "books" where /);
+  // Drizzle leaves out a zero offset.
+  assert.match(pageStatement.sql, /order by "books"\."original_title" asc, "books"\."id" asc limit \$\d+$/);
+  assert.equal(pageStatement.params.at(-1), 30);
+  assertPublicFilter(pageStatement);
+  // Only the books of the page are expanded into cards.
+  assert.match(detailStatement.sql, /"books"\."id" in \(\$\d+, \$\d+\)/);
+  assert.ok(detailStatement.params.includes("book-a") && detailStatement.params.includes("book-b"));
+  assertPublicFilter(detailStatement);
+  assertConsumed();
+});
+
+test("later pages skip whole pages of books, and search and category filters stay EXISTS on the page statement", async () => {
+  const { queries, statements, assertConsumed } = queriesWithRows(
+    [{ id: "book-a", total: 61 }],
+    fannedOutRows("book-a", "work-a"),
+  );
+  const result = await queries.getBookPage("en", { page: 3, query: "Author 1", category: "category-1" });
+
+  assert.equal(result.books.length, 1);
+  assert.equal(result.totalPages, 3);
+  assert.deepEqual(statements[0].params.slice(-2), [30, 60]);
+  assert.match(statements[0].sql, /exists \(select "book_authors"\."book_id" from "book_authors" inner join "authors"/);
+  assert.ok(statements[0].params.includes("%Author 1%"));
+  assert.ok(statements[0].params.includes("category-1"));
+  assert.match(statements[0].sql, /^select "id", count\(\*\) over\(\) from "books" where /);
+  assert.match(statements[0].sql, /limit \$\d+ offset \$\d+$/);
+  assertConsumed();
+});
+
+test("an empty page is told apart from an empty listing by a count, and nothing is expanded", async () => {
+  const beyond = queriesWithRows([], [{ total: 33 }]);
+  const pastLast = await beyond.queries.getBookPage("es", { page: 3 });
+  assert.deepEqual(pastLast, { books: [], total: 33, page: 3, pageSize: 30, totalPages: 2 });
+  assert.match(beyond.statements[1].sql, /^select count\(\*\) from "books" where/);
+  beyond.assertConsumed();
+
+  // The first page of an empty listing needs no count: there is nothing before it.
+  const empty = queriesWithRows([]);
+  assert.deepEqual(await empty.queries.getBookPage("es", { query: "nothing" }), {
+    books: [],
+    total: 0,
+    page: 1,
+    pageSize: 30,
+    totalPages: 1,
+  });
+  assert.equal(empty.statements.length, 1);
+  empty.assertConsumed();
+});
+
+test("a page that is not a whole number from 1 is read as the first page", async () => {
+  for (const page of [0, -2, 1.5, Number.NaN, undefined]) {
+    const { queries, statements } = queriesWithRows([]);
+    assert.equal((await queries.getBookPage("es", { page })).page, 1);
+    assert.match(statements[0].sql, /limit \$\d+$/);
+    assert.equal(statements[0].params.at(-1), 30);
+  }
+});

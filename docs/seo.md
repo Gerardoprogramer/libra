@@ -121,6 +121,35 @@ una ruta con la categoría como parámetro (por ejemplo `/[locale]/categories/[s
 `pnpm smoke:seo` comprueba los dos comportamientos por separado: 404 con Googlebot y, para el navegador, el 200
 señalado como `KNOWN LIMITATION`, con el mismo `<head>` de no encontrado.
 
+## Paginación del catálogo
+
+El catálogo (`/{locale}/books`) y cada categoría se reparten en páginas de `CATALOG_PAGE_SIZE` libros (30,
+`src/lib/catalog-filters.ts`), con `?page=N`. `getCatalogPath` escribe siempre los parámetros en el mismo orden
+(`category`, `q`, `page`) y nunca `page=1`, de modo que cada listado tiene una sola URL.
+
+- **Orden:** `original_title ASC, books.id ASC`, igual en ambos idiomas. La página N de `/es` y la de `/en` contienen
+  los mismos libros; solo cambia el título de la edición mostrada.
+- **Consulta:** `getBookPage` elige los libros de la página sobre `books`, con todos los filtros como `EXISTS`
+  (edición pública, autor, título, categoría), `LIMIT/OFFSET` y el total con `count(*) over()` en la misma sentencia;
+  solo esos libros se expanden después en tarjetas. `getBooks` (portada y biblioteca) no cambia.
+- **Canonical:** cada página es su propia URL canónica. La página 1 no lleva `?page=` (`?page=1` canonicaliza a la URL
+  limpia, sin redirección); desde la 2, `?page=N`, con categoría si la hay (`/es/books?category=adventure&page=2`).
+  Ninguna página apunta a la primera.
+- **Hreflang:** la misma página en el otro idioma (`/es/books?page=2` ↔ `/en/books?page=2`), con las reglas de idioma de
+  las categorías. Desde la página 2 el título lleva el sufijo «— Página N» / «— Page N».
+- **Búsquedas:** cualquier URL con `q`, en cualquier página, sigue siendo `noindex, follow`, sin canonical ni hreflang.
+- **Sitemap:** solo la primera página de cada listado. Las siguientes se descubren por los enlaces de paginación,
+  `<a href>` reales en el HTML que recibe Googlebot (`CatalogPagination`).
+- **Páginas inexistentes:** un `page` que no sea un número simple de 1 a 9999 (cero, negativos, decimales, texto, ceros
+  a la izquierda, parámetros repetidos) o mayor que la última página llama a `notFound()` antes del `Suspense`. Tiene la
+  misma limitación conocida que las categorías inexistentes: 404 real para Googlebot y 200 con el `<head>` de no
+  encontrado (`noindex, follow`, sin canonical) para los navegadores. Solo las páginas desde la 2 se cuentan antes del
+  streaming; la 1 siempre existe.
+
+`pnpm smoke:seo` recorre el catálogo en ambos idiomas siguiendo los enlaces «siguiente» y comprueba que cada libro
+aparece una sola vez, que el total coincide con el recuento, que el orden es el mismo en `/es` y `/en`, el canonical y
+el hreflang de cada página, `?page=1` y los casos de página inexistente.
+
 ## Probar localmente
 
 Configurar `DATABASE_URL`, `R2_PUBLIC_URL` y `SITE_URL`. Para desarrollo, `SITE_URL=http://localhost:3000`

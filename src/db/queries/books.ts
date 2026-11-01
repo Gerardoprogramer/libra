@@ -1,12 +1,12 @@
 import "server-only";
 
-import { and, asc, countDistinct, eq, exists, ilike, inArray, or } from "drizzle-orm";
+import { and, asc, countDistinct, eq, exists, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { cacheLife, cacheTag } from "next/cache";
 
 import { db } from "@/db";
 import { formatAuthorNames } from "@/lib/book-authors";
-import { containsPattern, normalizeCategorySlug, normalizeSearchQuery } from "@/lib/catalog-filters";
+import { CATALOG_PAGE_SIZE, containsPattern, normalizeCategorySlug, normalizeSearchQuery } from "@/lib/catalog-filters";
 import { chooseEdition } from "@/lib/edition-selection";
 
 import {
@@ -156,119 +156,112 @@ function getBookCategories(categories: Map<string, PositionedBookCategory>): Boo
     .map(({ id, slug, name }) => ({ id, slug, name }));
 }
 
-export async function getBooks(locale: ContentLocale, filters: BookFilters = {}): Promise<BookListItem[]> {
-  "use cache";
+/** Books with a public edition in the category with this slug. */
+function inCategory(category: string) {
+  return exists(
+    db
+      .select({
+        categoryId: bookCategories.categoryId,
+      })
+      .from(bookCategories)
+      .innerJoin(categories, eq(categories.id, bookCategories.categoryId))
+      .where(and(eq(bookCategories.bookId, books.id), eq(categories.slug, category))),
+  );
+}
 
-  cacheLife("editorial");
-  cacheTag("library:editorial");
-
-  // Bounded and wildcard-free: callers normalize first (a cache key is made of the raw arguments), and this
-  // repeats it so no caller can put an unbounded or wildcard-bearing pattern into SQL.
-  const query = normalizeSearchQuery(filters.query);
-  const category = normalizeCategorySlug(filters.category);
-
-  const rows = await db
-    .select({
-      bookId: books.id,
-
-      bookSlug: books.slug,
-
-      originalTitle: books.originalTitle,
-
-      publicationYear: books.originalPublicationYear,
-
-      authorId: authors.id,
-
-      authorName: authors.name,
-
-      authorPosition: bookAuthors.position,
-
-      editionId: editions.id,
-
-      editionSlug: editions.slug,
-
-      editionTitle: editions.title,
-
-      editionLanguage: editions.language,
-
-      editionIsPreferred: editions.isPreferred,
-
-      editionCreatedAt: editions.createdAt,
-
-      editionCoverUrl: editions.coverUrl,
-
-      categoryId: categories.id,
-
-      categorySlug: categories.slug,
-
-      categoryName: categoryTranslations.name,
-
-      fallbackCategoryName: fallbackCategoryTranslations.name,
-
-      categoryPosition: bookCategories.position,
-    })
-    .from(books)
-
-    // Left joins: an anonymous work has no authors and is still listed.
-    .leftJoin(bookAuthors, eq(bookAuthors.bookId, books.id))
-
-    .leftJoin(authors, eq(authors.id, bookAuthors.authorId))
-
-    .innerJoin(editions, eq(editions.bookId, books.id))
-
-    .leftJoin(bookCategories, eq(bookCategories.bookId, books.id))
-
-    .leftJoin(categories, eq(categories.id, bookCategories.categoryId))
-
-    .leftJoin(
-      categoryTranslations,
-      and(eq(categoryTranslations.categoryId, categories.id), eq(categoryTranslations.locale, locale)),
-    )
-
-    .leftJoin(
-      fallbackCategoryTranslations,
-      and(eq(fallbackCategoryTranslations.categoryId, categories.id), eq(fallbackCategoryTranslations.locale, "en")),
-    )
-
-    .where(
-      and(
-        getPublicEditionVisibilityCondition(),
-
-        query
-          ? or(
-              ilike(books.originalTitle, containsPattern(query)),
-              ilike(authors.name, containsPattern(query)),
-              exists(
-                db
-                  .select({ id: editions.id })
-                  .from(editions)
-                  .where(
-                    and(
-                      eq(editions.bookId, books.id),
-                      getPublicEditionVisibilityCondition(),
-                      ilike(editions.title, containsPattern(query)),
-                    ),
-                  ),
-              ),
-            )
-          : undefined,
-
-        category
-          ? exists(
-              db
-                .select({
-                  categoryId: bookCategories.categoryId,
-                })
-                .from(bookCategories)
-                .innerJoin(categories, eq(categories.id, bookCategories.categoryId))
-                .where(and(eq(bookCategories.bookId, books.id), eq(categories.slug, category))),
-            )
-          : undefined,
+/** Books with a public edition whose title contains the search. */
+function hasPublicEditionTitled(query: string) {
+  return exists(
+    db
+      .select({ id: editions.id })
+      .from(editions)
+      .where(
+        and(
+          eq(editions.bookId, books.id),
+          getPublicEditionVisibilityCondition(),
+          ilike(editions.title, containsPattern(query)),
+        ),
       ),
-    )
+  );
+}
 
-    .orderBy(asc(books.originalTitle), asc(bookAuthors.position), asc(bookCategories.position));
+// One row per book × author × public edition × category, the shape the catalog cards are grouped from. A LIMIT here
+// would count those rows instead of books, so a page of books is chosen first (getBookPage) and only then expanded.
+function selectBookListRows(locale: ContentLocale, ...conditions: (SQL | undefined)[]) {
+  return (
+    db
+      .select({
+        bookId: books.id,
 
+        bookSlug: books.slug,
+
+        originalTitle: books.originalTitle,
+
+        publicationYear: books.originalPublicationYear,
+
+        authorId: authors.id,
+
+        authorName: authors.name,
+
+        authorPosition: bookAuthors.position,
+
+        editionId: editions.id,
+
+        editionSlug: editions.slug,
+
+        editionTitle: editions.title,
+
+        editionLanguage: editions.language,
+
+        editionIsPreferred: editions.isPreferred,
+
+        editionCreatedAt: editions.createdAt,
+
+        editionCoverUrl: editions.coverUrl,
+
+        categoryId: categories.id,
+
+        categorySlug: categories.slug,
+
+        categoryName: categoryTranslations.name,
+
+        fallbackCategoryName: fallbackCategoryTranslations.name,
+
+        categoryPosition: bookCategories.position,
+      })
+      .from(books)
+
+      // Left joins: an anonymous work has no authors and is still listed.
+      .leftJoin(bookAuthors, eq(bookAuthors.bookId, books.id))
+
+      .leftJoin(authors, eq(authors.id, bookAuthors.authorId))
+
+      .innerJoin(editions, eq(editions.bookId, books.id))
+
+      .leftJoin(bookCategories, eq(bookCategories.bookId, books.id))
+
+      .leftJoin(categories, eq(categories.id, bookCategories.categoryId))
+
+      .leftJoin(
+        categoryTranslations,
+        and(eq(categoryTranslations.categoryId, categories.id), eq(categoryTranslations.locale, locale)),
+      )
+
+      .leftJoin(
+        fallbackCategoryTranslations,
+        and(eq(fallbackCategoryTranslations.categoryId, categories.id), eq(fallbackCategoryTranslations.locale, "en")),
+      )
+
+      .where(and(getPublicEditionVisibilityCondition(), ...conditions))
+
+      .orderBy(asc(books.originalTitle), asc(bookAuthors.position), asc(bookCategories.position))
+  );
+}
+
+type BookListRow = Awaited<ReturnType<typeof selectBookListRows>>[number];
+
+/** One catalog card per book, in the order of the rows, with the edition chosen for the locale. */
+function groupBookListItems(rows: BookListRow[], locale: ContentLocale): BookListItem[] {
   const grouped = new Map<
     string,
     {
@@ -387,6 +380,131 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
     ];
   });
 }
+
+export async function getBooks(locale: ContentLocale, filters: BookFilters = {}): Promise<BookListItem[]> {
+  "use cache";
+
+  cacheLife("editorial");
+  cacheTag("library:editorial");
+
+  // Bounded and wildcard-free: callers normalize first (a cache key is made of the raw arguments), and this
+  // repeats it so no caller can put an unbounded or wildcard-bearing pattern into SQL.
+  const query = normalizeSearchQuery(filters.query);
+  const category = normalizeCategorySlug(filters.category);
+
+  const rows = await selectBookListRows(
+    locale,
+
+    query
+      ? or(
+          ilike(books.originalTitle, containsPattern(query)),
+          ilike(authors.name, containsPattern(query)),
+          hasPublicEditionTitled(query),
+        )
+      : undefined,
+
+    category ? inCategory(category) : undefined,
+  );
+
+  return groupBookListItems(rows, locale);
+}
+
+export interface BookPage {
+  books: BookListItem[];
+  /** Books matching the filters, across every page. */
+  total: number;
+  page: number;
+  pageSize: number;
+  /** At least 1: an empty listing still has its first page. */
+  totalPages: number;
+}
+
+/**
+ * One page of the catalog, in an order that does not depend on the locale (original title, then id), so a page holds
+ * the same books in every language. The books of the page are chosen on `books` alone, every filter an EXISTS, and
+ * only those are expanded into cards; the total comes from the same statement as the page.
+ */
+export async function getBookPage(
+  locale: ContentLocale,
+  filters: BookFilters & { page?: number } = {},
+): Promise<BookPage> {
+  "use cache";
+
+  cacheLife("editorial");
+  cacheTag("library:editorial");
+
+  const query = normalizeSearchQuery(filters.query);
+  const category = normalizeCategorySlug(filters.category);
+  // Callers parse the page (parseCatalogPage); anything else that reaches here is the first page.
+  const page = filters.page !== undefined && Number.isSafeInteger(filters.page) && filters.page > 1 ? filters.page : 1;
+  const pageSize = CATALOG_PAGE_SIZE;
+
+  const condition = and(
+    exists(
+      db
+        .select({ id: editions.id })
+        .from(editions)
+        .where(and(eq(editions.bookId, books.id), getPublicEditionVisibilityCondition())),
+    ),
+
+    query
+      ? or(
+          ilike(books.originalTitle, containsPattern(query)),
+          exists(
+            db
+              .select({ bookId: bookAuthors.bookId })
+              .from(bookAuthors)
+              .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
+              .where(and(eq(bookAuthors.bookId, books.id), ilike(authors.name, containsPattern(query)))),
+          ),
+          hasPublicEditionTitled(query),
+        )
+      : undefined,
+
+    category ? inCategory(category) : undefined,
+  );
+
+  // The window count is taken with the page itself, so the total always describes the books returned.
+  const pageRows = await db
+    .select({
+      id: books.id,
+      total: sql<number>`count(*) over()`.mapWith(Number),
+    })
+    .from(books)
+    .where(condition)
+    .orderBy(asc(books.originalTitle), asc(books.id))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  let total = pageRows[0]?.total;
+
+  if (total === undefined) {
+    // An empty page has no row to carry the count: only a count tells an empty listing from a page past the last.
+    total =
+      page === 1
+        ? 0
+        : ((
+            await db
+              .select({ total: sql<number>`count(*)`.mapWith(Number) })
+              .from(books)
+              .where(condition)
+          )[0]?.total ?? 0);
+  }
+
+  const ids = pageRows.map((row) => row.id);
+  const cards =
+    ids.length > 0 ? groupBookListItems(await selectBookListRows(locale, inArray(books.id, ids)), locale) : [];
+  const cardsById = new Map(cards.map((card) => [card.id, card]));
+
+  return {
+    books: ids.flatMap((id) => cardsById.get(id) ?? []),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  };
+}
+
 export async function getCategories(locale: ContentLocale): Promise<CategoryListItem[]> {
   "use cache";
 
