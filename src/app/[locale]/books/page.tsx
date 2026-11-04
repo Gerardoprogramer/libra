@@ -185,9 +185,9 @@ async function BooksContent({ searchParams }: BooksContentProps) {
   return (
     <main id="main-content" className="mx-auto min-h-screen max-w-7xl px-6 py-14 md:py-20">
       <header className="max-w-3xl">
-        <p className="text-muted-foreground mb-3 text-xs tracking-[0.25em] uppercase">{t("eyebrow")}</p>
+        <p className="text-muted-foreground eyebrow mb-3">{t("eyebrow")}</p>
 
-        <h1 className="font-serif text-5xl tracking-tight md:text-6xl">{t("title")}</h1>
+        <h1 className="page-title">{t("title")}</h1>
 
         <p className="text-muted-foreground mt-5 max-w-2xl text-lg leading-8">{t("description")}</p>
       </header>

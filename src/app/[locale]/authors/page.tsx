@@ -35,9 +35,9 @@ export default async function AuthorsPage() {
   return (
     <main id="main-content" className="mx-auto min-h-screen max-w-7xl px-6 py-14 md:py-20">
       <header className="max-w-3xl">
-        <p className="text-muted-foreground mb-3 text-xs tracking-[0.25em] uppercase">{t("listingEyebrow")}</p>
+        <p className="text-muted-foreground eyebrow mb-3">{t("listingEyebrow")}</p>
 
-        <h1 className="font-serif text-5xl tracking-tight md:text-6xl">{t("listingTitle")}</h1>
+        <h1 className="page-title">{t("listingTitle")}</h1>
 
         <p className="text-muted-foreground mt-5 max-w-2xl text-lg leading-8">{t("listingDescription")}</p>
       </header>
@@ -60,7 +60,7 @@ export default async function AuthorsPage() {
                 href={`/authors/${author.slug}`}
                 className="group hover:bg-muted/40 border p-7 transition"
               >
-                <h2 className="font-serif text-2xl">{author.name}</h2>
+                <h2 className="font-serif text-xl text-balance md:text-2xl">{author.name}</h2>
 
                 {lifespan && <p className="text-muted-foreground mt-2 text-sm">{lifespan}</p>}
 

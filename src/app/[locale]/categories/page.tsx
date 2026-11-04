@@ -38,9 +38,9 @@ export default async function CategoriesPage() {
   return (
     <main id="main-content" className="mx-auto min-h-screen max-w-7xl px-6 py-14 md:py-20">
       <header className="max-w-3xl">
-        <p className="text-muted-foreground mb-3 text-xs tracking-[0.25em] uppercase">{t("categoriesEyebrow")}</p>
+        <p className="text-muted-foreground eyebrow mb-3">{t("categoriesEyebrow")}</p>
 
-        <h1 className="font-serif text-5xl tracking-tight md:text-6xl">{t("categoriesTitle")}</h1>
+        <h1 className="page-title">{t("categoriesTitle")}</h1>
 
         <p className="text-muted-foreground mt-5 max-w-2xl text-lg leading-8">{t("categoriesDescription")}</p>
       </header>
@@ -52,7 +52,7 @@ export default async function CategoriesPage() {
             href={`/books?category=${category.slug}`}
             className="group hover:bg-muted/40 border p-7 transition"
           >
-            <h2 className="font-serif text-2xl">{category.name}</h2>
+            <h2 className="font-serif text-xl text-balance md:text-2xl">{category.name}</h2>
 
             <p className="text-muted-foreground mt-2 text-sm">
               {t("booksInCategory", {

@@ -101,7 +101,11 @@ export function BookCard({ book, eager = false, sizes, fetchPriority, preload, h
           {visibleCategories.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {visibleCategories.map((category) => (
-                <Badge key={category.id} variant="secondary" className="max-w-full px-1.5 text-[10px] font-normal">
+                <Badge
+                  key={category.id}
+                  variant="secondary"
+                  className="h-auto max-w-full px-1.5 text-left text-xs font-normal wrap-break-word whitespace-normal"
+                >
                   {category.name}
                 </Badge>
               ))}

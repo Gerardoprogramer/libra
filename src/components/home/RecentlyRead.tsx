@@ -58,7 +58,7 @@ export function RecentlyRead({ books, title, continueLabel, limit = 4 }: Recentl
         <div className="mb-8 flex items-center gap-2">
           <FiBookOpen className="text-muted-foreground" />
 
-          <h2 className="font-serif text-2xl tracking-tight">{title}</h2>
+          <h2 className="section-title">{title}</h2>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">

@@ -317,7 +317,7 @@ export default async function BookPage({ params }: BookPageProps) {
                     <div className="absolute inset-0 bg-black/10" />
 
                     <div className="absolute inset-x-8 top-10 text-center">
-                      <p className="text-[10px] tracking-[0.3em] text-white/60 uppercase">{book.edition.language}</p>
+                      <p className="text-xs tracking-[0.3em] text-white/60 uppercase">{book.edition.language}</p>
                     </div>
 
                     <div className="absolute inset-x-7 top-1/2 -translate-y-1/2 text-center">
@@ -439,9 +439,9 @@ export default async function BookPage({ params }: BookPageProps) {
         <section className="mx-auto max-w-4xl px-6 py-14">
           <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-muted-foreground mb-2 text-xs tracking-[0.2em] uppercase">{t("contents")}</p>
+              <p className="text-muted-foreground eyebrow mb-2">{t("contents")}</p>
 
-              <h2 className="font-serif text-3xl">{t("chapterList")}</h2>
+              <h2 className="section-title">{t("chapterList")}</h2>
             </div>
 
             <p className="text-muted-foreground text-sm">{t("chapters", { count: book.chapters.length })}</p>

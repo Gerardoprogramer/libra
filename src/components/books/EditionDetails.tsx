@@ -35,7 +35,7 @@ export function EditionDetails({ edition, chapterCount }: EditionDetailsProps) {
 
   return (
     <section aria-labelledby="edition-details" className="text-muted-foreground mt-7 border-l-2 pl-4 text-sm leading-6">
-      <h2 id="edition-details" className="mb-1.5 text-xs tracking-[0.15em] uppercase">
+      <h2 id="edition-details" className="eyebrow mb-1.5">
         {t("editionDetails")}
       </h2>
 

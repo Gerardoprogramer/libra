@@ -66,7 +66,7 @@ export function ContinueReading({
         <div className="mb-6 flex items-center gap-2">
           <FiBookOpen className="text-muted-foreground" />
 
-          <h2 className="font-serif text-2xl">{title}</h2>
+          <h2 className="section-title">{title}</h2>
         </div>
 
         <Link

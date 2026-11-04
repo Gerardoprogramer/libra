@@ -17,8 +17,8 @@ export function BookSynopsis({ text, lang }: BookSynopsisProps) {
   if (!text?.trim()) return null;
 
   return (
-    <section aria-labelledby="book-synopsis" className="mt-10 max-w-2xl border-t pt-8 md:mt-12">
-      <h2 id="book-synopsis" className="font-serif text-2xl">
+    <section aria-labelledby="book-synopsis" className="mt-10 max-w-[65ch] border-t pt-8 md:mt-12">
+      <h2 id="book-synopsis" className="section-title">
         {t("synopsis")}
       </h2>
 

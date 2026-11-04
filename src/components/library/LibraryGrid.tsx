@@ -55,7 +55,7 @@ export function LibraryGrid({
           <FiBookOpen aria-hidden="true" className="text-muted-foreground size-5" />
         </div>
 
-        <h2 className="mt-5 font-serif text-2xl">{isAvailable ? emptyTitle : unavailableTitle}</h2>
+        <h2 className="section-title mt-5">{isAvailable ? emptyTitle : unavailableTitle}</h2>
 
         <p className="text-muted-foreground mt-2 max-w-md text-sm leading-6">
           {isAvailable ? emptyDescription : errorLabel}

@@ -142,9 +142,9 @@ export default async function AuthorPage({ params }: AuthorPageProps) {
       <main id="main-content" className="min-h-screen">
         <section className="border-b">
           <div className="mx-auto max-w-7xl px-6 py-14 md:py-20">
-            <p className="text-muted-foreground mb-3 text-xs tracking-[0.25em] uppercase">{t("eyebrow")}</p>
+            <p className="text-muted-foreground eyebrow mb-3">{t("eyebrow")}</p>
 
-            <h1 className="max-w-4xl font-serif text-5xl tracking-tight md:text-6xl">{author.name}</h1>
+            <h1 className="page-title max-w-4xl">{author.name}</h1>
 
             {lifespan && <p className="text-muted-foreground mt-4 text-lg">{lifespan}</p>}
           </div>
@@ -153,9 +153,9 @@ export default async function AuthorPage({ params }: AuthorPageProps) {
         <section className="mx-auto max-w-7xl px-6 py-14">
           <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-muted-foreground mb-2 text-xs tracking-[0.2em] uppercase">{t("booksEyebrow")}</p>
+              <p className="text-muted-foreground eyebrow mb-2">{t("booksEyebrow")}</p>
 
-              <h2 className="font-serif text-3xl">{t("books")}</h2>
+              <h2 className="section-title">{t("books")}</h2>
             </div>
 
             <p className="text-muted-foreground text-sm">

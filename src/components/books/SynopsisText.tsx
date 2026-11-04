@@ -68,7 +68,7 @@ export function SynopsisText({ text, lang, moreLabel, lessLabel }: SynopsisTextP
         id={id}
         ref={textRef}
         lang={lang}
-        className={`mt-4 text-base leading-7 text-pretty wrap-break-word md:leading-8 ${view.clamped ? "line-clamp-4" : ""}`}
+        className={`mt-4 text-base leading-7 text-pretty wrap-break-word ${view.clamped ? "line-clamp-4" : ""}`}
       >
         {text}
       </p>

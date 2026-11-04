@@ -59,7 +59,7 @@ export default async function AccountPage({ params }: AccountPageProps) {
     <main id="main-content" className="mx-auto max-w-3xl px-6 py-12">
       <div className="space-y-8">
         <header className="space-y-2">
-          <h1 className="font-serif text-3xl font-semibold tracking-tight">{t("title")}</h1>
+          <h1 className="font-serif text-3xl tracking-tight">{t("title")}</h1>
         </header>
 
         <section className="bg-card rounded-2xl border p-6 shadow-sm">
@@ -71,7 +71,7 @@ export default async function AccountPage({ params }: AccountPageProps) {
 
         <section className="bg-card rounded-2xl border p-6 shadow-sm">
           <div className="space-y-2">
-            <h2 className="font-serif text-xl font-semibold">{t("syncTitle")}</h2>
+            <h2 className="font-serif text-xl">{t("syncTitle")}</h2>
             <p className="text-muted-foreground text-sm leading-6">{t("syncDescription")}</p>
           </div>
         </section>

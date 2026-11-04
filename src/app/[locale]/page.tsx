@@ -56,9 +56,9 @@ export default async function Home() {
       <section className="border-b">
         <div className="mx-auto max-w-7xl px-6 py-16 md:py-24">
           <div className="max-w-3xl">
-            <p className="text-muted-foreground mb-5 text-xs font-medium tracking-[0.25em] uppercase">{t("eyebrow")}</p>
+            <p className="text-muted-foreground eyebrow mb-5">{t("eyebrow")}</p>
 
-            <h1 className="font-serif text-4xl leading-[1.05] tracking-tight sm:text-5xl md:text-7xl">
+            <h1 className="page-title lg:text-7xl">
               {t("titleFirst")}
               <br />
               {t("titleSecond")}
@@ -93,9 +93,9 @@ export default async function Home() {
         <section className="mx-auto max-w-7xl px-6 py-14 md:py-16">
           <div className="mb-8 flex items-end justify-between gap-4">
             <div>
-              <p className="text-muted-foreground mb-2 text-xs tracking-[0.2em] uppercase">{t("discover")}</p>
+              <p className="text-muted-foreground eyebrow mb-2">{t("discover")}</p>
 
-              <h2 className="font-serif text-3xl tracking-tight">{t("collectionTitle")}</h2>
+              <h2 className="section-title">{t("collectionTitle")}</h2>
             </div>
 
             <Link href="/books" className="text-muted-foreground hover:text-foreground text-sm transition">
