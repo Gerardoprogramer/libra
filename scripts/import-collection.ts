@@ -27,6 +27,7 @@ the run never reports an empty comparison.
 
 A PUBLISHED edition is never modified from a collection run. A book whose published edition would change is
 reported as BLOCKED; revise it with pnpm import:gutenberg --revise-published --plan-hash <digest>.
+A cover made for Libra (covers/libra/) is always kept; replace it with pnpm import:gutenberg --replace-custom-cover.
 
 Manifest: scripts/catalog/initial-library.ts
 Exit code: 0 if every book succeeded, 1 if any book failed, was blocked or was missing.

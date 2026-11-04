@@ -2,11 +2,15 @@ import { createHash } from "node:crypto";
 
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
+import { CUSTOM_COVER_PREFIX } from "./custom-cover";
+
 export interface CoverKeyInput {
   bookSlug: string;
   gutenbergId: string;
   data: Buffer;
   extension: string;
+  /** A cover made for Libra rather than taken from the EPUB: stored under covers/libra/ (see custom-cover.ts). */
+  custom?: boolean;
 }
 
 interface UploadCoverInput extends CoverKeyInput {
@@ -27,13 +31,13 @@ function getEnv(name: string): string {
  * Deterministic object key: the same bytes always map to the same key, so a stored cover can be compared with
  * an EPUB cover without any request to R2, and re-uploading can never replace a different image.
  */
-export function coverKeyFor({ bookSlug, gutenbergId, data, extension }: CoverKeyInput): string {
+export function coverKeyFor({ bookSlug, gutenbergId, data, extension, custom = false }: CoverKeyInput): string {
   const hash = createHash("sha256").update(data).digest("hex").slice(0, 12);
 
-  return `covers/${bookSlug}-${gutenbergId}-${hash}.${extension}`;
+  return `${custom ? CUSTOM_COVER_PREFIX : "covers/"}${bookSlug}-${gutenbergId}-${hash}.${extension}`;
 }
 
-export async function uploadCover({ bookSlug, gutenbergId, data, mediaType, extension }: UploadCoverInput) {
+export async function uploadCover({ bookSlug, gutenbergId, data, mediaType, extension, custom }: UploadCoverInput) {
   const accountId = getEnv("R2_ACCOUNT_ID");
   const accessKeyId = getEnv("R2_ACCESS_KEY_ID");
   const secretAccessKey = getEnv("R2_SECRET_ACCESS_KEY");
@@ -60,7 +64,7 @@ export async function uploadCover({ bookSlug, gutenbergId, data, mediaType, exte
     },
   });
 
-  const key = coverKeyFor({ bookSlug, gutenbergId, data, extension });
+  const key = coverKeyFor({ bookSlug, gutenbergId, data, extension, custom });
 
   try {
     // Keys are content-addressed and objects are never deleted here: an upload that is followed by a

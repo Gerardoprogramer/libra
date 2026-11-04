@@ -50,6 +50,9 @@ no se escribe y hace que el comando termine con código `1`; el motivo se imprim
 | El slug se derivó del título y ya pertenece a otro libro               | Pasar `--slug` explícito                                                             |
 | El EPUB no declara creador y el libro no tiene autores                 | Corregir el EPUB o el libro: no aparecería en el catálogo                            |
 
+Una portada propia de Libra (bajo `covers/libra/`, ver `scripts/covers/README.md`) nunca se sustituye por la del EPUB:
+el plan dice `custom cover kept`. Solo `pnpm import:gutenberg --replace-custom-cover` la sustituye, libro a libro.
+
 Una edición publicada **sin cambios** no se toca (ni escrituras, ni subida de portada, ni invalidación de caché).
 El `--apply` de una colección nunca modifica una edición publicada: esa revisión es siempre por libro.
 

@@ -50,6 +50,8 @@ export interface ImportGutenbergOptions {
   allowRemovals?: boolean;
   allowSlugChanges?: boolean;
   acceptWarnings?: boolean;
+  /** Let the EPUB's cover replace a cover made for Libra (covers/libra/); without it such a cover is kept. */
+  replaceCustomCover?: boolean;
 }
 
 export interface ImportDependencies {
@@ -255,6 +257,7 @@ export async function importGutenbergBook(
         })),
       },
       warnings,
+      replaceCustomCover: options.replaceCustomCover ?? false,
     };
 
     const request: StateRequest = {

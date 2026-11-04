@@ -40,6 +40,8 @@ Gates, each needed only when the plan calls for it:
   --revise-published         Modify a PUBLISHED edition. Requires --plan-hash.
   --plan-hash <digest>       Digest printed by the dry run; the write is refused if the EPUB or the
                              database changed since.
+  --replace-custom-cover     Replace a cover made for Libra (covers/libra/) with the EPUB's. Without it,
+                             such a cover is always kept.
 
 Chapters with saved reading progress are never deleted by the importer.`;
 
@@ -65,6 +67,7 @@ export function parseGutenbergArguments(args: readonly string[]): {
       "allow-removals": { type: "boolean", default: false },
       "allow-slug-changes": { type: "boolean", default: false },
       "accept-warnings": { type: "boolean", default: false },
+      "replace-custom-cover": { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
     strict: true,
@@ -127,6 +130,7 @@ export function parseGutenbergArguments(args: readonly string[]): {
       allowRemovals: values["allow-removals"],
       allowSlugChanges: values["allow-slug-changes"],
       acceptWarnings: values["accept-warnings"],
+      replaceCustomCover: values["replace-custom-cover"],
     },
   };
 }

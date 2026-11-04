@@ -23,6 +23,7 @@ test("L10: the single-book CLI defaults to a dry run with no gate open", () => {
   assert.equal(options?.revisePublished, false);
   assert.equal(options?.allowRemovals, false);
   assert.equal(options?.acceptWarnings, false);
+  assert.equal(options?.replaceCustomCover, false);
   assert.equal(options?.slug, undefined);
 });
 
@@ -45,6 +46,7 @@ test("the pnpm separator and every gate flag are accepted", () => {
     "--allow-removals",
     "--allow-slug-changes",
     "--accept-warnings",
+    "--replace-custom-cover",
   ]);
 
   assert.deepEqual(options, {
@@ -63,6 +65,7 @@ test("the pnpm separator and every gate flag are accepted", () => {
     allowRemovals: true,
     allowSlugChanges: true,
     acceptWarnings: true,
+    replaceCustomCover: true,
   });
 });
 

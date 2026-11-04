@@ -10,6 +10,7 @@ import {
   formatImportDiff,
   type PlanInput,
 } from "./import-plan";
+import { isCustomCoverUrl } from "./custom-cover";
 import type { EditionState } from "./import-state";
 
 /** One paragraph block per paragraph of the text: blocks that derive exactly `content`. */
@@ -207,5 +208,158 @@ test("REVIEW: database targets are described without the password, the user's pr
       assert.ok(!String((error as Error).message).includes("topsecret"));
       return true;
     },
+  );
+});
+
+const unchangedChapters = [chapter(1, "one"), chapter(2, "two"), chapter(3, "three")];
+const customUrl = "https://covers.example/covers/libra/test-book-7-0123456789ab.jpg";
+const epubCoverKey = "covers/test-book-7-fedcba987654.jpg";
+const withCover = (coverUrl: string | null, publicationStatus: "DRAFT" | "PUBLISHED" = "DRAFT") =>
+  state({ edition: { ...state().edition!, coverUrl, publicationStatus } });
+const withEpubCover = (extra: Partial<PlanInput> = {}) => {
+  const plan = input(unchangedChapters, extra);
+  return { ...plan, incoming: { ...plan.incoming, coverKey: epubCoverKey } };
+};
+
+test("COVER: a re-import keeps a custom cover, says so, and leaves the plan unchanged when nothing else differs", () => {
+  for (const status of ["DRAFT", "PUBLISHED"] as const) {
+    const current = withCover(customUrl, status);
+    const diff = buildImportDiff(current, withEpubCover());
+
+    assert.deepEqual(diff.customCover, { url: customUrl, action: "kept" });
+    assert.deepEqual(diff.metadata, []);
+    assert.equal(diff.hasChanges, false, status);
+    assert(formatImportDiff(diff).some((line) => line.includes("custom cover kept") && line.includes(customUrl)));
+    // A published edition needs no --revise-published for a plan that writes nothing.
+    assert.deepEqual(
+      evaluateImportPolicy({
+        diff,
+        digest: digestOf(current, withEpubCover()),
+        extractionWarnings: [],
+        slugWasExplicit: true,
+        flags: defaultImportFlags,
+      }),
+      [],
+    );
+  }
+});
+
+test("COVER: a custom cover is kept with other changes too, and only those changes are planned", () => {
+  const diff = buildImportDiff(withCover(customUrl), {
+    ...withEpubCover(),
+    incoming: { ...withEpubCover().incoming, chapters: same },
+  });
+
+  assert.equal(diff.customCover?.action, "kept");
+  assert.equal(diff.metadata.length, 0);
+  assert.equal(diff.totals.modified, 1);
+  assert.equal(diff.hasChanges, true);
+});
+
+test("COVER: Gutenberg covers keep the normal behavior: a different one, a missing one and a new edition", () => {
+  const different = buildImportDiff(
+    withCover("https://covers.example/covers/test-book-7-000000000000.jpg"),
+    withEpubCover(),
+  );
+  assert.deepEqual(different.metadata, [
+    { field: "cover", from: "https://covers.example/covers/test-book-7-000000000000.jpg", to: epubCoverKey },
+  ]);
+  assert.equal(different.customCover, null);
+
+  const missing = buildImportDiff(withCover(null), withEpubCover());
+  assert.deepEqual(missing.metadata, [{ field: "cover", from: null, to: epubCoverKey }]);
+  assert.equal(missing.customCover, null);
+
+  const same = buildImportDiff(withCover(`https://covers.example/${epubCoverKey}`), withEpubCover());
+  assert.equal(same.hasChanges, false);
+  assert.equal(same.customCover, null);
+
+  const created = buildImportDiff(state({ edition: null, chapters: [] }), withEpubCover());
+  assert.equal(created.edition.exists, false);
+  assert.equal(created.customCover, null);
+  assert.equal(created.hasChanges, true);
+});
+
+test("COVER: --replace-custom-cover plans the EPUB's cover, and does nothing when the EPUB has none", () => {
+  const replaced = buildImportDiff(withCover(customUrl), withEpubCover({ replaceCustomCover: true }));
+  assert.deepEqual(replaced.customCover, { url: customUrl, action: "replaced" });
+  assert.deepEqual(replaced.metadata, [{ field: "cover", from: customUrl, to: epubCoverKey }]);
+  assert.equal(replaced.hasChanges, true);
+  assert(formatImportDiff(replaced).some((line) => line.includes("will be replaced by the EPUB's")));
+
+  const noEpubCover = buildImportDiff(withCover(customUrl), input(unchangedChapters, { replaceCustomCover: true }));
+  assert.equal(noEpubCover.customCover?.action, "kept");
+  assert.equal(noEpubCover.hasChanges, false);
+
+  // The flag changes nothing for a Gutenberg cover.
+  const gutenberg = "https://covers.example/covers/test-book-7-000000000000.jpg";
+  assert.deepEqual(
+    buildImportDiff(withCover(gutenberg), withEpubCover({ replaceCustomCover: true })).metadata,
+    buildImportDiff(withCover(gutenberg), withEpubCover()).metadata,
+  );
+});
+
+test("COVER: the digest is stable and records the custom-cover decision", () => {
+  const kept = digestOf(withCover(customUrl), withEpubCover());
+  assert.equal(digestOf(withCover(customUrl), withEpubCover()), kept, "deterministic");
+
+  const replaced = digestOf(withCover(customUrl), withEpubCover({ replaceCustomCover: true }));
+  const otherCustom = digestOf(
+    withCover("https://covers.example/covers/libra/test-book-7-111111111111.jpg"),
+    withEpubCover(),
+  );
+  assert.equal(new Set([kept, replaced, otherCustom]).size, 3);
+
+  // A digest reviewed with the cover kept does not authorize the write that replaces it.
+  const current = withCover(customUrl, "PUBLISHED");
+  const plan = withEpubCover({ replaceCustomCover: true });
+  const violations = evaluateImportPolicy({
+    diff: buildImportDiff(current, plan),
+    digest: digestOf(current, plan),
+    extractionWarnings: [],
+    slugWasExplicit: true,
+    flags: { ...defaultImportFlags, revisePublished: true, planHash: digestOf(current, withEpubCover()) },
+  });
+  assert(violations.some((violation) => violation.includes("does not match the current plan")));
+});
+
+test("COVER: only a file directly under covers/libra/ is a custom cover; Hound's Gutenberg cover is not", () => {
+  assert.equal(isCustomCoverUrl(customUrl), true);
+  assert.equal(isCustomCoverUrl("https://cdn.example/books/covers/libra/a-1-0123456789ab.webp"), true);
+  for (const url of [
+    null,
+    undefined,
+    "",
+    "not a url",
+    "https://covers.example/covers/the-hound-of-the-baskervilles-2852-0123456789ab.jpg",
+    // A book whose slug starts with "libra" keeps the importer's key shape.
+    "https://covers.example/covers/libra-1-0123456789ab.jpg",
+    "https://covers.example/covers/libra/",
+    "https://covers.example/covers/libra/nested/a.jpg",
+    "https://covers.example/other/libra/a.jpg",
+  ]) {
+    assert.equal(isCustomCoverUrl(url), false, String(url));
+  }
+
+  // Re-importing Hound with its own stored cover plans nothing; with a newer EPUB cover it updates as before.
+  const houndKey = "covers/the-hound-of-the-baskervilles-2852-0123456789ab.jpg";
+  const hound = state({
+    book: { id: "book-h", slug: "the-hound-of-the-baskervilles" },
+    edition: { ...state().edition!, bookId: "book-h", coverUrl: `https://covers.example/${houndKey}` },
+  });
+  const houndPlan = (coverKey: string) => {
+    const plan = input(unchangedChapters, { bookSlug: "the-hound-of-the-baskervilles", replaceCustomCover: true });
+    return { ...plan, incoming: { ...plan.incoming, coverKey } };
+  };
+  const kept = buildImportDiff(hound, houndPlan(houndKey));
+  assert.equal(kept.customCover, null);
+  assert.equal(
+    kept.metadata.some((change) => change.field === "cover"),
+    false,
+  );
+  const updated = buildImportDiff(hound, houndPlan("covers/the-hound-of-the-baskervilles-2852-ffffffffffff.jpg"));
+  assert.equal(
+    updated.metadata.some((change) => change.field === "cover"),
+    true,
   );
 });

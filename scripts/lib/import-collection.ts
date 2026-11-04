@@ -259,7 +259,8 @@ export async function importCollection(
     try {
       // Await the entire pipeline, including invalidation and connection cleanup.
       // A published edition is never revised from a collection run (no --revise-published here): each one
-      // needs its own reviewed plan through pnpm import:gutenberg.
+      // needs its own reviewed plan through pnpm import:gutenberg. Likewise a cover made for Libra is always kept
+      // here (no --replace-custom-cover): replacing one is a per-book decision.
       const outcome = await importBook({
         file,
         gutenbergId: String(entry.gutenbergId),
@@ -274,6 +275,7 @@ export async function importCollection(
         allowRemovals,
         allowSlugChanges,
         acceptWarnings,
+        replaceCustomCover: false,
       });
 
       if (outcome?.status === "blocked") {

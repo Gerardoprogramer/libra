@@ -684,3 +684,76 @@ test("REVIEW: --plan-hash without --revise-published, and --revise-published on 
     "the removal, slug and warning gates do not open published editions",
   );
 });
+
+const customCover = "https://covers.example/covers/libra/test-book-7-0123456789ab.jpg";
+
+test("COVER: a re-import keeps a custom cover: unchanged, nothing uploaded, written or invalidated", async (t) => {
+  const printed = quiet(t);
+  const file = await writeEpub(t, threeChapters);
+
+  for (const status of ["DRAFT", "PUBLISHED"] as const) {
+    const state = await stateAfterImporting(file, status);
+    state.edition!.coverUrl = customCover;
+    const { database, committed } = fakeDatabase(state);
+    const { dependencies: deps, uploads, revalidations } = dependencies(database);
+
+    const dryRun = await importGutenbergBook(options(file), deps);
+    assert.equal(dryRun.status, "unchanged", status);
+    assert.deepEqual("diff" in dryRun && dryRun.diff.customCover, { url: customCover, action: "kept" });
+
+    const applied = await importGutenbergBook(
+      options(file, { apply: true, confirmDatabase: database.target.token }),
+      deps,
+    );
+    assert.equal(applied.status, "unchanged", status);
+    assert.deepEqual(committed, []);
+    assert.deepEqual(uploads, []);
+    assert.deepEqual(revalidations, []);
+  }
+  assert(printed.some((line) => line.includes("custom cover kept")));
+});
+
+test("COVER: a draft without a cover, or with an older Gutenberg cover, still receives the EPUB's", async (t) => {
+  quiet(t);
+  const file = await writeEpub(t, threeChapters);
+
+  for (const coverUrl of [null, "https://covers.example/covers/test-book-7-stale.jpg"]) {
+    const state = await stateAfterImporting(file, "DRAFT");
+    state.edition!.coverUrl = coverUrl;
+    const { database, committed } = fakeDatabase(state);
+    const { dependencies: deps, uploads } = dependencies(database);
+
+    const outcome = await importGutenbergBook(
+      options(file, { apply: true, confirmDatabase: database.target.token }),
+      deps,
+    );
+
+    assert.equal(outcome.status, "applied", String(coverUrl));
+    assert.deepEqual(uploads, ["test-book"]);
+    assert.equal(committed[0].edition.coverUrl, "https://covers.example/covers/uploaded.jpg");
+    assert.equal(committed[0].diff.customCover, null);
+  }
+});
+
+test("COVER: --replace-custom-cover uploads the EPUB's cover and writes it over the custom one", async (t) => {
+  const printed = quiet(t);
+  const file = await writeEpub(t, threeChapters);
+  const state = await stateAfterImporting(file, "DRAFT");
+  state.edition!.coverUrl = customCover;
+  const { database, committed } = fakeDatabase(state);
+  const { dependencies: deps, uploads, revalidations } = dependencies(database);
+
+  const dryRun = await importGutenbergBook(options(file, { replaceCustomCover: true }), deps);
+  assert.equal(dryRun.status, "planned");
+  assert(printed.some((line) => line.includes("will be replaced by the EPUB's")));
+
+  const applied = await importGutenbergBook(
+    options(file, { apply: true, confirmDatabase: database.target.token, replaceCustomCover: true }),
+    deps,
+  );
+  assert.equal(applied.status, "applied");
+  assert.deepEqual(uploads, ["test-book"]);
+  assert.equal(committed[0].edition.coverUrl, "https://covers.example/covers/uploaded.jpg");
+  assert.deepEqual(committed[0].diff.customCover, { url: customCover, action: "replaced" });
+  assert.deepEqual(revalidations, [["book:test-book", "library"]]);
+});

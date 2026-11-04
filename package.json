@@ -21,6 +21,7 @@
     "import:collection": "tsx scripts/import-collection.ts",
     "db:review": "tsx scripts/review-edition.ts",
     "db:migrate-cover-origin": "tsx scripts/migrate-cover-origin.ts",
+    "db:replace-cover": "tsx scripts/replace-cover.ts",
     "db:seed:categories": "tsx scripts/seed-categories.ts",
     "db:categories:add": "tsx scripts/add-book-categories.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm format:check && pnpm test"

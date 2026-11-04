@@ -15,7 +15,11 @@ import {
   type CatalogEntry,
 } from "./import-collection";
 import { formatImportError } from "./import-errors";
+import type { ImportDatabase } from "./import-database";
 import { importGutenbergBook, type ImportGutenbergOptions } from "./import-gutenberg";
+import { describeDatabaseTarget } from "./import-plan";
+import type { EditionState } from "./import-state";
+import { testImportDependencies } from "./import-test-guards";
 import { createSharpCodec } from "./sharp-codec";
 
 // The importer verifies its codec against the approved environments before parsing (only win32-x64 today), so on
@@ -521,4 +525,77 @@ test("error reports include the driver cause and code but redact credentials and
   const message = formatImportError(error);
   assert(message.includes("ECONNREFUSED") && message.includes("Connection failed"));
   assert(!message.includes("private") && !message.includes("postgres://") && !message.includes("SQL AND EPUB CONTENT"));
+});
+
+test("COVER: a collection run never forwards --replace-custom-cover and keeps a custom cover", async (t) => {
+  const projectRoot = await createProject(t);
+  const file = path.join(projectRoot, dracula.file);
+  await createEpub(file);
+
+  const calls: ImportGutenbergOptions[] = [];
+  await importCollection(
+    [dracula],
+    { projectRoot, apply: true, confirmDatabase: "local" },
+    { logger: captureOutput().logger, importBook: async (options) => void calls.push(options) },
+  );
+  assert.equal(calls[0].replaceCustomCover, false);
+
+  // The real importer, against an in-memory database whose edition already has a custom cover.
+  const customCover = "https://covers.example/covers/libra/dracula-345-0123456789ab.jpg";
+  const parsed = await parseEpub(await fs.readFile(file));
+  const state: EditionState = {
+    book: { id: "book-1", slug: "dracula" },
+    bookAuthors: [{ id: "author-1", slug: "test-author", name: "Test Author" }],
+    creatorAuthors: [],
+    edition: {
+      id: "edition-1",
+      bookId: "book-1",
+      slug: "en-gutenberg-345",
+      language: "en",
+      title: "Test Book",
+      translator: null,
+      publicationYear: null,
+      coverUrl: customCover,
+      sourceUrl: "https://www.gutenberg.org/ebooks/345",
+      copyrightStatus: "PUBLIC_DOMAIN_VERIFIED",
+      publicationStatus: "PUBLISHED",
+    },
+    chapters: parsed.chapters.map((chapter) => ({ ...chapter, id: `chapter-${chapter.slug}` })),
+    assets: [],
+    progressChapterIds: [],
+    progressRows: [],
+  };
+  const database: ImportDatabase = {
+    target: describeDatabaseTarget("postgres://postgres:not-a-real-password@localhost:5432/libra"),
+    readState: async () => state,
+    write: async (_request, run) =>
+      run(state, {
+        apply: async () => {
+          throw new Error("a kept custom cover must not be written");
+        },
+      }),
+    close: async () => {},
+  };
+  const forbidden = async () => {
+    throw new Error("nothing may be uploaded or invalidated");
+  };
+  const importBook = (options: ImportGutenbergOptions) =>
+    importGutenbergBook(
+      options,
+      testImportDependencies({ database, ...unverifiedCodec, uploadCover: forbidden, revalidate: forbidden }),
+    );
+  const printed: string[] = [];
+  t.mock.method(console, "log", (...args: unknown[]) => printed.push(String(args[0])));
+
+  for (const apply of [false, true]) {
+    const { logger, lines } = captureOutput();
+    const result = await importCollection(
+      [dracula],
+      { projectRoot, apply, confirmDatabase: apply ? database.target.token : undefined },
+      { logger, importBook },
+    );
+    assert.equal(result.exitCode, 0, lines.join("\n"));
+    assert(lines.some((line) => line.includes("already matches the database")));
+  }
+  assert(printed.some((line) => line.includes("custom cover kept")));
 });

@@ -4,6 +4,7 @@ import { isLocalDatabase } from "../../src/db/tls";
 
 import { readStoredChapterBlocks, type ChapterBlocks } from "../../src/lib/chapter-blocks";
 
+import { isCustomCoverUrl } from "./custom-cover";
 import { matchChapters } from "./reimport-chapters";
 import type { ChapterRecord, EditionAssetRecord, EditionState } from "./import-state";
 
@@ -81,6 +82,11 @@ export interface PlanInput {
   };
   /** Every warning that needs a human decision: the extractor's and the unusable images'. */
   warnings: string[];
+  /**
+   * --replace-custom-cover: let the EPUB's cover replace a cover made for Libra (under covers/libra/). Without it, a
+   * stored custom cover is always kept.
+   */
+  replaceCustomCover?: boolean;
 }
 
 export interface ChapterChange {
@@ -132,6 +138,11 @@ export interface ImportDiff {
   authors: AuthorPlan[];
   keptAuthors: number;
   metadata: MetadataChange[];
+  /**
+   * The edition's stored cover when it is a cover made for Libra, and what the plan does with it: `kept` (no `cover`
+   * change, whatever the EPUB has) or `replaced` (by the EPUB's, with --replace-custom-cover). Null otherwise.
+   */
+  customCover: { url: string; action: "kept" | "replaced" } | null;
   chapters: ChapterChange[];
   removed: RemovedChapter[];
   orderChanged: boolean;
@@ -260,6 +271,7 @@ export function buildImportDiff(state: EditionState, input: PlanInput): ImportDi
   const orderChanged = matchedNumbers.some((number, index) => index > 0 && number < matchedNumbers[index - 1]);
 
   const metadata: MetadataChange[] = [];
+  let customCover: ImportDiff["customCover"] = null;
   if (edition) {
     const expectedSlug = `${input.incoming.language}-gutenberg-${input.gutenbergId}`;
     const sourceUrl = `https://www.gutenberg.org/ebooks/${input.gutenbergId}`;
@@ -275,7 +287,17 @@ export function buildImportDiff(state: EditionState, input: PlanInput): ImportDi
     if (input.editionPublicationYear !== undefined) {
       compare("publicationYear", edition.publicationYear, input.editionPublicationYear);
     }
-    if (input.incoming.coverKey && !edition.coverUrl?.endsWith(`/${input.incoming.coverKey}`)) {
+    // A cover made for Libra is never restored to the EPUB's by a re-import: only an explicit --replace-custom-cover
+    // (and an EPUB that has a cover) turns it into a `cover` change.
+    const replacesCustom = Boolean(input.replaceCustomCover && input.incoming.coverKey);
+    if (edition.coverUrl && isCustomCoverUrl(edition.coverUrl)) {
+      customCover = { url: edition.coverUrl, action: replacesCustom ? "replaced" : "kept" };
+    }
+    if (
+      input.incoming.coverKey &&
+      !edition.coverUrl?.endsWith(`/${input.incoming.coverKey}`) &&
+      customCover?.action !== "kept"
+    ) {
       metadata.push({ field: "cover", from: edition.coverUrl, to: input.incoming.coverKey });
     }
   }
@@ -329,6 +351,7 @@ export function buildImportDiff(state: EditionState, input: PlanInput): ImportDi
     authors,
     keptAuthors: state.bookAuthors.length,
     metadata,
+    customCover,
     chapters,
     removed: removed.map((chapter) => ({
       id: chapter.id,
@@ -360,6 +383,8 @@ export function buildImportDiff(state: EditionState, input: PlanInput): ImportDi
  * that would be written (with the codec that normalized them), the images the edition has, the warnings and whether
  * they were accepted: accepting warnings is part of the reviewed plan, so the dry run that gives the digest to
  * approve takes the same --accept-warnings as the write. Lists are sorted, so their order never changes the digest.
+ * The decision on a custom cover (kept or replaced) is part of it too: a digest reviewed with the cover kept does not
+ * authorize a write that replaces it.
  */
 export function computePlanDigest(
   state: EditionState,
@@ -369,7 +394,7 @@ export function computePlanDigest(
 ): string {
   return sha256(
     JSON.stringify({
-      v: 3,
+      v: 4,
       gutenbergId: input.gutenbergId,
       bookSlug: input.bookSlug,
       editionId: state.edition?.id ?? null,
@@ -428,6 +453,7 @@ export function computePlanDigest(
         ]),
       progress: [...state.progressChapterIds].sort(),
       metadata: diff.metadata,
+      customCover: diff.customCover ? [diff.customCover.url, diff.customCover.action] : null,
       warnings: [...input.warnings].sort(),
       acceptWarnings,
     }),
@@ -566,6 +592,14 @@ export function formatImportDiff(diff: ImportDiff): string[] {
 
   for (const change of diff.metadata) {
     lines.push(`  Metadata ${change.field}: ${JSON.stringify(change.from)} -> ${JSON.stringify(change.to)}`);
+  }
+
+  if (diff.customCover?.action === "kept") {
+    lines.push(
+      `Cover: custom cover kept (${diff.customCover.url}); pass --replace-custom-cover to use the EPUB's instead.`,
+    );
+  } else if (diff.customCover?.action === "replaced") {
+    lines.push(`Cover: custom cover ${diff.customCover.url} will be replaced by the EPUB's (--replace-custom-cover).`);
   }
 
   if (diff.authors.length) {
