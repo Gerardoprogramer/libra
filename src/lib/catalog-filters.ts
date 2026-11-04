@@ -30,6 +30,30 @@ export function normalizeSearchQuery(value: unknown): string {
     .trim();
 }
 
+/**
+ * The marks a search ignores: the Combining Diacritical Marks block, U+0300 to U+036F (acute, grave, tilde, diaeresis,
+ * cedilla, the dot of İ...), in code point order. The SQL side deletes exactly these with translate(), so this one
+ * string is what both sides remove. Marks of other blocks are kept on both sides.
+ */
+export const SEARCH_IGNORED_MARKS: string = Array.from({ length: 0x036f - 0x0300 + 1 }, (_, index) =>
+  String.fromCodePoint(0x0300 + index),
+).join("");
+
+const ignoredMarks = new RegExp(`[${SEARCH_IGNORED_MARKS}]`, "gu");
+
+/**
+ * The form a search is compared in: decomposed (NFD), lowercase, and without SEARCH_IGNORED_MARKS, so "Galdós" (NFC or
+ * NFD), "GALDOS" and "galdos" are the same text, and so are "niño" and "nino", "Nguyễn" and "nguyen", "İstanbul" and
+ * "istanbul". Letters without a canonical decomposition (ø, ł, æ, ß) stay as they are: no letter becomes two.
+ *
+ * It is the SQL expression translate(lower(normalize(column, NFD)), SEARCH_IGNORED_MARKS, '') step for step, so a
+ * stored value and the same value typed as a search always fold alike. The result is NFD, as the SQL side's is; only
+ * for matching: what the reader sees, and what is stored, keeps its accents.
+ */
+export function foldSearchText(value: string): string {
+  return value.normalize("NFD").toLowerCase().replace(ignoredMarks, "");
+}
+
 export function normalizeCategorySlug(value: unknown): string {
   if (typeof value !== "string") return "";
 

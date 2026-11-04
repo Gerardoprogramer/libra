@@ -78,6 +78,14 @@ function assertPublicFilter({ sql, params }: Statement) {
   assert.ok(!params.some((value) => ["DRAFT", "PENDING_REVIEW", "REJECTED"].includes(String(value))));
 }
 
+// The folded column compared with a parameter: translate(lower(normalize(column, NFD)), '<ignored marks>', '') ilike $n,
+// with exactly SEARCH_IGNORED_MARKS as the only literal.
+function foldedMatch(column: RegExp) {
+  return new RegExp(
+    String.raw`translate\(lower\(normalize\(${column.source}, NFD\)\), '${filters.SEARCH_IGNORED_MARKS}', ''\) ilike \$\d+`,
+  );
+}
+
 function edition(slug: string, language: string, overrides: Row = {}) {
   return {
     id: slug,
@@ -290,11 +298,12 @@ test("search matches another public edition but displays the edition selected fo
 
   assertPublicFilter(statements[0]);
 
-  assert.ok(statements[0].params.includes("%Dracula%"));
-  assert.match(statements[0].sql, /"books"\."original_title"/);
-  assert.match(statements[0].sql, /"authors"\."name"/);
+  // The search reaches SQL folded (lowercase, without accents), and each searched column is folded the same way.
+  assert.ok(statements[0].params.includes("%dracula%"));
+  assert.match(statements[0].sql, foldedMatch(/"books"\."original_title"/));
+  assert.match(statements[0].sql, foldedMatch(/"authors"\."name"/));
   assert.match(statements[0].sql, /exists \(select/);
-  assert.match(statements[0].sql, /"editions"\."title" ilike/);
+  assert.match(statements[0].sql, foldedMatch(/"editions"\."title"/));
 
   // Searching an English edition must not force the English edition
   // when the requested UI locale is Spanish.
@@ -314,7 +323,7 @@ test("search query requires public edition visibility", async () => {
 
   assertPublicFilter(statements[0]);
 
-  assert.ok(statements[0].params.includes("%Drácula%"));
+  assert.ok(statements[0].params.includes("%dracula%"));
 
   // The edition-title search is performed inside an EXISTS subquery.
   // That subquery must also contain the public editorial visibility filter.
@@ -463,6 +472,107 @@ test("L11: search wildcards match literally and the pattern is bounded", async (
   }
 });
 
+test("a search ignores case and accents in every searched column, and the cards keep their accents", async () => {
+  const galdos = { authorId: "galdos", authorName: "Benito Pérez Galdós", authorPosition: 0 };
+  const accented = edition("marianela", "es", { title: "Marianela, la niña" });
+
+  for (const query of ["galdos", "Galdós", "GALDOS", "perez galdos", "Pérez GALDÓS"]) {
+    const { queries, statements, assertConsumed } = queriesWithRows(
+      [{ id: book.id, total: 1 }],
+      [joinedRow(accented, { ...galdos, originalTitle: "Marianela" })],
+    );
+    const result = await queries.getBookPage("es", { query });
+    const [pageStatement, detailStatement] = statements;
+    const folded = query.includes(" ") ? "%perez galdos%" : "%galdos%";
+
+    // One folded pattern for the title, author and edition-title conditions, and nothing else from the request.
+    assert.deepEqual(
+      pageStatement.params.filter((value) => typeof value === "string" && value.startsWith("%")),
+      [folded, folded, folded],
+      query,
+    );
+    for (const column of [/"books"\."original_title"/, /"authors"\."name"/, /"editions"\."title"/]) {
+      assert.match(pageStatement.sql, foldedMatch(column));
+    }
+    // The edition-title EXISTS and the page itself both keep the public visibility filter.
+    assertPublicFilter(pageStatement);
+    assert.ok((pageStatement.sql.match(/"editions"\."publication_status" = \$\d+/g) ?? []).length >= 2);
+    assert.ok((pageStatement.sql.match(/"editions"\."copyright_status" in \(/g) ?? []).length >= 2);
+    assertPublicFilter(detailStatement);
+
+    // Only the comparison is folded: the card shows the stored text.
+    assert.equal(result.books[0].title, "Marianela, la niña");
+    assert.equal(result.books[0].author, "Benito Pérez Galdós");
+    assertConsumed();
+  }
+
+  for (const [query, pattern] of [
+    ["pereda", "%pereda%"],
+    ["niño", "%nino%"],
+    ["nino", "%nino%"],
+    ["NIÑO", "%nino%"],
+  ]) {
+    const { queries, statements } = queriesWithRows([]);
+    await queries.getBooks("es", { query });
+    const patterns = statements[0].params.filter((value) => typeof value === "string" && value.startsWith("%"));
+    assert.deepEqual(patterns, [pattern, pattern, pattern], query);
+    assertPublicFilter(statements[0]);
+  }
+});
+
+test("folding happens before escaping: an accented search with wildcards still matches them literally", async () => {
+  for (const load of [
+    (queries: typeof import("./books")) => queries.getBooks("es", { query: String.raw`Ñ100%_Él\x` }),
+    (queries: typeof import("./books")) => queries.getBookPage("es", { query: String.raw`Ñ100%_Él\x` }),
+  ]) {
+    const { queries, statements } = queriesWithRows([]);
+    await load(queries);
+    const patterns = statements[0].params.filter((value) => typeof value === "string" && value.startsWith("%"));
+
+    assert.equal(patterns.length, 3);
+    for (const pattern of patterns) assert.equal(pattern, String.raw`%n100\%\_el\\x%`);
+    // The request reaches SQL only as that parameter; the only literal is the ignored marks.
+    assert.ok(!statements[0].sql.includes("100"));
+  }
+});
+
+test("a search that folds to nothing matches no book instead of removing the filter", async () => {
+  // Only combining marks: a search, but nothing is left to look for once they are ignored.
+  for (const query of ["\u0301", "\u0301\u0308", " \u0303 "]) {
+    const list = queriesWithRows([]);
+    assert.deepEqual(await list.queries.getBooks("es", { query }), []);
+    assert.match(list.statements[0].sql, /and false/);
+    assert.ok(!list.statements[0].params.some((value) => typeof value === "string" && value.startsWith("%")));
+    assertPublicFilter(list.statements[0]);
+
+    const page = queriesWithRows([]);
+    assert.deepEqual(await page.queries.getBookPage("es", { query }), {
+      books: [],
+      total: 0,
+      page: 1,
+      pageSize: 30,
+      totalPages: 1,
+    });
+    assert.match(page.statements[0].sql, /and false/);
+    assertPublicFilter(page.statements[0]);
+    page.assertConsumed();
+  }
+
+  // No search at all is still no filter: the whole public catalog.
+  for (const query of [undefined, "", "   "]) {
+    const { queries, statements } = queriesWithRows([]);
+    await queries.getBooks("es", { query });
+    assert.doesNotMatch(statements[0].sql, /false|ilike/);
+  }
+
+  // Marks next to letters: the letters are searched.
+  const mixed = queriesWithRows([]);
+  await mixed.queries.getBooks("es", { query: "\u0301nin\u0303o" });
+  const patterns = mixed.statements[0].params.filter((value) => typeof value === "string" && value.startsWith("%"));
+  assert.deepEqual(patterns, ["%nino%", "%nino%", "%nino%"]);
+  assert.doesNotMatch(mixed.statements[0].sql, /and false/);
+});
+
 // A work with two authors and two categories in two editions: 8 joined rows that must still make one card.
 function fannedOutRows(bookId: string, bookSlug: string) {
   return [english, preferred].flatMap((item) =>
@@ -529,7 +639,7 @@ test("later pages skip whole pages of books, and search and category filters sta
   assert.equal(result.totalPages, 3);
   assert.deepEqual(statements[0].params.slice(-2), [30, 60]);
   assert.match(statements[0].sql, /exists \(select "book_authors"\."book_id" from "book_authors" inner join "authors"/);
-  assert.ok(statements[0].params.includes("%Author 1%"));
+  assert.ok(statements[0].params.includes("%author 1%"));
   assert.ok(statements[0].params.includes("category-1"));
   assert.match(statements[0].sql, /^select "id", count\(\*\) over\(\) from "books" where /);
   assert.match(statements[0].sql, /limit \$\d+ offset \$\d+$/);

@@ -1,12 +1,19 @@
 import "server-only";
 
-import { and, asc, countDistinct, eq, exists, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, countDistinct, eq, exists, ilike, inArray, or, sql, type Column, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { cacheLife, cacheTag } from "next/cache";
 
 import { db } from "@/db";
 import { formatAuthorNames } from "@/lib/book-authors";
-import { CATALOG_PAGE_SIZE, containsPattern, normalizeCategorySlug, normalizeSearchQuery } from "@/lib/catalog-filters";
+import {
+  CATALOG_PAGE_SIZE,
+  containsPattern,
+  foldSearchText,
+  normalizeCategorySlug,
+  normalizeSearchQuery,
+  SEARCH_IGNORED_MARKS,
+} from "@/lib/catalog-filters";
 import { chooseEdition } from "@/lib/edition-selection";
 
 import {
@@ -169,8 +176,50 @@ function inCategory(category: string) {
   );
 }
 
-/** Books with a public edition whose title contains the search. */
-function hasPublicEditionTitled(query: string) {
+// The marks translate() deletes are built from code points (SEARCH_IGNORED_MARKS), never from a request, and are
+// written as a literal, so the expression is the same text in every statement. Checked when the module loads: only
+// combining marks of U+0300-U+036F (never a quote, a backslash or a letter that would vanish from stored text), all
+// of them, each once and in order. Its counterpart is '', so translate() can only delete them, never substitute.
+if (
+  Array.from(SEARCH_IGNORED_MARKS).length !== 0x036f - 0x0300 + 1 ||
+  !/^[\u0300-\u036f]+$/u.test(SEARCH_IGNORED_MARKS) ||
+  !Array.from(SEARCH_IGNORED_MARKS).every((mark, index, marks) => index === 0 || mark > marks[index - 1])
+) {
+  throw new Error("The ignored search marks must be distinct combining marks of U+0300-U+036F, in order.");
+}
+
+const ignoredMarks = sql.raw(`'${SEARCH_IGNORED_MARKS}'`);
+
+/**
+ * Whether a stored column contains the search, both compared folded: the column with
+ * translate(lower(normalize(column, NFD)), SEARCH_IGNORED_MARKS, ''), the search with foldSearchText, which is the
+ * same steps in JavaScript. Case and accents are ignored, NFC and NFD forms are the same text, and the stored value
+ * itself is never changed. `search` must already be folded; it only reaches SQL as a parameter, escaped by
+ * containsPattern so `%`, `_` and `\` match literally.
+ *
+ * normalize() needs a UTF8 database (production is). Decomposing before lower() leaves the base of every accented
+ * Latin letter in ASCII, so that part does not depend on the database's locale; lower() of other uppercase letters
+ * (Greek, Cyrillic, ø, ł) follows its locale provider, which in production is ICU, as JavaScript's toLowerCase is.
+ * Both sides follow their own Unicode version: letters newer than the database's ICU may lowercase differently.
+ */
+function containsSearch(column: Column, search: string) {
+  return ilike(sql`translate(lower(normalize(${column}, NFD)), ${ignoredMarks}, '')`, containsPattern(search));
+}
+
+/**
+ * The search condition for a normalized query: none for an empty one, `false` for one that folds to nothing (only
+ * combining marks: still a search, which matches no book rather than every book), else `conditions(folded)`.
+ */
+function searchCondition(query: string, conditions: (search: string) => SQL | undefined): SQL | undefined {
+  if (!query) return undefined;
+
+  const search = foldSearchText(query);
+
+  return search ? conditions(search) : sql`false`;
+}
+
+/** Books with a public edition whose title contains the (folded) search. */
+function hasPublicEditionTitled(search: string) {
   return exists(
     db
       .select({ id: editions.id })
@@ -179,7 +228,7 @@ function hasPublicEditionTitled(query: string) {
         and(
           eq(editions.bookId, books.id),
           getPublicEditionVisibilityCondition(),
-          ilike(editions.title, containsPattern(query)),
+          containsSearch(editions.title, search),
         ),
       ),
   );
@@ -395,13 +444,13 @@ export async function getBooks(locale: ContentLocale, filters: BookFilters = {})
   const rows = await selectBookListRows(
     locale,
 
-    query
-      ? or(
-          ilike(books.originalTitle, containsPattern(query)),
-          ilike(authors.name, containsPattern(query)),
-          hasPublicEditionTitled(query),
-        )
-      : undefined,
+    searchCondition(query, (search) =>
+      or(
+        containsSearch(books.originalTitle, search),
+        containsSearch(authors.name, search),
+        hasPublicEditionTitled(search),
+      ),
+    ),
 
     category ? inCategory(category) : undefined,
   );
@@ -447,19 +496,19 @@ export async function getBookPage(
         .where(and(eq(editions.bookId, books.id), getPublicEditionVisibilityCondition())),
     ),
 
-    query
-      ? or(
-          ilike(books.originalTitle, containsPattern(query)),
-          exists(
-            db
-              .select({ bookId: bookAuthors.bookId })
-              .from(bookAuthors)
-              .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
-              .where(and(eq(bookAuthors.bookId, books.id), ilike(authors.name, containsPattern(query)))),
-          ),
-          hasPublicEditionTitled(query),
-        )
-      : undefined,
+    searchCondition(query, (search) =>
+      or(
+        containsSearch(books.originalTitle, search),
+        exists(
+          db
+            .select({ bookId: bookAuthors.bookId })
+            .from(bookAuthors)
+            .innerJoin(authors, eq(authors.id, bookAuthors.authorId))
+            .where(and(eq(bookAuthors.bookId, books.id), containsSearch(authors.name, search))),
+        ),
+        hasPublicEditionTitled(search),
+      ),
+    ),
 
     category ? inCategory(category) : undefined,
   );
