@@ -71,6 +71,21 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* The editorial type scale, shared by the pages and their sections. Size, spacing, wrapping and case only: color and
+   margins stay with each use. Title sizes set their own line height (1 from text-5xl up), so the titles fix theirs. */
+@utility page-title {
+  @apply font-serif text-4xl leading-[1.1] tracking-tight text-balance sm:text-5xl md:text-6xl;
+}
+
+@utility section-title {
+  @apply font-serif text-2xl tracking-tight text-balance md:text-3xl;
+}
+
+/* The small capitals line above a title. */
+@utility eyebrow {
+  @apply text-xs font-normal tracking-[0.2em] uppercase;
+}
+
 /* Warm paper, dark ink and a single burgundy accent. --background is mirrored by themeColor in
    src/app/[locale]/layout.tsx. */
 :root {

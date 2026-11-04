@@ -357,7 +357,7 @@ export default async function BookPage({ params }: BookPageProps) {
 
               <h1
                 lang={getLanguageCode(book.edition.language)}
-                className="max-w-3xl font-serif text-4xl leading-tight tracking-tight sm:text-5xl md:text-6xl"
+                className="page-title max-w-3xl md:text-5xl lg:text-6xl"
               >
                 {book.edition.title}
               </h1>

@@ -21,13 +21,13 @@ export async function Header() {
     // data-site-header: hidden by globals.css on the chapter page, which shows the reader's own bar instead.
     <header data-site-header className="bg-background/90 sticky top-0 z-50 border-b backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center px-6">
-        <Link href="/" className="flex items-center gap-2 md:mr-10">
+        <Link href="/" className="flex items-center gap-2 lg:mr-10">
           <HiOutlineBookOpen aria-hidden="true" className="size-6" />
 
           <span className="font-serif text-xl font-semibold tracking-tight">Libra</span>
         </Link>
 
-        <nav className="hidden items-center gap-7 text-sm md:flex">
+        <nav className="hidden items-center gap-7 text-sm lg:flex">
           <Link href="/books" className="text-muted-foreground hover:text-foreground transition">
             {t("discover")}
           </Link>

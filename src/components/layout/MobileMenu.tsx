@@ -34,7 +34,7 @@ export function MobileMenu({ label, children }: MobileMenuProps) {
     <details
       ref={container}
       open={open}
-      className="relative md:hidden"
+      className="relative lg:hidden"
       onToggle={(event) => setOpenAt(event.currentTarget.open ? pathname : null)}
       onKeyDown={(event) => {
         if (event.key === "Escape" && open) {
