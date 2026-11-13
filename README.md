@@ -175,8 +175,8 @@ Favorites and reader preferences remain browser-local. Reading progress is local
 legacy keys are never automatically assigned or uploaded to an account. Resume links include `?edition=<uuid>`;
 the chapter URL is an explicit navigation choice and background synchronization cannot redirect it.
 
-Migration `0007_preserve_reading_progress` is already applied in production and recorded in the Drizzle migration
-history; do not run it again by hand. It changed the chapter reference to `ON DELETE RESTRICT`, added the FK lookup
+Migration `0007_preserve_reading_progress` is applied only through `pnpm db:migrate`, which records it in the Drizzle
+migration history; never run it by hand. It changed the chapter reference to `ON DELETE RESTRICT`, added the FK lookup
 index, made authenticated grants explicit and rejects updates older than the stored position. User deletion still
 cascades through the user FK. It did not create another progress table or discard existing rows. A database that does
 not have it yet receives it, in order, from `pnpm db:migrate` (try that on a copy first).

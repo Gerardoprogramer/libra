@@ -250,8 +250,8 @@ edición bloqueada: al menos un capítulo, ninguno vacío, texto legible, títul
 
 Cada decisión (`PUBLISH`, `REJECT`, `ARCHIVE`, `PREFER`) se registra en la tabla `edition_reviews` en la **misma
 transacción**: quién (usuario del sistema operativo), cuándo, estado anterior y nuevo, notas, capítulos y palabras. Una
-decisión sin su registro no puede confirmarse. La migración `0008_edition_reviews` **ya está aplicada en producción**
-(ver «Migraciones aplicadas»). En una base de desarrollo que aún no la tenga, aplícala antes con `pnpm db:migrate`:
+decisión sin su registro no puede confirmarse. Necesita la migración `0008_edition_reviews` (ver
+«Migraciones»). En una base que aún no la tenga, aplícala antes con `pnpm db:migrate`:
 sin la tabla, la transacción falla y no cambia nada.
 
 Las categorías se mantienen en `categoryDefinitions` y `assignments` de `scripts/seed-categories.ts`,
@@ -275,17 +275,16 @@ pnpm db:categories:add                                      # dry-run, transacci
 pnpm db:categories:add -- --apply --confirm-database <id>
 ```
 
-## Migraciones aplicadas
+## Migraciones
 
-Estas dos migraciones **ya están aplicadas en producción** y registradas en el historial de Drizzle
-(`drizzle.__drizzle_migrations`); se verificó el 15 de octubre de 2026, con una lectura de solo lectura:
+Dos migraciones sostienen lo que describe este documento:
 
 - `0008_edition_reviews`: tabla de auditoría editorial (RLS activado, sin políticas).
 - `0009_book_authors_author_index`: índice por `author_id`.
 
-No deben volver a ejecutarse a mano. `pnpm db:migrate` aplica, en orden, las migraciones que falten en la base de
-datos de destino, así que contra producción no hace nada con estas dos; contra una copia de desarrollo que no las
-tenga, las aplica. Comprueba siempre el destino (`Target database` / `DIRECT_DATABASE_URL`) antes de migrar.
+Ninguna migración se ejecuta a mano. `pnpm db:migrate` aplica, en orden, solo las que falten en la base de datos de
+destino y las registra en el historial de Drizzle (`drizzle.__drizzle_migrations`); con una base que ya las tiene no
+hace nada. Comprueba siempre el destino (`Target database` / `DIRECT_DATABASE_URL`) antes de migrar.
 Se conserva `0006_reading_progress_grants.sql`, que está vacía: ya forma parte del historial compartido
 (`_journal.json` y snapshots); borrarla no aporta nada y arriesga la coherencia con bases que ya la registraron.
 
