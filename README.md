@@ -1,5 +1,7 @@
 # Libra
 
+[![CI](https://github.com/Gerardoprogramer/libra/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Gerardoprogramer/libra/actions/workflows/ci.yml)
+
 Libra is a bilingual (Spanish and English) digital library for classic literature. The web application uses
 Next.js App Router, React Server Components, Tailwind CSS, next-intl, PostgreSQL and Drizzle ORM. Book covers
 are served from Cloudflare R2.
