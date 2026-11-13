@@ -60,6 +60,9 @@ pnpm smoke:seo
 - `scripts/lib/import-persistence.integration.test.ts` (11 tests) and `scripts/lib/cover-replacement.integration.test.ts`
   (9 tests) need the disposable local PostgreSQL container described in [docs/epub-images.md](docs/epub-images.md) and
   run only with `LIBRA_DISPOSABLE_POSTGRES=1`. Without it they are skipped: these are the 20 skips of a local run.
+  The `integration` job of `.github/workflows/ci.yml` starts that container on the runner and runs both files with
+  the variable set. Locally, start the container with the command in docs/epub-images.md, then run
+  `LIBRA_DISPOSABLE_POSTGRES=1 pnpm exec tsx --test scripts/lib/import-persistence.integration.test.ts scripts/lib/cover-replacement.integration.test.ts`.
 - `scripts/lib/epub-corpus-baseline.test.ts`, `scripts/lib/epub-corpus-images.test.ts` and
   `scripts/lib/real-epubs.test.ts` read the EPUBs in `imports/`, which is not tracked. Each test whose file is absent is
   skipped, as in CI. The first two also accept another folder through `LIBRA_EPUB_CORPUS_DIR`.

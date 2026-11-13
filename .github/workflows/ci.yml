@@ -1,7 +1,8 @@
 name: CI
 
-# No secrets and no database: everything here runs offline. `next build` is not part of it because the
-# routes prerender from PostgreSQL; build in the deployment preview, which has the database configured.
+# No secrets and no real database. `checks` runs offline. `integration` starts its own throwaway PostgreSQL on the
+# runner's loopback and runs the tests that need it. `next build` is not part of CI because the routes prerender from
+# PostgreSQL; build in the deployment preview, which has the database configured.
 on:
   push:
     branches: [master]
@@ -37,3 +38,46 @@ jobs:
       - run: pnpm format:check
 
       - run: pnpm test
+
+  integration:
+    # The tests that `pnpm test` skips without LIBRA_DISPOSABLE_POSTGRES=1 (README, "Development and validation").
+    # Their target is fixed in scripts/lib/disposable-postgres.ts: 127.0.0.1:54361, a test user and libra_disposable_*
+    # databases. The job creates that server itself and it disappears with the runner; no secret is used.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      LIBRA_DISPOSABLE_POSTGRES: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Not a service container: the harness refuses a server without its cluster_name marker, which PostgreSQL only
+      # takes at startup (-c), and services cannot pass a command. Same image and settings as docs/epub-images.md.
+      - name: Start the disposable PostgreSQL
+        run: |
+          docker run -d --name libra-disposable-pg -p 127.0.0.1:54361:5432 \
+            -e POSTGRES_USER=libra_test -e POSTGRES_PASSWORD=libra-disposable-test-only \
+            -e POSTGRES_DB=libra_disposable_admin postgres:17 -c cluster_name=libra_disposable_test
+          # Over TCP: during initialization the image's temporary server listens only on its Unix socket.
+          for attempt in $(seq 1 30); do
+            if docker exec libra-disposable-pg pg_isready -h 127.0.0.1 -U libra_test -d libra_disposable_admin; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs libra-disposable-pg
+          exit 1
+
+      - name: Integration tests
+        run: >-
+          pnpm exec tsx --test
+          scripts/lib/import-persistence.integration.test.ts
+          scripts/lib/cover-replacement.integration.test.ts
