@@ -21,9 +21,10 @@ Live demo: [Spanish](https://www.alyvenor.com/es) · [English](https://www.alyve
 2. Copy `.env.example` to `.env.local` and set the values required by your environment.
 3. Set `DATABASE_URL` to the PostgreSQL connection string used by the application. It must support TLS.
 4. For direct database scripts, set `DIRECT_DATABASE_URL` to a PostgreSQL connection string that supports TLS.
-   **Use a development database here.** Every script that writes (imports, reviews, seeds) uses this variable: if it
-   points at production, `--apply` writes to production. Scripts print the masked target and require
-   `--confirm-database <id>` for a remote one; `pnpm db:seed` refuses remote databases entirely.
+   **Use a development database here.** Every script that writes (migrations, imports, reviews, seeds) uses this
+   variable: if it points at production, `--apply` writes to production. Scripts print the masked target and require
+   `--confirm-database <id>` for a remote one; `pnpm db:seed` refuses remote databases entirely. See
+   [docs/operations.md](docs/operations.md) for setting up a separate development database.
    Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` for authentication (both are public by
    design; never put a service-role key in a `NEXT_PUBLIC_` variable).
    A remote database also needs `DATABASE_CA_CERT`: the PEM of the CA that signs its server certificate (see
@@ -141,6 +142,13 @@ pnpm db:migrate -- --apply --confirm-database <id>   # applies them (a local dat
 `pnpm db:migrate` runs the same migrator as `drizzle-kit migrate` (`drizzle-orm/postgres-js/migrator`, table
 `drizzle.__drizzle_migrations`), behind the guard of the other scripts that write. Review generated migrations and try
 them on a development database before applying them to production.
+
+> **`pnpm db:studio` has no guard.** It opens Drizzle Studio on the database of `DIRECT_DATABASE_URL`, can modify and
+> delete data, and neither prints the target nor asks for confirmation. Never use it against production; check the
+> target first with `pnpm db:migrate` (without `--apply`).
+
+[docs/operations.md](docs/operations.md) explains how to set up a separate development database, lists every script
+that writes with its guard, and why `db:studio` and migrations need care.
 
 ## Editorial catalog
 
