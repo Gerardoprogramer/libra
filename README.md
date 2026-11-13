@@ -53,6 +53,18 @@ pnpm smoke:production
 pnpm smoke:seo
 ```
 
+`pnpm test` skips some tests on purpose; the runner prints each reason:
+
+- `scripts/lib/import-persistence.integration.test.ts` (11 tests) and `scripts/lib/cover-replacement.integration.test.ts`
+  (9 tests) need the disposable local PostgreSQL container described in [docs/epub-images.md](docs/epub-images.md) and
+  run only with `LIBRA_DISPOSABLE_POSTGRES=1`. Without it they are skipped: these are the 20 skips of a local run.
+- `scripts/lib/epub-corpus-baseline.test.ts`, `scripts/lib/epub-corpus-images.test.ts` and
+  `scripts/lib/real-epubs.test.ts` read the EPUBs in `imports/`, which is not tracked. Each test whose file is absent is
+  skipped, as in CI. The first two also accept another folder through `LIBRA_EPUB_CORPUS_DIR`.
+- `scripts/lib/sharp-environment.test.ts` runs one test only on the approved image runtime (`win32-x64`).
+- `src/db/tls.integration.test.ts` needs `openssl` to generate its certificates, and one test needs to bind
+  `127.0.0.2`.
+
 The smoke test defaults to `http://localhost:3000`, follows the localized home/catalog/author/category routes,
 checks `/sitemap.xml` and `/robots.txt`, verifies the basic response headers, and opens one published book found in the
 sitemap. To target a different HTTPS origin intentionally, pass it as the first argument:
