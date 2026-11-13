@@ -1,0 +1,27 @@
+# Weekly version updates. Minor and patch updates of each ecosystem arrive grouped in one pull request; major updates
+# arrive one per dependency, to be reviewed on their own. Every pull request runs CI (.github/workflows/ci.yml).
+#
+# No "docker" entry: Dependabot reads Docker images from Dockerfiles, Compose files, Kubernetes manifests and Helm
+# charts, and this repository has none. The postgres image of the integration job is a `docker run` argument in
+# ci.yml, which Dependabot does not update; it is kept in step with docs/epub-images.md by hand.
+version: 2
+updates:
+  # pnpm projects use the npm ecosystem; Dependabot updates package.json and pnpm-lock.yaml.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
