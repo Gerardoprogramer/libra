@@ -22,6 +22,10 @@ are served from Cloudflare R2.
    `--confirm-database <id>` for a remote one; `pnpm db:seed` refuses remote databases entirely.
    Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` for authentication (both are public by
    design; never put a service-role key in a `NEXT_PUBLIC_` variable).
+   A remote database also needs `DATABASE_CA_CERT`: the PEM of the CA that signs its server certificate (see
+   `src/db/tls.ts`). For Supabase, download it from the project's Database settings, SSL Configuration; the file is
+   named `prod-ca-2021.crt` and `.gitignore` excludes it. Paste its contents into the variable. The certificate is
+   public, but keep the downloaded file out of Git anyway.
 5. In production, set `SITE_URL` to the real canonical HTTPS origin of your deployment. The value in `.env.example`
    (`https://www.example.com`) is a domain reserved for documentation: never use it, or any other placeholder, as the
    production domain. It is also used for the sitemap and robots directive. In development it may be
