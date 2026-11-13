@@ -13,13 +13,31 @@ updates:
       interval: weekly
     # At most one grouped minor/patch pull request plus a couple of major ones waiting for review at a time.
     open-pull-requests-limit: 3
+    # A dependency goes to the first group it matches, so "framework" comes before the catch-all group.
     groups:
+      # Next.js and React are released to work together; one pull request moves them at the same time.
+      framework:
+        patterns: ["next", "react", "react-dom"]
       npm-minor-and-patch:
         patterns: ["*"]
+        # drizzle-orm and drizzle-kit are 0.x: a "minor" release can break the schema, queries or migrations, so each
+        # arrives in its own pull request instead of inside this group.
+        exclude-patterns: ["drizzle-orm", "drizzle-kit"]
         update-types: [minor, patch]
     # Major versions of these packages are planned migrations, done by hand on their own branch: Dependabot only bumps
     # the version and the lockfile, and the code needs changes that no automatic pull request makes.
     ignore:
+      # Next.js and React majors change the framework (routing, rendering, APIs) and are migrated together, by hand.
+      - dependency-name: next
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-dom
+        update-types: ["version-update:semver-major"]
+      # @types/node is aligned by hand with the Node.js version of the runtime; a newer major would type APIs that the
+      # runtime does not have.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
       # postgres (postgres.js) is the driver of the app (src/db/index.ts), of drizzle-orm/postgres-js and of every
       # script that writes to the database. A major version can change connection options, types and query behavior,
       # so it is moved together with drizzle-orm and tested against the disposable PostgreSQL before any deploy.
