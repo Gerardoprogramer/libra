@@ -11,16 +11,30 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    # At most one grouped minor/patch pull request plus a couple of major ones waiting for review at a time.
+    open-pull-requests-limit: 3
     groups:
       npm-minor-and-patch:
         patterns: ["*"]
         update-types: [minor, patch]
+    # Major versions of these packages are planned migrations, done by hand on their own branch: Dependabot only bumps
+    # the version and the lockfile, and the code needs changes that no automatic pull request makes.
+    ignore:
+      # postgres (postgres.js) is the driver of the app (src/db/index.ts), of drizzle-orm/postgres-js and of every
+      # script that writes to the database. A major version can change connection options, types and query behavior,
+      # so it is moved together with drizzle-orm and tested against the disposable PostgreSQL before any deploy.
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
+      # TypeScript majors change type-checking rules; 6.0 already rejects test code that 5.x accepts. The move is
+      # planned with its fixes, and package.json pins the major ("^5").
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 2
     groups:
       actions-minor-and-patch:
         patterns: ["*"]
