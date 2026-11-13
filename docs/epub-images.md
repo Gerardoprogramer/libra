@@ -183,11 +183,16 @@ un usuario de pruebas y una base `libra_disposable_*`. Después exige el marcado
 una base nueva y vacía, que borra al terminar. Crea también los mínimos de Supabase que las migraciones esperan
 (`auth.users`, `auth.uid()`, roles `anon` y `authenticated`).
 
+`scripts/lib/cover-replacement.integration.test.ts` y `scripts/lib/migration-plan.integration.test.ts` usan el mismo
+contenedor y las mismas reglas. El job `integration` de `.github/workflows/ci.yml` lo arranca en el runner con esta
+misma configuración y ejecuta los tres archivos.
+
 ```sh
 docker run -d --rm --name libra-2d-disposable-pg -p 127.0.0.1:54361:5432 \
   -e POSTGRES_USER=libra_test -e POSTGRES_PASSWORD=libra-disposable-test-only \
   -e POSTGRES_DB=libra_disposable_admin postgres:17 -c cluster_name=libra_disposable_test
-LIBRA_DISPOSABLE_POSTGRES=1 pnpm exec tsx --test scripts/lib/import-persistence.integration.test.ts
+LIBRA_DISPOSABLE_POSTGRES=1 pnpm exec tsx --test scripts/lib/import-persistence.integration.test.ts \
+  scripts/lib/cover-replacement.integration.test.ts scripts/lib/migration-plan.integration.test.ts
 docker stop libra-2d-disposable-pg
 ```
 
