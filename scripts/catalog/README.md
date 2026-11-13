@@ -258,11 +258,14 @@ Las categorías se mantienen en `categoryDefinitions` y `assignments` de `script
 mediante slugs; no se incluyen en el manifiesto de importación ni se hardcodean IDs de DB:
 
 ```bash
-pnpm db:seed:categories -- --confirm-database <id>
+pnpm db:seed:categories                                    # ejecución en seco: plan y base de destino enmascarada
+pnpm db:seed:categories -- --apply --confirm-database <id>  # escribe
 ```
 
-Reemplaza las relaciones de categorías de los libros definidos y requiere que todos existan. Tras confirmar, invalida la
-caché editorial. `pnpm db:seed` (semilla de desarrollo) **se niega a escribir en una base remota**, con cualquier flag.
+Sin `--apply` lee la base en una transacción `READ ONLY`, imprime el destino enmascarado y, por cada libro, sus
+categorías actuales frente a las definidas, y no escribe nada. Con `--apply` reemplaza las relaciones de categorías de
+los libros definidos y requiere que todos existan; si la base es remota, exige `--confirm-database <id>`. Tras
+confirmar, invalida la caché editorial. `pnpm db:seed` (semilla de desarrollo) **se niega a escribir en una base remota**, con cualquier flag.
 
 Para añadir categorías a libros nuevos sin tocar los demás, usa `scripts/add-book-categories.ts`, que solo inserta las
 relaciones que faltan en los libros de su lista (nunca borra ni reordena otras, y repetirlo no cambia nada):

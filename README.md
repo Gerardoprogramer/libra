@@ -145,7 +145,8 @@ pnpm import:collection                                     # read-only: compares
 pnpm import:collection -- --apply --confirm-database <id>  # writes, only after reading the dry run
 pnpm import:gutenberg -- --help                            # single book; the only way to revise a PUBLISHED edition
 pnpm db:review -- --gutenberg-id 123
-pnpm db:seed:categories -- --confirm-database <id>
+pnpm db:seed:categories                                   # read-only: prints the plan and the target id
+pnpm db:seed:categories -- --apply --confirm-database <id>
 ```
 
 The dry run needs `DIRECT_DATABASE_URL` and fails, rather than guessing, when the database cannot be read;
