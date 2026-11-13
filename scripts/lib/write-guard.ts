@@ -15,6 +15,43 @@ export function readConfirmedDatabase(args: readonly string[]): string | undefin
   return value && !value.startsWith("--") ? value : undefined;
 }
 
+/**
+ * Arguments of an editorial script whose only options are --apply and --confirm-database <id>, each at most once.
+ * Without --apply the script is a dry run: it reads and prints the plan, and writes nothing. The id itself is checked
+ * against the target by assertWriteAllowed; as in db:replace-cover, it confirms a write, so it is refused without
+ * --apply. pnpm's forwarded separator is accepted only as the first argument; anything else is an error.
+ */
+export function parseApplyArguments(rawArgs: readonly string[], script: string): { apply: boolean } {
+  const args = rawArgs[0] === "--" ? rawArgs.slice(1) : rawArgs;
+  let apply = false;
+  let confirmDatabase: string | undefined;
+
+  for (let index = 0; index < args.length; index++) {
+    const argument = args[index];
+
+    if (argument === "--apply") {
+      if (apply) throw new Error("Expected --apply at most once.");
+      apply = true;
+      continue;
+    }
+
+    if (argument === "--confirm-database") {
+      const value = args[++index];
+      if (confirmDatabase !== undefined || !value || value.startsWith("--")) {
+        throw new Error("Expected one --confirm-database value.");
+      }
+      confirmDatabase = value;
+      continue;
+    }
+
+    throw new Error(`Unknown ${script} argument: ${argument}`);
+  }
+
+  if (confirmDatabase !== undefined && !apply) throw new Error("--confirm-database is only used with --apply.");
+
+  return { apply };
+}
+
 /** The masked target line every editorial script prints, the same as the import dry run. */
 export function formatDatabaseTarget(target: DatabaseTarget): string {
   return `Target database: ${target.host} (role ${target.role}, id ${target.token})`;

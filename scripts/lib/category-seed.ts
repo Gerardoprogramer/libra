@@ -1,4 +1,5 @@
 import type { ExistingAssignment } from "./category-additions";
+import { parseApplyArguments } from "./write-guard";
 
 /** A category of db:seed:categories, with its names in both locales. */
 export interface CategoryDefinition {
@@ -19,41 +20,9 @@ export interface SeedCategoriesArguments {
   apply: boolean;
 }
 
-/**
- * Arguments of db:seed:categories. Only --apply and --confirm-database <id> are accepted, each at most once; the id
- * itself is checked against the target by assertWriteAllowed. As in db:replace-cover, --confirm-database confirms a
- * write, so it is refused without --apply.
- */
+/** Arguments of db:seed:categories: only --apply and --confirm-database <id> (see parseApplyArguments). */
 export function parseSeedCategoriesArguments(rawArgs: readonly string[]): SeedCategoriesArguments {
-  // pnpm forwards the separator in `pnpm db:seed:categories -- --apply`.
-  const args = rawArgs[0] === "--" ? rawArgs.slice(1) : rawArgs;
-  let apply = false;
-  let confirmDatabase: string | undefined;
-
-  for (let index = 0; index < args.length; index++) {
-    const argument = args[index];
-
-    if (argument === "--apply") {
-      if (apply) throw new Error("Expected --apply at most once.");
-      apply = true;
-      continue;
-    }
-
-    if (argument === "--confirm-database") {
-      const value = args[++index];
-      if (confirmDatabase !== undefined || !value || value.startsWith("--")) {
-        throw new Error("Expected one --confirm-database value.");
-      }
-      confirmDatabase = value;
-      continue;
-    }
-
-    throw new Error(`Unknown db:seed:categories argument: ${argument}`);
-  }
-
-  if (confirmDatabase !== undefined && !apply) throw new Error("--confirm-database is only used with --apply.");
-
-  return { apply };
+  return parseApplyArguments(rawArgs, "db:seed:categories");
 }
 
 /**
