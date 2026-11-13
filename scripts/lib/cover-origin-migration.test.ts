@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseMediaBase, planCoverOriginMigration } from "./cover-origin-migration";
+import { parseCoverOriginArguments, parseMediaBase, planCoverOriginMigration } from "./cover-origin-migration";
 
 // Pure planning only: no database, R2 or network access.
 const oldBase = parseMediaBase("https://pub-0123.r2.dev", "--from");
@@ -75,4 +75,17 @@ test("identical or nested bases are refused", () => {
   const nested = parseMediaBase("https://pub-0123.r2.dev/covers", "--to");
   assert.throws(() => planCoverOriginMigration([], oldBase, nested), /contain one another/);
   assert.throws(() => planCoverOriginMigration([], nested, oldBase), /contain one another/);
+});
+
+test("db:migrate-cover-origin is a dry run unless --apply is given, and refuses --confirm-database without it", () => {
+  const base = ["--from", "https://pub-0123.r2.dev", "--to", "https://covers.example.com"];
+
+  assert.equal(parseCoverOriginArguments(base).apply, false);
+  assert.equal(parseCoverOriginArguments(["--", ...base, "--apply", "--confirm-database", "exa..ef"]).apply, true);
+  assert.throws(
+    () => parseCoverOriginArguments([...base, "--confirm-database", "exa..ef"]),
+    /--confirm-database is only used with --apply/,
+  );
+  assert.throws(() => parseCoverOriginArguments([...base, "--aply"]), /Unknown option/);
+  assert.equal(parseCoverOriginArguments(["--help"]).help, true);
 });

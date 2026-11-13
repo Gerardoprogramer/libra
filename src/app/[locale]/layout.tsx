@@ -7,6 +7,7 @@ import { InlineScript } from "@/components/InlineScript";
 import { ConnectionStatus } from "@/components/layout/ConnectionStatus";
 import { Header } from "@/components/layout/Header";
 import { ServiceWorkerRegistration } from "@/components/layout/ServiceWorkerRegistration";
+import { SiteFooter } from "@/components/layout/SiteFooter";
 import { routing } from "@/i18n/routing";
 import { editorialFont } from "@/lib/fonts/editorial";
 import { earlyReaderPreferencesScript } from "@/lib/reader-preferences";
@@ -77,10 +78,11 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
   }
 
   setRequestLocale(locale);
-  const [messages, nav, connection] = await Promise.all([
+  const [messages, nav, connection, footer] = await Promise.all([
     getMessages(),
     getTranslations({ locale, namespace: "nav" }),
     getTranslations({ locale, namespace: "connection" }),
+    getTranslations({ locale, namespace: "footer" }),
   ]);
 
   return (
@@ -105,6 +107,7 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
           </a>
           <Header />
           {children}
+          <SiteFooter sourceLabel={footer("source")} noticeLabel={footer("notice")} />
           {/* Labels are passed as props, so the client messages keep only the namespaces listed above. */}
           <ConnectionStatus offlineLabel={connection("offline")} restoredLabel={connection("restored")} />
           <ServiceWorkerRegistration />

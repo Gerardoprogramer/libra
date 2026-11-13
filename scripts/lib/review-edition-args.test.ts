@@ -95,7 +95,7 @@ test("edition review arguments refuse multiple state-changing actions", () => {
 test("--confirm-database is parsed with its value, in any position, and omitted when absent", () => {
   // The id is only carried here; whether it matches the target database is decided by the write guard.
   assert.deepEqual(
-    parseEditionReviewArguments(["--gutenberg-id", "345", "--archive", "--confirm-database", "exa..ef"]),
+    parseEditionReviewArguments(["--gutenberg-id", "345", "--archive", "--apply", "--confirm-database", "exa..ef"]),
     {
       sourceName: "Project Gutenberg",
       sourceIdentifier: "345",
@@ -103,17 +103,19 @@ test("--confirm-database is parsed with its value, in any position, and omitted 
       action: "archive",
       copyrightStatus: undefined,
       confirmDatabase: "exa..ef",
+      apply: true,
     },
   );
   assert.equal(
-    parseEditionReviewArguments(["--confirm-database", "exa..ef", "--gutenberg-id", "345", "--reject"]).confirmDatabase,
+    parseEditionReviewArguments(["--confirm-database", "exa..ef", "--gutenberg-id", "345", "--reject", "--apply"])
+      .confirmDatabase,
     "exa..ef",
   );
   assert.ok(!("confirmDatabase" in parseEditionReviewArguments(["--gutenberg-id", "345", "--archive"])));
 });
 
 test("the separator that pnpm forwards is accepted only as the first argument", () => {
-  const args = ["--gutenberg-id", "345", "--archive", "--confirm-database", "exa..ef"];
+  const args = ["--gutenberg-id", "345", "--archive", "--apply", "--confirm-database", "exa..ef"];
 
   assert.deepEqual(parseEditionReviewArguments(["--", ...args]), parseEditionReviewArguments(args));
   assert.equal(parseEditionReviewArguments(["--", "--gutenberg-id", "345"]).action, "show");
@@ -131,5 +133,34 @@ test("--confirm-database refuses a missing, empty, flag-like or repeated value",
     ["--gutenberg-id", "345", "--archive", "--confirm-database", "exa..ef", "--confirm-database", "exa..ef"],
   ]) {
     assert.throws(() => parseEditionReviewArguments(args), /Expected one --confirm-database value/, args.join(" "));
+  }
+});
+
+test("an action without --apply is a dry run, and --apply is carried only when given", () => {
+  const dryRun = parseEditionReviewArguments(["--gutenberg-id", "345", "--publish", "--copyright-status", "LICENSED"]);
+  assert.equal(dryRun.action, "publish");
+  assert.ok(!("apply" in dryRun));
+
+  for (const flag of ["--publish", "--reject", "--archive", "--prefer"]) {
+    const args = ["--gutenberg-id", "345", flag, "--apply"];
+    if (flag === "--publish") args.push("--copyright-status", "LICENSED");
+    assert.equal(parseEditionReviewArguments(args).apply, true, flag);
+  }
+});
+
+test("--apply needs an action and is accepted once", () => {
+  assert.throws(() => parseEditionReviewArguments(["--gutenberg-id", "345", "--apply"]), /--apply needs an action/);
+  assert.throws(
+    () => parseEditionReviewArguments(["--gutenberg-id", "345", "--archive", "--apply", "--apply"]),
+    /--apply at most once/,
+  );
+});
+
+test("--confirm-database without --apply is refused, even with a valid id", () => {
+  for (const args of [
+    ["--gutenberg-id", "345", "--archive", "--confirm-database", "exa..ef"],
+    ["--gutenberg-id", "345", "--confirm-database", "exa..ef"],
+  ]) {
+    assert.throws(() => parseEditionReviewArguments(args), /only used with --apply/, args.join(" "));
   }
 });

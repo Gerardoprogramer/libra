@@ -5,9 +5,14 @@ import postgres from "postgres";
 
 import { bookCategories, books, categories, categoryTranslations } from "../src/db/schema";
 
+import { parseSeedCategoriesArguments, planCategorySeed, type CategoryDefinition } from "./lib/category-seed";
 import { formatImportError } from "./lib/import-errors";
-import { assertWriteAllowed, sslFor } from "./lib/write-guard";
+import { describeDatabaseTarget } from "./lib/import-plan";
+import { assertWriteAllowed, dryRunNotice, formatDatabaseTarget, sslFor } from "./lib/write-guard";
 import { revalidateEditorialCache } from "./lib/revalidate-cache";
+
+//   pnpm db:seed:categories                                     dry run: prints the plan (READ ONLY transaction)
+//   pnpm db:seed:categories -- --apply [--confirm-database <id>]  writes; a remote database also needs its id
 
 config({
   path: ".env.local",
@@ -17,13 +22,19 @@ if (!process.env.DIRECT_DATABASE_URL) {
   throw new Error("DIRECT_DATABASE_URL is not defined");
 }
 
+const args = process.argv.slice(2);
+const { apply } = parseSeedCategoriesArguments(args);
+const target = describeDatabaseTarget(process.env.DIRECT_DATABASE_URL);
+
 // Fails before any connection is opened if the target is remote and not explicitly confirmed.
-assertWriteAllowed({
-  connectionString: process.env.DIRECT_DATABASE_URL,
-  args: process.argv.slice(2),
-  script: "db:seed:categories",
-  allowRemote: true,
-});
+if (apply) {
+  assertWriteAllowed({
+    connectionString: process.env.DIRECT_DATABASE_URL,
+    args,
+    script: "db:seed:categories",
+    allowRemote: true,
+  });
+}
 
 const client = postgres(process.env.DIRECT_DATABASE_URL, {
   max: 1,
@@ -33,7 +44,7 @@ const client = postgres(process.env.DIRECT_DATABASE_URL, {
 
 const db = drizzle(client);
 
-const categoryDefinitions = [
+const categoryDefinitions: CategoryDefinition[] = [
   {
     slug: "classic-literature",
     en: "Classic Literature",
@@ -120,8 +131,67 @@ function validateAssignments() {
   }
 }
 
+/** Reads what the seed would change, in a READ ONLY transaction, and prints it. Fails as --apply would on missing books. */
+async function dryRun() {
+  const definedSlugs = categoryDefinitions.map((category) => category.slug);
+  const bookSlugs = Object.keys(assignments);
+
+  const lines = await db.transaction(
+    async (tx) => {
+      const storedCategories = await tx
+        .select({ slug: categories.slug })
+        .from(categories)
+        .where(inArray(categories.slug, definedSlugs));
+
+      const storedNames = await tx
+        .select({ slug: categories.slug, locale: categoryTranslations.locale, name: categoryTranslations.name })
+        .from(categoryTranslations)
+        .innerJoin(categories, eq(categories.id, categoryTranslations.categoryId))
+        .where(inArray(categories.slug, definedSlugs));
+
+      const bookRows = await tx.select({ slug: books.slug }).from(books).where(inArray(books.slug, bookSlugs));
+      const found = new Set(bookRows.map((book) => book.slug));
+      const missingBooks = bookSlugs.filter((slug) => !found.has(slug));
+
+      if (missingBooks.length > 0) {
+        throw new Error(`Books not found: ${missingBooks.join(", ")}`);
+      }
+
+      const current = await tx
+        .select({ bookSlug: books.slug, categorySlug: categories.slug, position: bookCategories.position })
+        .from(bookCategories)
+        .innerJoin(books, eq(books.id, bookCategories.bookId))
+        .innerJoin(categories, eq(categories.id, bookCategories.categoryId))
+        .where(inArray(books.slug, bookSlugs));
+
+      return planCategorySeed(
+        categoryDefinitions,
+        assignments,
+        storedNames,
+        storedCategories.map((category) => category.slug),
+        current,
+      );
+    },
+    { accessMode: "read only" },
+  );
+
+  for (const line of lines) console.log(line);
+
+  console.log("");
+
+  for (const line of dryRunNotice(target)) console.log(line);
+}
+
 async function main() {
   validateAssignments();
+
+  console.log(formatDatabaseTarget(target));
+
+  if (!apply) {
+    await dryRun();
+
+    return;
+  }
 
   console.log("Seeding categories...");
 

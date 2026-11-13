@@ -14,6 +14,10 @@
     "offline": "Sin conexión. Las páginas nuevas pueden no cargarse hasta que vuelva la conexión.",
     "restored": "Conexión restablecida."
   },
+  "footer": {
+    "source": "Los textos proceden de",
+    "notice": "Son de dominio público en Estados Unidos; su situación puede variar en otros países. La licencia MIT de Libra cubre solo el código."
+  },
   "home": {
     "metadataTitle": "Libra — Una biblioteca sin fronteras",
     "metadataDescription": "Descubre libros atemporales, presentados con elegancia y completamente gratis.",

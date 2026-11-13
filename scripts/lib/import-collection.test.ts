@@ -599,3 +599,14 @@ test("COVER: a collection run never forwards --replace-custom-cover and keeps a 
   }
   assert(printed.some((line) => line.includes("custom cover kept")));
 });
+
+test("import:collection refuses --confirm-database without --apply instead of ignoring it", () => {
+  assert.throws(
+    () => parseCollectionArguments(["--confirm-database", "abc..yz"]),
+    /--confirm-database is only used with --apply/,
+  );
+  assert.throws(
+    () => parseCollectionArguments(["--", "--fail-fast", "--confirm-database", "abc..yz"]),
+    /--confirm-database is only used with --apply/,
+  );
+});

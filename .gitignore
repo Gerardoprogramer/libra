@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Local ebook imports
 imports/*.epub
+
+# Supabase PostgreSQL CA certificate downloaded for DATABASE_CA_CERT (see README, Setup)
+prod-ca-2021.crt

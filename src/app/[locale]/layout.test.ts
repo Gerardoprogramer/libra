@@ -19,6 +19,10 @@ function ServiceWorkerRegistration() {
   return null;
 }
 
+function SiteFooter() {
+  return null;
+}
+
 // Every element in a rendered tree, depth first.
 function* elements(node: unknown): Generator<{ type: unknown; props: Record<string, unknown> }> {
   if (Array.isArray(node)) {
@@ -56,6 +60,7 @@ function loadLayout() {
     "@/components/layout/ConnectionStatus": { ConnectionStatus },
     "@/components/layout/Header": {},
     "@/components/layout/ServiceWorkerRegistration": { ServiceWorkerRegistration },
+    "@/components/layout/SiteFooter": { SiteFooter },
     "@/i18n/routing": { routing },
     "@/lib/fonts/editorial": { editorialFont: { variable: "" } },
     "@/lib/reader-preferences": { earlyReaderPreferencesScript: "" },
@@ -124,6 +129,23 @@ test("every page carries the connection notice, worded in its locale", async () 
     assert.deepEqual(
       notices[0].props,
       { offlineLabel: messages.connection.offline, restoredLabel: messages.connection.restored },
+      locale,
+    );
+  }
+});
+
+test("every page carries the attribution footer once, worded in its locale", async () => {
+  for (const [locale, messages] of [
+    ["es", es],
+    ["en", en],
+  ] as const) {
+    const tree = await loadLayout().default({ children: null, params: Promise.resolve({ locale }) });
+    const footers = [...elements(tree)].filter((element) => element.type === SiteFooter);
+
+    assert.equal(footers.length, 1, locale);
+    assert.deepEqual(
+      footers[0].props,
+      { sourceLabel: messages.footer.source, noticeLabel: messages.footer.notice },
       locale,
     );
   }

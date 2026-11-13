@@ -2,6 +2,29 @@
 // r2.dev development URL to a custom domain. Only the base changes: the object key after it is kept byte for byte, so
 // the same object is served from the new base. Planning is pure; the script decides whether to write.
 
+import { parseArgs } from "node:util";
+
+import { assertConfirmationNeedsApply } from "./write-guard";
+
+/** Options of db:migrate-cover-origin. Unknown flags, and --confirm-database without --apply, are refused. */
+export function parseCoverOriginArguments(args: readonly string[]) {
+  const { values } = parseArgs({
+    args: args[0] === "--" ? args.slice(1) : [...args],
+    options: {
+      from: { type: "string" },
+      to: { type: "string" },
+      apply: { type: "boolean", default: false },
+      "confirm-database": { type: "string" },
+      help: { type: "boolean", default: false },
+    },
+    strict: true,
+  });
+
+  if (!values.help) assertConfirmationNeedsApply(values.apply, values["confirm-database"]);
+
+  return values;
+}
+
 export interface MediaBase {
   /** The base without a trailing slash, e.g. https://covers.example.com or https://cdn.example.com/books. */
   href: string;

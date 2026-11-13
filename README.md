@@ -1,8 +1,12 @@
 # Libra
 
+[![CI](https://github.com/Gerardoprogramer/libra/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Gerardoprogramer/libra/actions/workflows/ci.yml)
+
 Libra is a bilingual (Spanish and English) digital library for classic literature. The web application uses
 Next.js App Router, React Server Components, Tailwind CSS, next-intl, PostgreSQL and Drizzle ORM. Book covers
 are served from Cloudflare R2.
+
+Live demo: [Spanish](https://www.alyvenor.com/es) · [English](https://www.alyvenor.com/en)
 
 ## Requirements
 
@@ -17,11 +21,16 @@ are served from Cloudflare R2.
 2. Copy `.env.example` to `.env.local` and set the values required by your environment.
 3. Set `DATABASE_URL` to the PostgreSQL connection string used by the application. It must support TLS.
 4. For direct database scripts, set `DIRECT_DATABASE_URL` to a PostgreSQL connection string that supports TLS.
-   **Use a development database here.** Every script that writes (imports, reviews, seeds) uses this variable: if it
-   points at production, `--apply` writes to production. Scripts print the masked target and require
-   `--confirm-database <id>` for a remote one; `pnpm db:seed` refuses remote databases entirely.
+   **Use a development database here.** Every script that writes (migrations, imports, reviews, seeds) uses this
+   variable: if it points at production, `--apply` writes to production. Scripts print the masked target and require
+   `--confirm-database <id>` for a remote one; `pnpm db:seed` refuses remote databases entirely. See
+   [docs/operations.md](docs/operations.md) for setting up a separate development database.
    Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` for authentication (both are public by
    design; never put a service-role key in a `NEXT_PUBLIC_` variable).
+   A remote database also needs `DATABASE_CA_CERT`: the PEM of the CA that signs its server certificate (see
+   `src/db/tls.ts`). For Supabase, download it from the project's Database settings, SSL Configuration; the file is
+   named `prod-ca-2021.crt` and `.gitignore` excludes it. Paste its contents into the variable. The certificate is
+   public, but keep the downloaded file out of Git anyway.
 5. In production, set `SITE_URL` to the real canonical HTTPS origin of your deployment. The value in `.env.example`
    (`https://www.example.com`) is a domain reserved for documentation: never use it, or any other placeholder, as the
    production domain. It is also used for the sitemap and robots directive. In development it may be
@@ -48,6 +57,23 @@ pnpm start
 pnpm smoke:production
 pnpm smoke:seo
 ```
+
+`pnpm test` skips some tests on purpose; the runner prints each reason:
+
+- **Tests that need a disposable PostgreSQL:** `scripts/lib/import-persistence.integration.test.ts` (11 tests),
+  `scripts/lib/cover-replacement.integration.test.ts` (9) and `scripts/lib/migration-plan.integration.test.ts` (3) need
+  the disposable local PostgreSQL container described in [docs/epub-images.md](docs/epub-images.md) and run only with
+  `LIBRA_DISPOSABLE_POSTGRES=1`. Without it they are skipped: these are the 23 skips of a local run. They never use
+  `.env.local` or a real database: the target is fixed in `scripts/lib/disposable-postgres.ts`. The `integration` job
+  of `.github/workflows/ci.yml` starts that container on the runner and runs the three files with the variable set.
+  Locally, start the container with the command in docs/epub-images.md, then run
+  `LIBRA_DISPOSABLE_POSTGRES=1 pnpm exec tsx --test scripts/lib/import-persistence.integration.test.ts scripts/lib/cover-replacement.integration.test.ts scripts/lib/migration-plan.integration.test.ts`.
+- `scripts/lib/epub-corpus-baseline.test.ts`, `scripts/lib/epub-corpus-images.test.ts` and
+  `scripts/lib/real-epubs.test.ts` read the EPUBs in `imports/`, which is not tracked. Each test whose file is absent is
+  skipped, as in CI. The first two also accept another folder through `LIBRA_EPUB_CORPUS_DIR`.
+- `scripts/lib/sharp-environment.test.ts` runs one test only on the approved image runtime (`win32-x64`).
+- `src/db/tls.integration.test.ts` needs `openssl` to generate its certificates, and one test needs to bind
+  `127.0.0.2`.
 
 The smoke test defaults to `http://localhost:3000`, follows the localized home/catalog/author/category routes,
 checks `/sitemap.xml` and `/robots.txt`, verifies the basic response headers, and opens one published book found in the
@@ -107,14 +133,24 @@ Build and verify each change in a Vercel preview before promoting it.
   payload size) and the write endpoint requires a session and a same-origin request. Configure rate limits in the
   Vercel Firewall for `/api/*`, `/auth/callback` and the Open Graph image routes, which query the database and render.
 
-Database schema changes use Drizzle Kit:
+Database schema changes use Drizzle Kit to generate migrations and `scripts/migrate.ts` to apply them:
 
 ```bash
-pnpm db:generate
-pnpm db:migrate
+pnpm db:generate                                     # writes a new migration under drizzle/; touches no database
+pnpm db:migrate                                      # read-only: masked target and pending migrations
+pnpm db:migrate -- --apply --confirm-database <id>   # applies them (a local database needs only --apply)
 ```
 
-Review generated migrations before applying them to a production database.
+`pnpm db:migrate` runs the same migrator as `drizzle-kit migrate` (`drizzle-orm/postgres-js/migrator`, table
+`drizzle.__drizzle_migrations`), behind the guard of the other scripts that write. Review generated migrations and try
+them on a development database before applying them to production.
+
+> **`pnpm db:studio` has no guard.** It opens Drizzle Studio on the database of `DIRECT_DATABASE_URL`, can modify and
+> delete data, and neither prints the target nor asks for confirmation. Never use it against production; check the
+> target first with `pnpm db:migrate` (without `--apply`).
+
+[docs/operations.md](docs/operations.md) explains how to set up a separate development database, lists every script
+that writes with its guard, and why `db:studio` and migrations need care.
 
 ## Editorial catalog
 
@@ -127,7 +163,8 @@ pnpm import:collection                                     # read-only: compares
 pnpm import:collection -- --apply --confirm-database <id>  # writes, only after reading the dry run
 pnpm import:gutenberg -- --help                            # single book; the only way to revise a PUBLISHED edition
 pnpm db:review -- --gutenberg-id 123
-pnpm db:seed:categories -- --confirm-database <id>
+pnpm db:seed:categories                                   # read-only: prints the plan and the target id
+pnpm db:seed:categories -- --apply --confirm-database <id>
 ```
 
 The dry run needs `DIRECT_DATABASE_URL` and fails, rather than guessing, when the database cannot be read;
@@ -156,8 +193,8 @@ Favorites and reader preferences remain browser-local. Reading progress is local
 legacy keys are never automatically assigned or uploaded to an account. Resume links include `?edition=<uuid>`;
 the chapter URL is an explicit navigation choice and background synchronization cannot redirect it.
 
-Migration `0007_preserve_reading_progress` is already applied in production and recorded in the Drizzle migration
-history; do not run it again by hand. It changed the chapter reference to `ON DELETE RESTRICT`, added the FK lookup
+Migration `0007_preserve_reading_progress` is applied only through `pnpm db:migrate`, which records it in the Drizzle
+migration history; never run it by hand. It changed the chapter reference to `ON DELETE RESTRICT`, added the FK lookup
 index, made authenticated grants explicit and rejects updates older than the stored position. User deletion still
 cascades through the user FK. It did not create another progress table or discard existing rows. A database that does
 not have it yet receives it, in order, from `pnpm db:migrate` (try that on a copy first).
@@ -184,3 +221,32 @@ browser with controlled router and Supabase adapters. Set `LIBRA_TEST_BROWSER` t
 is unavailable. It checks one-click Next/Previous, guest reading, stale responses and account changes without a
 refresh. `--baseline` loads `ReaderView` from Git `HEAD` instead of the working tree, which is only useful to compare
 a local change against the committed version. These tests do not exercise production OAuth or write to PostgreSQL/R2.
+
+## Content and attribution
+
+The book texts come from [Project Gutenberg](https://www.gutenberg.org/) EPUB files: the importer records every
+edition with the source name `Project Gutenberg`, its ebook number and a link to it (`scripts/lib/import-database.ts`),
+and the book page shows them under "This edition" (`src/components/books/EditionDetails.tsx`). Project Gutenberg states
+that nearly all the works in its collection are in the public domain in the United States, under United States law;
+their status may differ in other countries. An edition is public only after an editor records its copyright status as
+`PUBLIC_DOMAIN_VERIFIED`, `LICENSED` or `ORIGINAL` (`src/lib/editorial-status.ts`).
+
+The importer removes the Project Gutenberg license and boilerplate from the text (`scripts/lib/epub-sections.ts`).
+Project Gutenberg allows distributing its ebooks without its license when all references to Project Gutenberg are
+removed, and it does not count references with links in acknowledgement, reference or colophon sections as use of its
+trademark: see the [Project Gutenberg License](https://www.gutenberg.org/policy/license.html). Libra names it only as
+the source of each edition.
+
+Covers come from two places:
+
+- The cover image inside the source EPUB, uploaded to R2 by the importer (`scripts/lib/parse-epub.ts`,
+  `scripts/lib/r2.ts`). TODO: confirm the copyright status of each EPUB cover image.
+- Typographic covers made for Libra, with their design and image in `scripts/covers/` (see
+  [scripts/covers/README.md](./scripts/covers/README.md)).
+
+The bundled fonts are distributed under the SIL Open Font License (`src/assets/fonts/README.md`).
+
+## License
+
+The source code is licensed under the [MIT License](./LICENSE). The license covers only the code. It does not cover
+the book texts, the covers, the fonts or the Libra name and logo.

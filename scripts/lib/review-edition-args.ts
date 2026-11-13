@@ -10,6 +10,8 @@ export interface EditionReviewArguments {
   copyrightStatus?: PublicCopyrightStatus;
   /** Target id that authorizes a write to a remote database; see scripts/lib/write-guard.ts. */
   confirmDatabase?: string;
+  /** Present (true) only with --apply. Without it an action is a dry run: it reads and reports, and writes nothing. */
+  apply?: true;
 }
 
 const actionFlags = new Map<string, Exclude<EditionReviewAction, "show">>([
@@ -30,6 +32,7 @@ export function parseEditionReviewArguments(rawArgs: readonly string[]): Edition
   let notes: string | undefined;
   let hasNotes = false;
   let confirmDatabase: string | undefined;
+  let apply = false;
   const actions: EditionReviewAction[] = [];
 
   for (let index = 0; index < args.length; index++) {
@@ -83,6 +86,12 @@ export function parseEditionReviewArguments(rawArgs: readonly string[]): Edition
       continue;
     }
 
+    if (argument === "--apply") {
+      if (apply) throw new Error("Expected --apply at most once.");
+      apply = true;
+      continue;
+    }
+
     if (argument === "--notes") {
       const value = args[++index];
       if (hasNotes || value === undefined || value.startsWith("--")) {
@@ -124,6 +133,15 @@ export function parseEditionReviewArguments(rawArgs: readonly string[]): Edition
     throw new Error("--copyright-status may only be used with --publish.");
   }
 
+  if (apply && action === "show") {
+    throw new Error("--apply needs an action: --publish, --reject, --archive or --prefer.");
+  }
+
+  // As in db:replace-cover: the target id confirms a write, so it means nothing without --apply.
+  if (confirmDatabase !== undefined && !apply) {
+    throw new Error("--confirm-database is only used with --apply.");
+  }
+
   const resolvedSourceName = gutenbergId !== undefined ? "Project Gutenberg" : sourceName;
   const resolvedSourceIdentifier = gutenbergId ?? sourceIdentifier;
 
@@ -138,5 +156,6 @@ export function parseEditionReviewArguments(rawArgs: readonly string[]): Edition
     action,
     copyrightStatus,
     ...(confirmDatabase !== undefined ? { confirmDatabase } : {}),
+    ...(apply ? { apply: true as const } : {}),
   };
 }

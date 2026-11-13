@@ -16,6 +16,66 @@ export function readConfirmedDatabase(args: readonly string[]): string | undefin
 }
 
 /**
+ * Arguments of an editorial script whose only options are --apply and --confirm-database <id>, each at most once.
+ * Without --apply the script is a dry run: it reads and prints the plan, and writes nothing. The id itself is checked
+ * against the target by assertWriteAllowed; as in db:replace-cover, it confirms a write, so it is refused without
+ * --apply. pnpm's forwarded separator is accepted only as the first argument; anything else is an error.
+ */
+export function parseApplyArguments(rawArgs: readonly string[], script: string): { apply: boolean } {
+  const args = rawArgs[0] === "--" ? rawArgs.slice(1) : rawArgs;
+  let apply = false;
+  let confirmDatabase: string | undefined;
+
+  for (let index = 0; index < args.length; index++) {
+    const argument = args[index];
+
+    if (argument === "--apply") {
+      if (apply) throw new Error("Expected --apply at most once.");
+      apply = true;
+      continue;
+    }
+
+    if (argument === "--confirm-database") {
+      const value = args[++index];
+      if (confirmDatabase !== undefined || !value || value.startsWith("--")) {
+        throw new Error("Expected one --confirm-database value.");
+      }
+      confirmDatabase = value;
+      continue;
+    }
+
+    throw new Error(`Unknown ${script} argument: ${argument}`);
+  }
+
+  assertConfirmationNeedsApply(apply, confirmDatabase);
+
+  return { apply };
+}
+
+/**
+ * The target id confirms a write, so it means nothing without --apply: refused rather than ignored, which would leave
+ * an operator believing a confirmed command wrote. Shared by every script that takes --confirm-database.
+ */
+export function assertConfirmationNeedsApply(apply: boolean, confirmDatabase: string | undefined): void {
+  if (confirmDatabase !== undefined && !apply) throw new Error("--confirm-database is only used with --apply.");
+}
+
+/** The masked target line every editorial script prints, the same as the import dry run. */
+export function formatDatabaseTarget(target: DatabaseTarget): string {
+  return `Target database: ${target.host} (role ${target.role}, id ${target.token})`;
+}
+
+/**
+ * Closing lines of a dry run: nothing was written, and the exact flags that would write to this target. A local
+ * database needs only --apply; a remote one also needs its id, as assertWriteAllowed requires.
+ */
+export function dryRunNotice(target: DatabaseTarget): string[] {
+  const flags = target.isLocal ? "--apply" : `--apply --confirm-database ${target.token}`;
+
+  return ["Dry run: nothing was written.", `To write, repeat the command with ${flags}.`];
+}
+
+/**
  * Gate for scripts that write to PostgreSQL. A local database is always fine. A remote one needs the target id
  * (shown in the error) to be repeated with --confirm-database, and some scripts must never write to a remote
  * database at all. Throws before any connection is opened.

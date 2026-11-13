@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 
 import { formatImportError } from "./import-errors";
 import { importGutenbergBook, type ImportGutenbergOptions, type ImportOutcome } from "./import-gutenberg";
+import { assertConfirmationNeedsApply } from "./write-guard";
 
 export const PROJECT_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -175,6 +176,8 @@ export function parseCollectionArguments(args: string[]) {
   if (values.apply && values["epub-only"]) {
     throw new Error("--epub-only analyzes the EPUBs without the database and cannot be combined with --apply.");
   }
+
+  assertConfirmationNeedsApply(values.apply, values["confirm-database"]);
 
   return {
     apply: values.apply,
