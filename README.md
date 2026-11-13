@@ -188,3 +188,32 @@ browser with controlled router and Supabase adapters. Set `LIBRA_TEST_BROWSER` t
 is unavailable. It checks one-click Next/Previous, guest reading, stale responses and account changes without a
 refresh. `--baseline` loads `ReaderView` from Git `HEAD` instead of the working tree, which is only useful to compare
 a local change against the committed version. These tests do not exercise production OAuth or write to PostgreSQL/R2.
+
+## Content and attribution
+
+The book texts come from [Project Gutenberg](https://www.gutenberg.org/) EPUB files: the importer records every
+edition with the source name `Project Gutenberg`, its ebook number and a link to it (`scripts/lib/import-database.ts`),
+and the book page shows them under "This edition" (`src/components/books/EditionDetails.tsx`). Project Gutenberg states
+that nearly all the works in its collection are in the public domain in the United States, under United States law;
+their status may differ in other countries. An edition is public only after an editor records its copyright status as
+`PUBLIC_DOMAIN_VERIFIED`, `LICENSED` or `ORIGINAL` (`src/lib/editorial-status.ts`).
+
+The importer removes the Project Gutenberg license and boilerplate from the text (`scripts/lib/epub-sections.ts`).
+Project Gutenberg allows distributing its ebooks without its license when all references to Project Gutenberg are
+removed, and it does not count references with links in acknowledgement, reference or colophon sections as use of its
+trademark: see the [Project Gutenberg License](https://www.gutenberg.org/policy/license.html). Libra names it only as
+the source of each edition.
+
+Covers come from two places:
+
+- The cover image inside the source EPUB, uploaded to R2 by the importer (`scripts/lib/parse-epub.ts`,
+  `scripts/lib/r2.ts`). TODO: confirm the copyright status of each EPUB cover image.
+- Typographic covers made for Libra, with their design and image in `scripts/covers/` (see
+  [scripts/covers/README.md](./scripts/covers/README.md)).
+
+The bundled fonts are distributed under the SIL Open Font License (`src/assets/fonts/README.md`).
+
+## License
+
+The source code is licensed under the [MIT License](./LICENSE). The license covers only the code. It does not cover
+the book texts, the covers, the fonts or the Libra name and logo.
