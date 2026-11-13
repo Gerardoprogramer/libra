@@ -334,9 +334,10 @@ html[data-reader-early-width="wide"] main[data-reader-width] {
 /* The chapter reader has its own compact bar with the way out (home, book, language); the site header is hidden
    only while a reader surface, or the chapter page's streaming placeholder (data-reader-pending), is shown: hiding it
    only when the reader arrives would move the text up. After a client navigation away, React keeps the previous page
-   in the DOM, hidden with an inline `display: none !important` on it or an ancestor; such an element does not count. */
+   in the DOM, hidden with an inline `display: none !important` on it or an ancestor; such an element does not count.
+   The site footer is hidden with it: its paper colors would not follow the reader's theme. */
 body:has(:is([data-reader-theme], [data-reader-pending]):not([style*="display: none"], [style*="display: none"] *))
-  > [data-site-header] {
+  > :is([data-site-header], [data-site-footer]) {
   display: none;
 }
 

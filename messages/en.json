@@ -14,6 +14,10 @@
     "offline": "You're offline. New pages may not load until the connection returns.",
     "restored": "Back online."
   },
+  "footer": {
+    "source": "The texts come from",
+    "notice": "They are in the public domain in the United States; their status may differ in other countries. Libra's MIT license covers only the code."
+  },
   "home": {
     "metadataTitle": "Libra — A library without walls",
     "metadataDescription": "Discover timeless books, beautifully presented and free to read.",
