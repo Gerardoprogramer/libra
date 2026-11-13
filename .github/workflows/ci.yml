@@ -58,26 +58,40 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+        timeout-minutes: 5
 
       # Not a service container: the harness refuses a server without its cluster_name marker, which PostgreSQL only
       # takes at startup (-c), and services cannot pass a command. Same image and settings as docs/epub-images.md.
+      # The health check runs pg_isready over TCP: while the image initializes, its temporary server listens only on
+      # the Unix socket, so a TCP answer means the final server is up.
       - name: Start the disposable PostgreSQL
+        timeout-minutes: 3
         run: |
           docker run -d --name libra-disposable-pg -p 127.0.0.1:54361:5432 \
             -e POSTGRES_USER=libra_test -e POSTGRES_PASSWORD=libra-disposable-test-only \
-            -e POSTGRES_DB=libra_disposable_admin postgres:17 -c cluster_name=libra_disposable_test
-          # Over TCP: during initialization the image's temporary server listens only on its Unix socket.
-          for attempt in $(seq 1 30); do
-            if docker exec libra-disposable-pg pg_isready -h 127.0.0.1 -U libra_test -d libra_disposable_admin; then
-              exit 0
-            fi
+            -e POSTGRES_DB=libra_disposable_admin \
+            --health-cmd "pg_isready -h 127.0.0.1 -U libra_test -d libra_disposable_admin" \
+            --health-interval 2s --health-timeout 5s --health-retries 30 --health-start-period 5s \
+            postgres:17 -c cluster_name=libra_disposable_test
+          for attempt in $(seq 1 60); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' libra-disposable-pg)
+            if [ "$status" = "healthy" ]; then exit 0; fi
+            if [ "$status" = "unhealthy" ]; then break; fi
             sleep 2
           done
-          docker logs libra-disposable-pg
+          echo "PostgreSQL did not become healthy (last status: $status)"
           exit 1
 
+      # Every *.integration.test.ts under scripts/lib needs this server. src/db/tls.integration.test.ts does not: it
+      # runs in `checks` with a stand-in server.
       - name: Integration tests
+        timeout-minutes: 8
         run: >-
           pnpm exec tsx --test
           scripts/lib/import-persistence.integration.test.ts
           scripts/lib/cover-replacement.integration.test.ts
+          scripts/lib/migration-plan.integration.test.ts
+
+      - name: PostgreSQL logs
+        if: failure()
+        run: docker logs libra-disposable-pg || true
