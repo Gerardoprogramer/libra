@@ -7,8 +7,9 @@ import { bookCategories, books, categories } from "../src/db/schema";
 
 import { planCategoryAdditions } from "./lib/category-additions";
 import { formatImportError } from "./lib/import-errors";
+import { describeDatabaseTarget } from "./lib/import-plan";
 import { revalidateEditorialCache } from "./lib/revalidate-cache";
-import { assertWriteAllowed, sslFor } from "./lib/write-guard";
+import { assertWriteAllowed, dryRunNotice, formatDatabaseTarget, parseApplyArguments, sslFor } from "./lib/write-guard";
 
 // Adds categories to the listed books only. Unlike db:seed:categories, which replaces the relations of every book
 // it lists, this never deletes a relation or touches another book: it inserts the missing rows, so running it again
@@ -64,7 +65,9 @@ if (!process.env.DIRECT_DATABASE_URL) {
 }
 
 const args = process.argv.slice(2);
-const apply = args.includes("--apply");
+// Strict: unknown flags, a repeated --apply and --confirm-database without --apply are refused.
+const { apply } = parseApplyArguments(args, "db:categories:add");
+const target = describeDatabaseTarget(process.env.DIRECT_DATABASE_URL);
 
 // Fails before any connection is opened if the target is remote and not explicitly confirmed.
 if (apply) {
@@ -87,6 +90,8 @@ const db = drizzle(client);
 async function main() {
   const bookSlugs = Object.keys(additions);
   const categorySlugs = [...new Set(Object.values(additions).flat())];
+
+  console.log(formatDatabaseTarget(target));
 
   const inserted = await db.transaction(
     async (tx) => {
@@ -142,7 +147,7 @@ async function main() {
   );
 
   if (!apply) {
-    console.log("Dry run only. Nothing was written. Use --apply --confirm-database <id> to insert.");
+    for (const line of dryRunNotice(target)) console.log(line);
     return;
   }
 

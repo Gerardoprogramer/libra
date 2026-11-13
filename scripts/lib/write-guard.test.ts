@@ -4,7 +4,14 @@ import { test } from "node:test";
 import { findPublicationProblems } from "./review-edition-checks";
 import { isMissingRelation } from "./import-errors";
 import { describeDatabaseTarget } from "./import-plan";
-import { assertWriteAllowed, dryRunNotice, formatDatabaseTarget, readConfirmedDatabase, sslFor } from "./write-guard";
+import {
+  assertWriteAllowed,
+  dryRunNotice,
+  formatDatabaseTarget,
+  parseApplyArguments,
+  readConfirmedDatabase,
+  sslFor,
+} from "./write-guard";
 
 // Fictitious on purpose: a host under the reserved .invalid TLD and an obviously fake password, assembled from
 // parts so that no complete connection string sits in the source.
@@ -166,4 +173,29 @@ test("a dry run against a local database asks only for --apply", () => {
 
   assert.equal(formatDatabaseTarget(target), "Target database: localhost (role dev, id local)");
   assert.equal(dryRunNotice(target)[1], "To write, repeat the command with --apply.");
+});
+
+test("db:categories:add is a dry run unless --apply is given, and refuses --confirm-database without it", () => {
+  assert.deepEqual(parseApplyArguments([], "db:categories:add"), { apply: false });
+  assert.deepEqual(parseApplyArguments(["--", "--apply"], "db:categories:add"), { apply: true });
+  assert.deepEqual(parseApplyArguments(["--apply", "--confirm-database", remoteToken], "db:categories:add"), {
+    apply: true,
+  });
+  assert.throws(
+    () => parseApplyArguments(["--confirm-database", remoteToken], "db:categories:add"),
+    /only used with --apply/,
+  );
+});
+
+test("the shared --apply parser names the script in an unknown argument and refuses repeats", () => {
+  assert.throws(() => parseApplyArguments(["--yes"], "db:categories:add"), /Unknown db:categories:add argument: --yes/);
+  for (const args of [
+    ["--apply", "--apply"],
+    ["--apply", "--confirm-database"],
+    ["--apply", "--confirm-database", "--apply"],
+    ["--apply", "--confirm-database", "a", "--confirm-database", "a"],
+    ["--apply", "--"],
+  ]) {
+    assert.throws(() => parseApplyArguments(args, "db:categories:add"), Error, args.join(" "));
+  }
 });

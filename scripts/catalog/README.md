@@ -271,7 +271,7 @@ Para añadir categorías a libros nuevos sin tocar los demás, usa `scripts/add-
 relaciones que faltan en los libros de su lista (nunca borra ni reordena otras, y repetirlo no cambia nada):
 
 ```bash
-pnpm db:categories:add                                      # dry-run, transacción READ ONLY
+pnpm db:categories:add                                      # dry-run, READ ONLY: plan y destino enmascarado
 pnpm db:categories:add -- --apply --confirm-database <id>
 ```
 
