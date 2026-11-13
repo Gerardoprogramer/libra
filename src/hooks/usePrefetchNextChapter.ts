@@ -31,7 +31,7 @@ function currentNetworkConditions() {
 }
 
 /** Whether an element has keyboard focus. A browser without :focus-visible (Safari before 15.4) counts as no. */
-export function hasKeyboardFocus(element: Pick<Element, "matches">): boolean {
+export function hasKeyboardFocus(element: { matches(selectors: string): boolean }): boolean {
   try {
     return element.matches(":focus-visible");
   } catch {
