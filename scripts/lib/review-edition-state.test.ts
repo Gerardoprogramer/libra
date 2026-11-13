@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   assertEditionCanBePreferred,
+  describeReviewDecision,
   getArchivedEditionUpdate,
   getRejectedEditionUpdate,
 } from "./review-edition-state";
@@ -40,5 +41,21 @@ test("--prefer rejects editions that are not publicly eligible", () => {
     ["PUBLISHED", "REJECTED"],
   ]) {
     assert.throws(() => assertEditionCanBePreferred(publicationStatus, copyrightStatus));
+  }
+});
+
+test("a dry run describes the same changes as the update each action writes", () => {
+  const at = new Date("2026-01-01T00:00:00.000Z");
+  const rejected = getRejectedEditionUpdate(undefined, at);
+  const archived = getArchivedEditionUpdate(at);
+
+  assert.match(describeReviewDecision("publish", "LICENSED"), /copyright LICENSED and publication PUBLISHED/);
+  assert.match(
+    describeReviewDecision("reject"),
+    new RegExp(`copyright ${rejected.copyrightStatus} and publication ${rejected.publicationStatus}`),
+  );
+  assert.match(describeReviewDecision("archive"), new RegExp(`publication ${archived.publicationStatus}`));
+  for (const action of ["publish", "reject", "archive", "prefer"] as const) {
+    assert.match(describeReviewDecision(action, "LICENSED"), /would .* record [A-Z]+ in edition_reviews\.$/, action);
   }
 });

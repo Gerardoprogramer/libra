@@ -3,7 +3,8 @@ import { test } from "node:test";
 
 import { findPublicationProblems } from "./review-edition-checks";
 import { isMissingRelation } from "./import-errors";
-import { assertWriteAllowed, readConfirmedDatabase, sslFor } from "./write-guard";
+import { describeDatabaseTarget } from "./import-plan";
+import { assertWriteAllowed, dryRunNotice, formatDatabaseTarget, readConfirmedDatabase, sslFor } from "./write-guard";
 
 // Fictitious on purpose: a host under the reserved .invalid TLD and an obviously fake password, assembled from
 // parts so that no complete connection string sits in the source.
@@ -144,4 +145,25 @@ test("L09: publishing is refused for empty or textless editions and for missing 
     findPublicationProblems({ ...ready, title: " ", language: "" }).join("\n"),
     /no title[\s\S]*no language/,
   );
+});
+
+test("a dry run names the masked target and the exact flags that would write to it", () => {
+  const target = describeDatabaseTarget(remote);
+  const lines = [formatDatabaseTarget(target), ...dryRunNotice(target)];
+
+  assert.equal(lines[0], `Target database: ${target.host} (role postgres, id ${remoteToken})`);
+  assert.deepEqual(lines.slice(1), [
+    "Dry run: nothing was written.",
+    `To write, repeat the command with --apply --confirm-database ${remoteToken}.`,
+  ]);
+  for (const line of lines) {
+    assert.doesNotMatch(line, /not-a-real-password|exampleprojectref|db-pool-1/, line);
+  }
+});
+
+test("a dry run against a local database asks only for --apply", () => {
+  const target = describeDatabaseTarget("postgres://dev:pw@localhost:5432/libra");
+
+  assert.equal(formatDatabaseTarget(target), "Target database: localhost (role dev, id local)");
+  assert.equal(dryRunNotice(target)[1], "To write, repeat the command with --apply.");
 });

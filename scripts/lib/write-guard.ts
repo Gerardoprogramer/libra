@@ -15,6 +15,21 @@ export function readConfirmedDatabase(args: readonly string[]): string | undefin
   return value && !value.startsWith("--") ? value : undefined;
 }
 
+/** The masked target line every editorial script prints, the same as the import dry run. */
+export function formatDatabaseTarget(target: DatabaseTarget): string {
+  return `Target database: ${target.host} (role ${target.role}, id ${target.token})`;
+}
+
+/**
+ * Closing lines of a dry run: nothing was written, and the exact flags that would write to this target. A local
+ * database needs only --apply; a remote one also needs its id, as assertWriteAllowed requires.
+ */
+export function dryRunNotice(target: DatabaseTarget): string[] {
+  const flags = target.isLocal ? "--apply" : `--apply --confirm-database ${target.token}`;
+
+  return ["Dry run: nothing was written.", `To write, repeat the command with ${flags}.`];
+}
+
 /**
  * Gate for scripts that write to PostgreSQL. A local database is always fine. A remote one needs the target id
  * (shown in the error) to be repeated with --confirm-database, and some scripts must never write to a remote

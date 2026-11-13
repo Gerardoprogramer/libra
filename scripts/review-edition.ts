@@ -11,12 +11,14 @@ import { parseEditionReviewArguments } from "./lib/review-edition-args";
 import { findPublicationProblems } from "./lib/review-edition-checks";
 import { formatImportError, isMissingRelation } from "./lib/import-errors";
 import { revalidateEditorialCache } from "./lib/revalidate-cache";
+import { describeDatabaseTarget } from "./lib/import-plan";
 import {
   assertEditionCanBePreferred,
+  describeReviewDecision,
   getArchivedEditionUpdate,
   getRejectedEditionUpdate,
 } from "./lib/review-edition-state";
-import { assertWriteAllowed, sslFor } from "./lib/write-guard";
+import { assertWriteAllowed, dryRunNotice, formatDatabaseTarget, sslFor } from "./lib/write-guard";
 
 config({
   path: ".env.local",
@@ -27,10 +29,11 @@ if (!process.env.DIRECT_DATABASE_URL) {
 }
 
 const args = process.argv.slice(2);
-const { sourceName, sourceIdentifier, notes, action, copyrightStatus } = parseEditionReviewArguments(args);
+const { sourceName, sourceIdentifier, notes, action, copyrightStatus, apply } = parseEditionReviewArguments(args);
+const target = describeDatabaseTarget(process.env.DIRECT_DATABASE_URL);
 
-// Showing an edition is read-only; every other action writes and must name its target database.
-if (action !== "show") {
+// Showing an edition and every dry run are read-only. Only --apply writes, and it must name its target database.
+if (apply) {
   assertWriteAllowed({
     connectionString: process.env.DIRECT_DATABASE_URL,
     args,
@@ -202,17 +205,42 @@ async function decide(
   });
 }
 
+/** Runs the checks the write would run, without the lock or any write, and prints what --apply would change. */
+function printDryRun(edition: Edition, facts: Facts, decision: Exclude<typeof action, "show">) {
+  if (decision === "publish") {
+    const problems = findPublicationProblems({ title: edition.title, language: edition.language, notes, ...facts });
+
+    if (problems.length) throw new Error(`Cannot publish: ${problems.join("; ")}.`);
+  }
+
+  if (decision === "prefer") assertEditionCanBePreferred(edition.publicationStatus, edition.copyrightStatus);
+
+  console.log(describeReviewDecision(decision, copyrightStatus));
+
+  for (const line of dryRunNotice(target)) console.log(line);
+}
+
 async function main() {
+  console.log(formatDatabaseTarget(target));
+
   const edition = await getEdition(db);
 
   if (!edition) {
     throw new Error(`No edition found for source ${sourceName} with identifier ${sourceIdentifier}`);
   }
 
-  printEdition(edition, await getFacts(db, edition));
+  const facts = await getFacts(db, edition);
+
+  printEdition(edition, facts);
 
   if (action === "show") {
     console.log("No changes made. Use --publish, --reject, --archive or --prefer.");
+
+    return;
+  }
+
+  if (!apply) {
+    printDryRun(edition, facts, action);
 
     return;
   }

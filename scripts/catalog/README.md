@@ -230,14 +230,19 @@ Las nuevas ediciones siguen entrando como `PENDING_REVIEW` / `DRAFT`. Los reimpo
 pnpm db:review -- --gutenberg-id 345
 # Publica con la clasificación legal verificada independientemente y los motivos de la decisión (--notes es obligatorio):
 pnpm db:review -- --gutenberg-id 345 --publish --copyright-status PUBLIC_DOMAIN_VERIFIED \
-  --notes "Bram Stoker murió en 1912; dominio público en Costa Rica (vida + 70 años)" --confirm-database <id>
-# Selecciona la edición publicada preferida para su idioma:
-pnpm db:review -- --gutenberg-id 345 --prefer --confirm-database <id>
+  --notes "Bram Stoker murió en 1912; dominio público en Costa Rica (vida + 70 años)"
+# Lo mismo con --apply escribe; con una base remota, también --confirm-database <id> (el id que imprimió el paso anterior):
+pnpm db:review -- --gutenberg-id 345 --publish --copyright-status PUBLIC_DOMAIN_VERIFIED \
+  --notes "Bram Stoker murió en 1912; dominio público en Costa Rica (vida + 70 años)" --apply --confirm-database <id>
+# Selecciona la edición publicada preferida para su idioma (primero sin --apply):
+pnpm db:review -- --gutenberg-id 345 --prefer --apply --confirm-database <id>
 pnpm db:review -- --source-name "Archive name" --source-identifier "item-id"
 ```
 
-`show` (sin acción) es de solo lectura y muestra capítulos, palabras y autores. Cualquier otra acción escribe y exige
-`--confirm-database <id>` si la base es remota. `--publish` además exige, comprobado dentro de la transacción con la
+`show` (sin acción) es de solo lectura y muestra capítulos, palabras y autores. Una acción sin `--apply` es una
+ejecución en seco: imprime la base de destino enmascarada (`Target database: … id <id>`), comprueba lo mismo que la
+escritura sin bloquear la fila, describe el cambio y no escribe nada. Con `--apply` escribe y, si la base es remota,
+exige `--confirm-database <id>`. `--confirm-database` sin `--apply` se rechaza. `--publish` además exige, comprobado dentro de la transacción con la
 edición bloqueada: al menos un capítulo, ninguno vacío, texto legible, título, idioma y `--notes` con los motivos
 (≥ 10 caracteres). No exige autor: una obra anónima no tiene filas en `book_authors` y el catálogo la muestra como
 «Anónimo» / «Anonymous». `--publish` requiere que el operador proporcione `PUBLIC_DOMAIN_VERIFIED`, `LICENSED` u
