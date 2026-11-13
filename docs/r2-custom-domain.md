@@ -3,11 +3,14 @@
 Plan preparado el 2026-10-29. **Nada de este documento está aplicado**: ni DNS, ni dominio en el bucket, ni variables
 de Vercel, ni la migración de la base de datos. Cada fase requiere la aprobación del propietario.
 
+`<BUCKET>` y `<PUBLIC_URL>` sustituyen el nombre real del bucket y su URL pública de desarrollo (r2.dev); los valores
+reales están en la configuración de Cloudflare y en `R2_BUCKET_NAME` / `R2_PUBLIC_URL`.
+
 ## Situación actual (comprobada)
 
-- Las portadas están en el bucket `libra-covers` y se sirven por su URL pública de desarrollo
-  `https://pub-c3e001e7741948a9abd61219841b9672.r2.dev`. El bucket no tiene dominio propio.
-- `editions.cover_url` guarda la URL absoluta: 36 filas, todas bajo `https://pub-….r2.dev/covers/` (34 publicadas,
+- Las portadas están en el bucket `<BUCKET>` y se sirven por su URL pública de desarrollo `<PUBLIC_URL>` (de la
+  forma `https://pub-<id>.r2.dev`). El bucket no tiene dominio propio.
+- `editions.cover_url` guarda la URL absoluta: 36 filas, todas bajo `<PUBLIC_URL>/covers/` (34 publicadas,
   2 en borrador, ninguna sin portada). Las ilustraciones (`image_assets.object_key`) guardan solo la clave, no una URL.
 - Las respuestas de r2.dev no llevan `cf-cache-status`: cada petición que llega a r2.dev es una lectura de R2.
 - Los navegadores no piden r2.dev directamente: `next/image` pasa por el optimizador de Vercel (`/_next/image`,
@@ -71,7 +74,7 @@ ni pruebas de carga.
 
 ### 1. Dominio y HTTPS (dashboard; requiere aprobación)
 
-1. R2 → `libra-covers` → Settings → Custom Domains → Add → `covers.alyvenor.com` → revisar el registro → Connect.
+1. R2 → `<BUCKET>` → Settings → Custom Domains → Add → `covers.alyvenor.com` → revisar el registro → Connect.
 2. Esperar a _Active_.
 3. Comprobar con una sola petición que el objeto es el mismo que en r2.dev:
    `curl -sI https://covers.alyvenor.com/covers/dracula-345-2c05b012cd42.jpg` → `200`, `content-type: image/jpeg`,
@@ -94,14 +97,14 @@ Nada cambia para los lectores: la aplicación sigue usando r2.dev.
 - `R2_PUBLIC_URL_PREVIOUS` (opcional): `next.config.ts` y la tarjeta OG aceptan también la base anterior. Sin esa
   variable el comportamiento es idéntico al actual. Se fusiona y despliega antes de tocar las variables.
 - Después, en Vercel (Production): `R2_PUBLIC_URL=https://covers.alyvenor.com` y
-  `R2_PUBLIC_URL_PREVIOUS=https://pub-c3e001e7741948a9abd61219841b9672.r2.dev`, y redesplegar (`remotePatterns` se
+  `R2_PUBLIC_URL_PREVIOUS=<PUBLIC_URL>`, y redesplegar (`remotePatterns` se
   fija en el build). En ese momento las portadas siguen saliendo de r2.dev porque la base de datos no ha cambiado.
 - Cambiar también `R2_PUBLIC_URL` en el `.env.local` desde el que se importa, para que las portadas nuevas se guarden
   con el dominio propio.
 
 ### 4. Migración de `editions.cover_url`
 
-`pnpm db:migrate-cover-origin --from https://pub-c3e001e7741948a9abd61219841b9672.r2.dev --to https://covers.alyvenor.com`
+`pnpm db:migrate-cover-origin --from <PUBLIC_URL> --to https://covers.alyvenor.com`
 
 - Sin `--apply` es un dry run: lee en una transacción `READ ONLY` y muestra cuántas filas cambiarían (2026-10-29:
   36 de 36, 0 ya migradas, 0 fuera de ambas bases).
