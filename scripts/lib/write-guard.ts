@@ -47,9 +47,17 @@ export function parseApplyArguments(rawArgs: readonly string[], script: string):
     throw new Error(`Unknown ${script} argument: ${argument}`);
   }
 
-  if (confirmDatabase !== undefined && !apply) throw new Error("--confirm-database is only used with --apply.");
+  assertConfirmationNeedsApply(apply, confirmDatabase);
 
   return { apply };
+}
+
+/**
+ * The target id confirms a write, so it means nothing without --apply: refused rather than ignored, which would leave
+ * an operator believing a confirmed command wrote. Shared by every script that takes --confirm-database.
+ */
+export function assertConfirmationNeedsApply(apply: boolean, confirmDatabase: string | undefined): void {
+  if (confirmDatabase !== undefined && !apply) throw new Error("--confirm-database is only used with --apply.");
 }
 
 /** The masked target line every editorial script prints, the same as the import dry run. */

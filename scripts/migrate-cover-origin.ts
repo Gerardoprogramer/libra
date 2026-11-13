@@ -3,12 +3,15 @@
 // confirmed with --confirm-database, locks the rows, re-plans under the lock, updates each row only if it still holds
 // the URL that was planned, and then invalidates the editorial cache. Running it again changes nothing; running it with
 // --from and --to swapped undoes it. It never touches R2 objects.
-import { parseArgs } from "node:util";
-
 import { config } from "dotenv";
 import postgres from "postgres";
 
-import { parseMediaBase, planCoverOriginMigration, type CoverRow } from "./lib/cover-origin-migration";
+import {
+  parseCoverOriginArguments,
+  parseMediaBase,
+  planCoverOriginMigration,
+  type CoverRow,
+} from "./lib/cover-origin-migration";
 import { describeDatabaseTarget } from "./lib/import-plan";
 import { revalidateEditorialCache } from "./lib/revalidate-cache";
 import { assertWriteAllowed, sslFor } from "./lib/write-guard";
@@ -22,16 +25,7 @@ const usage = `Usage: pnpm db:migrate-cover-origin --from <old base> --to <new b
 
 config({ path: ".env.local", quiet: true });
 
-const { values } = parseArgs({
-  options: {
-    from: { type: "string" },
-    to: { type: "string" },
-    apply: { type: "boolean", default: false },
-    "confirm-database": { type: "string" },
-    help: { type: "boolean", default: false },
-  },
-  strict: true,
-});
+const values = parseCoverOriginArguments(process.argv.slice(2));
 
 if (values.help) {
   console.log(usage);

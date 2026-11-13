@@ -147,3 +147,11 @@ test("a local database has its own token, and a malformed URL is rejected withou
     (error: Error) => !error.message.includes("hunter2"),
   );
 });
+
+test("--confirm-database without --apply is refused instead of being ignored", () => {
+  assert.throws(
+    () => parseGutenbergArguments([...required, "--confirm-database", "abc..yz"]),
+    /--confirm-database is only used with --apply/,
+  );
+  assert.equal(parseGutenbergArguments([...required, "--apply", "--confirm-database", "abc..yz"]).options?.apply, true);
+});

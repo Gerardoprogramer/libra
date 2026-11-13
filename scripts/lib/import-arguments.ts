@@ -1,6 +1,7 @@
 import { parseArgs } from "node:util";
 
 import { isValidBookSlug } from "./import-plan";
+import { assertConfirmationNeedsApply } from "./write-guard";
 import type { ImportGutenbergOptions } from "./import-gutenberg";
 
 const INT32 = { min: -2147483648, max: 2147483647 };
@@ -103,6 +104,8 @@ export function parseGutenbergArguments(args: readonly string[]): {
   if (values.apply && values["epub-only"]) {
     throw new Error("--epub-only analyzes the EPUB without the database and cannot be combined with --apply.");
   }
+
+  assertConfirmationNeedsApply(values.apply, values["confirm-database"]);
 
   if (values["plan-hash"] !== undefined && !/^[0-9a-f]{20}$/.test(values["plan-hash"])) {
     throw new Error("--plan-hash must be the 20-character digest printed by the dry run.");

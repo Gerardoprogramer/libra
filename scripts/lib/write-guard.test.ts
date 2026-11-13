@@ -5,6 +5,7 @@ import { findPublicationProblems } from "./review-edition-checks";
 import { isMissingRelation } from "./import-errors";
 import { describeDatabaseTarget } from "./import-plan";
 import {
+  assertConfirmationNeedsApply,
   assertWriteAllowed,
   dryRunNotice,
   formatDatabaseTarget,
@@ -198,4 +199,11 @@ test("the shared --apply parser names the script in an unknown argument and refu
   ]) {
     assert.throws(() => parseApplyArguments(args, "db:categories:add"), Error, args.join(" "));
   }
+});
+
+test("--confirm-database is accepted only together with --apply", () => {
+  assert.doesNotThrow(() => assertConfirmationNeedsApply(true, remoteToken));
+  assert.doesNotThrow(() => assertConfirmationNeedsApply(true, undefined));
+  assert.doesNotThrow(() => assertConfirmationNeedsApply(false, undefined));
+  assert.throws(() => assertConfirmationNeedsApply(false, remoteToken), /only used with --apply/);
 });
