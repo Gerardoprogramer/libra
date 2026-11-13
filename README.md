@@ -6,6 +6,8 @@ Libra is a bilingual (Spanish and English) digital library for classic literatur
 Next.js App Router, React Server Components, Tailwind CSS, next-intl, PostgreSQL and Drizzle ORM. Book covers
 are served from Cloudflare R2.
 
+Live demo: [Spanish](https://www.alyvenor.com/es) · [English](https://www.alyvenor.com/en)
+
 ## Requirements
 
 - Node.js supported by Next.js 16 (CI runs Node.js 24)
