@@ -284,7 +284,9 @@ Dos migraciones sostienen lo que describe este documento:
 
 Ninguna migración se ejecuta a mano. `pnpm db:migrate` aplica, en orden, solo las que falten en la base de datos de
 destino y las registra en el historial de Drizzle (`drizzle.__drizzle_migrations`); con una base que ya las tiene no
-hace nada. Comprueba siempre el destino (`Target database` / `DIRECT_DATABASE_URL`) antes de migrar.
+hace nada. Sin `--apply` solo muestra el destino enmascarado y las migraciones pendientes; para aplicarlas,
+`pnpm db:migrate -- --apply --confirm-database <id>` (en una base local basta `--apply`). Comprueba siempre el destino
+(`Target database` / `DIRECT_DATABASE_URL`) antes de migrar.
 Se conserva `0006_reading_progress_grants.sql`, que está vacía: ya forma parte del historial compartido
 (`_journal.json` y snapshots); borrarla no aporta nada y arriesga la coherencia con bases que ya la registraron.
 

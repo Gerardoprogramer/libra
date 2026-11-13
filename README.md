@@ -128,14 +128,17 @@ Build and verify each change in a Vercel preview before promoting it.
   payload size) and the write endpoint requires a session and a same-origin request. Configure rate limits in the
   Vercel Firewall for `/api/*`, `/auth/callback` and the Open Graph image routes, which query the database and render.
 
-Database schema changes use Drizzle Kit:
+Database schema changes use Drizzle Kit to generate migrations and `scripts/migrate.ts` to apply them:
 
 ```bash
-pnpm db:generate
-pnpm db:migrate
+pnpm db:generate                                     # writes a new migration under drizzle/; touches no database
+pnpm db:migrate                                      # read-only: masked target and pending migrations
+pnpm db:migrate -- --apply --confirm-database <id>   # applies them (a local database needs only --apply)
 ```
 
-Review generated migrations before applying them to a production database.
+`pnpm db:migrate` runs the same migrator as `drizzle-kit migrate` (`drizzle-orm/postgres-js/migrator`, table
+`drizzle.__drizzle_migrations`), behind the guard of the other scripts that write. Review generated migrations and try
+them on a development database before applying them to production.
 
 ## Editorial catalog
 
