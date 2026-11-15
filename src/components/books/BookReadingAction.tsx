@@ -4,11 +4,16 @@ import { FiBookOpen } from "react-icons/fi";
 
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
-import { calculateBookProgress, readingProgressHref } from "@/lib/reading-progress";
+import type { Locale } from "@/i18n/routing";
+import { bookLink } from "@/lib/book-links";
+import { calculateBookProgress } from "@/lib/reading-progress";
 import { useReadingHistory } from "@/lib/use-reading-history";
 
 interface BookReadingActionProps {
   bookSlug: string;
+  /** Language of the edition the book page shows; with interfaceLocale it decides the locale of the link. */
+  editionLanguage: string;
+  interfaceLocale: Locale;
   editionId: string;
   chapterSlugs: string[];
   firstChapterSlug: string;
@@ -20,6 +25,8 @@ interface BookReadingActionProps {
 
 export function BookReadingAction({
   bookSlug,
+  editionLanguage,
+  interfaceLocale,
   editionId,
   chapterSlugs,
   firstChapterSlug,
@@ -41,6 +48,8 @@ export function BookReadingAction({
 
   const chapterSlug = hasValidProgress && !isComplete ? progress.chapterSlug : firstChapterSlug;
 
+  const link = bookLink({ slug: bookSlug, editionLanguage, chapterSlug }, interfaceLocale);
+
   const label = isComplete ? readAgainLabel : hasValidProgress ? continueLabel : startLabel;
 
   const progressText = percentage === null ? null : progressLabel.replace("{progress}", String(percentage));
@@ -50,7 +59,7 @@ export function BookReadingAction({
       <Button size="lg" asChild>
         {/* No ?edition=: the book page shows the edition the clean URL selects in this locale, and the progress used
             here is that edition's, so a separate edition URL would only be a duplicate for crawlers. */}
-        <Link href={readingProgressHref({ bookSlug, chapterSlug })}>
+        <Link href={link.href} locale={link.locale}>
           <FiBookOpen aria-hidden="true" />
           <span className="grid">
             <span className="col-start-1 row-start-1">{label}</span>

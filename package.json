@@ -9,6 +9,7 @@
     "start": "next start",
     "smoke:production": "tsx scripts/smoke-production.ts",
     "smoke:seo": "tsx scripts/smoke-seo.ts",
+    "smoke:links": "tsx scripts/smoke-links.ts",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test \"scripts/**/*.test.ts\" \"src/**/*.test.ts\" \"src/**/*.test.tsx\"",

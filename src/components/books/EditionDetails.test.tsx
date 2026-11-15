@@ -119,6 +119,8 @@ test("only the preferred edition for each locale is presented and reading retain
         <NextIntlClientProvider locale={locale} messages={{}}>
           <BookReadingAction
             bookSlug="dracula"
+            editionLanguage={selected.language}
+            interfaceLocale={locale}
             editionId="edition-1"
             chapterSlugs={["chapter-1"]}
             firstChapterSlug="chapter-1"

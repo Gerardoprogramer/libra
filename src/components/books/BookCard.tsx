@@ -1,8 +1,11 @@
 import Image from "next/image";
+import { useLocale } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import type { BookCategory, BookListItem } from "@/db/queries/books";
 import { Link } from "@/i18n/navigation";
+import type { Locale } from "@/i18n/routing";
+import { bookLink } from "@/lib/book-links";
 
 interface BookCardProps {
   book: BookListItem;
@@ -45,10 +48,12 @@ export function BookCard({ book, eager = false, sizes, fetchPriority, preload, h
   const titleLanguage = book.language.toLowerCase().split("-")[0];
   const coverStyle = getCoverStyle(book.slug);
   const visibleCategories = getVisibleCategories(book.categories);
+  // Under the locale of the edition shown, where the book page is indexable (src/lib/book-links.ts).
+  const link = bookLink({ slug: book.slug, editionLanguage: book.language }, useLocale() as Locale);
 
   return (
     <article>
-      <Link href={`/books/${book.slug}`} className="group block">
+      <Link href={link.href} locale={link.locale} className="group block">
         <div
           className={`relative aspect-2/3 overflow-hidden rounded-lg bg-linear-to-br ${coverStyle} shadow-lg transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl`}
         >

@@ -1,3 +1,6 @@
+import type { Locale } from "@/i18n/routing";
+
+import { bookLink, bookPath, type BookLink } from "./book-links";
 import { isUuid } from "./catalog-filters";
 
 export const READING_PROGRESS_PREFIX = "libra:progress:";
@@ -306,8 +309,23 @@ export function parseReadingProgress(value: string | null): ReadingProgress | nu
 }
 
 export function readingProgressHref(progress: Pick<ReadingProgress, "bookSlug" | "chapterSlug" | "editionId">) {
-  const pathname = `/books/${encodeURIComponent(progress.bookSlug)}/${encodeURIComponent(progress.chapterSlug)}`;
-  return progress.editionId ? `${pathname}?edition=${encodeURIComponent(progress.editionId)}` : pathname;
+  return bookPath(progress.bookSlug, progress.chapterSlug, progress.editionId);
+}
+
+/**
+ * The link to the chapter being read, under the locale of the edition the book shows in this interface
+ * (`editionLanguage`, see src/lib/book-links.ts). A pinned edition stays in ?edition= and does not move a book that has
+ * an edition in the interface locale to the other one.
+ */
+export function readingProgressLink(
+  progress: Pick<ReadingProgress, "bookSlug" | "chapterSlug" | "editionId">,
+  editionLanguage: string,
+  interfaceLocale: Locale,
+): BookLink {
+  return bookLink(
+    { slug: progress.bookSlug, chapterSlug: progress.chapterSlug, editionId: progress.editionId, editionLanguage },
+    interfaceLocale,
+  );
 }
 
 /**

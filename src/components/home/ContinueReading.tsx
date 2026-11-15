@@ -2,11 +2,13 @@
 
 import Image from "next/image";
 
+import { useLocale } from "next-intl";
 import { FiArrowRight, FiBookOpen } from "react-icons/fi";
 
 import { Link } from "@/i18n/navigation";
+import type { Locale } from "@/i18n/routing";
 
-import { calculateBookProgress, readingProgressHref } from "@/lib/reading-progress";
+import { calculateBookProgress, readingProgressLink } from "@/lib/reading-progress";
 import { useReadingHistory } from "@/lib/use-reading-history";
 import { getLatestReadingProgress } from "@/lib/reading-history";
 
@@ -15,6 +17,8 @@ interface BookSummary {
   title: string;
   author: string;
   coverUrl: string | null;
+  /** Language of the edition shown in the interface locale (BookListItem.language): it decides the link locale. */
+  language: string;
 }
 
 interface ContinueReadingProps {
@@ -32,6 +36,7 @@ export function ContinueReading({
   continueLabel,
   storageUnavailableLabel,
 }: ContinueReadingProps) {
+  const interfaceLocale = useLocale() as Locale;
   const { entries, storageAvailable } = useReadingHistory();
   const progress = getLatestReadingProgress(
     entries.map((item) => JSON.stringify(item)),
@@ -70,7 +75,7 @@ export function ContinueReading({
         </div>
 
         <Link
-          href={readingProgressHref(progress)}
+          {...readingProgressLink(progress, book.language, interfaceLocale)}
           className="group bg-card hover:border-foreground/20 grid overflow-hidden rounded-xl border transition hover:shadow-sm sm:grid-cols-[120px_1fr]"
         >
           <div className="bg-muted relative hidden aspect-2/3 overflow-hidden sm:block">

@@ -36,6 +36,7 @@ function renderBookCard(book: BookListItem, locale: "en" | "es" = "en") {
 
 test("BookCard links to the localized book detail and shows the category names supplied by the query", () => {
   const book = makeBook({
+    language: "es",
     categories: [makeCategory("classic", "classic-literature", "Literatura clásica")],
   });
 
@@ -95,7 +96,8 @@ test("BookCard displays the edition language independently of the UI locale, cov
           const $ = load(renderBookCard(makeBook({ language, coverUrl, year }), locale));
           const caption = $("h2").parent();
           assert.equal(caption.find("span").last().text(), language);
-          assert.equal($("a").attr("href"), `/${locale}/books/dracula`);
+          // Under the locale of the edition shown, where its page is indexable (src/lib/book-links.ts).
+          assert.equal($("a").attr("href"), `/${language.split("-")[0]}/books/dracula`);
           assert.equal($("article").length, 1);
         }
       }

@@ -1,6 +1,7 @@
 "use client";
 
 import { Link } from "@/i18n/navigation";
+import type { Locale } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -30,6 +31,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { bookPath } from "@/lib/book-links";
 import { cn } from "@/lib/utils";
 import { usePrefetchNextChapter } from "@/hooks/usePrefetchNextChapter";
 import { useReaderPreferences } from "@/hooks/useReaderPreferences";
@@ -71,6 +73,11 @@ interface ReaderViewProps {
 
   previousHref?: string;
   nextHref?: string;
+  /**
+   * Locale of every link to this book and its chapters (bookLinkLocale, src/lib/book-links.ts): the locale of the text,
+   * so a chapter shown under the other locale does not link more pages that are noindex.
+   */
+  linkLocale: Locale;
 
   /** The site's language switcher, rendered in the reader's bar (the site header is hidden on this page). */
   languageSwitcher?: ReactNode;
@@ -184,6 +191,7 @@ export function ReaderView({
   fontVariables,
   previousHref,
   nextHref,
+  linkLocale,
   languageSwitcher,
   chapters,
 }: ReaderViewProps) {
@@ -373,7 +381,7 @@ export function ReaderView({
   ]);
 
   // A link's default prefetch stops at the loading placeholder; the "Next" link's is set by this hook.
-  const nextChapterPrefetch = usePrefetchNextChapter(nextHref, footerRef);
+  const nextChapterPrefetch = usePrefetchNextChapter(nextHref, footerRef, linkLocale);
 
   function decreaseFontSize() {
     if (!setFontSize(fontSize - 2)) {
@@ -431,7 +439,8 @@ export function ReaderView({
           </Button>
 
           <Link
-            href={`/books/${bookSlug}`}
+            href={bookPath(bookSlug)}
+            locale={linkLocale}
             className="focus-visible:ring-ring/50 flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm text-current/75 transition hover:text-current focus-visible:ring-2 focus-visible:outline-none"
           >
             <FiArrowLeft aria-hidden="true" className="shrink-0" />
@@ -495,6 +504,7 @@ export function ReaderView({
                             <Link
                               ref={current ? currentChapterRef : undefined}
                               href={item.href}
+                              locale={linkLocale}
                               aria-current={current ? "page" : undefined}
                               className="hover:bg-muted focus-visible:ring-ring/50 aria-[current=page]:bg-muted aria-[current=page]:border-primary flex min-h-11 items-baseline gap-3 rounded-lg border-l-2 border-transparent px-3 py-2.5 text-sm transition outline-none focus-visible:ring-[3px] aria-[current=page]:font-medium"
                             >
@@ -728,7 +738,7 @@ export function ReaderView({
 
           <nav aria-label={t("chapterNavigation")} className="mt-6 grid gap-3 sm:grid-cols-2">
             {previousHref && (
-              <Link href={previousHref} rel="prev" className={chapterLinkClass}>
+              <Link href={previousHref} locale={linkLocale} rel="prev" className={chapterLinkClass}>
                 <span className="text-muted-foreground inline-flex items-center gap-1 text-xs tracking-wide uppercase">
                   <FiChevronLeft aria-hidden="true" />
                   {t("previous")}
@@ -744,6 +754,7 @@ export function ReaderView({
             {nextHref ? (
               <Link
                 href={nextHref}
+                locale={linkLocale}
                 rel="next"
                 prefetch={nextChapterPrefetch.linkPrefetch}
                 onFocus={nextChapterPrefetch.onLinkFocus}
@@ -762,7 +773,8 @@ export function ReaderView({
             ) : (
               // The last chapter: its way forward is the book page.
               <Link
-                href={`/books/${bookSlug}`}
+                href={bookPath(bookSlug)}
+                locale={linkLocale}
                 className={cn(chapterLinkClass, "border-primary text-right sm:col-start-2")}
               >
                 <span className="text-primary text-xs tracking-wide uppercase">{t("finish")}</span>
@@ -776,7 +788,8 @@ export function ReaderView({
           {nextHref && (
             <p className="mt-6 text-center">
               <Link
-                href={`/books/${bookSlug}`}
+                href={bookPath(bookSlug)}
+                locale={linkLocale}
                 className="focus-visible:ring-ring/50 inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm text-current/75 transition outline-none hover:text-current focus-visible:ring-[3px]"
               >
                 <FiArrowLeft aria-hidden="true" />

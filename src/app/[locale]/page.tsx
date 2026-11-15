@@ -49,6 +49,7 @@ export default async function Home() {
     title: book.title,
     author: book.author,
     coverUrl: book.coverUrl,
+    language: book.language,
   }));
 
   return (

@@ -86,6 +86,42 @@ inglesa, la ficha española puede mostrarla y compartirse, pero mantiene `noinde
 en hreflang o sitemap. Si existen ediciones públicas en ambos idiomas, se emiten alternates recíprocos.
 No se añade `x-default` a los libros ni una traducción inexistente.
 
+## Enlaces internos a libros y capítulos
+
+Regla: un libro y sus capítulos se enlazan bajo el idioma de la edición que muestran, que es donde su página es
+indexable. Todos los enlaces se construyen con `bookLink` (`src/lib/book-links.ts`), que recibe el idioma de la edición
+que `chooseEdition` elige para el idioma de la interfaz:
+
+- Libro solo con edición inglesa: siempre `/en/books/...`, también desde la interfaz en español.
+- Libro solo con edición española: siempre `/es/books/...`, también desde la interfaz en inglés.
+- Libro con ediciones en ambos idiomas (por ejemplo `treasure-island`): el idioma de la interfaz.
+- Un idioma que no es `es` ni `en`: el idioma de la interfaz.
+- `?edition=` se conserva cuando el enlace fija una edición, pero no cambia el idioma del enlace.
+
+La aplican las tarjetas de libro (`BookCard`: portada, catálogo, categorías, búsquedas, autores y biblioteca), la lista
+de capítulos y el botón de lectura de la ficha, el lector (capítulo anterior y siguiente, índice, volver a la ficha y la
+precarga del capítulo siguiente) y los bloques «continuar leyendo» y «leídos recientemente» de la portada. Los enlaces a
+`/books`, categorías, autores e inicio siguen en el idioma de la interfaz: existen e indexan en los dos.
+
+Las páginas cruzadas siguen existiendo. `/es/books/<libro solo en inglés>` y sus capítulos responden 200 con la interfaz
+en español, el texto en inglés, `noindex, follow` y las mismas canonical y ausencia de hreflang que antes; tampoco
+entran en el sitemap. No hay redirecciones. Solo dejan de recibir enlaces internos. Se llega a ellas con el selector de
+idioma (no es un enlace `<a>`: `LanguageMenu` navega con el router) o con una URL compartida o antigua.
+
+Consecuencias para quien navega:
+
+- Abrir un libro solo en inglés desde la interfaz en español lleva a `/en/...`: la interfaz pasa a inglés.
+- next-intl guarda ese idioma en la cookie `NEXT_LOCALE`, así que `/` redirige después a `/en`.
+- Para volver al español, se usa el selector de idioma. En la ficha lleva a la ficha cruzada en español. En un
+  capítulo lleva al mismo capítulo en español, porque las dos URL muestran la misma edición
+  (`getLocalizedChapterPath`). Un libro con ediciones en ambos idiomas va a la ficha de la otra edición.
+- El progreso de lectura, la biblioteca y las preferencias del lector no dependen del prefijo de idioma.
+
+`pnpm smoke:links <URL>` rastrea un build desde `/es`, `/en` y el sitemap con el User-Agent de Googlebot, siguiendo los
+`<a href>` internos. Cuenta los enlaces a páginas con `noindex` por tipo de destino (ficha, capítulo, otros) y de origen.
+Falla si algún enlace apunta a una ficha o a un capítulo con `noindex`. Los enlaces a login, registro, biblioteca y
+recuperación de contraseña son `noindex` a propósito: se informan, pero no hacen fallar la comprobación.
+
 ## Categorías del catálogo
 
 Una categoría es el catálogo filtrado: `/{locale}/books?category={slug}`. El slug es el mismo en ambos idiomas
@@ -170,6 +206,7 @@ Desde otra terminal:
 ```powershell
 pnpm smoke:production http://localhost:3000
 pnpm smoke:seo http://localhost:3000
+pnpm smoke:links http://localhost:3000
 ```
 
 `smoke:seo` toma hasta dos libros publicados por idioma del sitemap; requiere al menos uno en cada idioma.

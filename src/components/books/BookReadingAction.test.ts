@@ -6,6 +6,7 @@ import type { ReactElement } from "react";
 import * as jsxRuntime from "react/jsx-runtime";
 import ts from "typescript";
 
+import * as bookLinks from "../../lib/book-links";
 import * as readingProgress from "../../lib/reading-progress";
 import type { ReadingProgress } from "../../lib/reading-progress";
 
@@ -20,6 +21,7 @@ function loadComponent(entries: ReadingProgress[]) {
     "react-icons/fi": { FiBookOpen: stub("FiBookOpen") },
     "@/components/ui/button": { Button: stub("Button") },
     "@/i18n/navigation": { Link },
+    "@/lib/book-links": bookLinks,
     "@/lib/reading-progress": readingProgress,
     "@/lib/use-reading-history": { useReadingHistory: () => ({ entries }) },
   };
@@ -36,17 +38,25 @@ function loadComponent(entries: ReadingProgress[]) {
   return exports.BookReadingAction;
 }
 
-function findLinkHref(node: unknown): string | undefined {
-  if (Array.isArray(node)) return node.map(findLinkHref).find(Boolean);
-  if (!node || typeof node !== "object" || !("props" in node)) return undefined;
-  const element = node as ReactElement<{ href?: string; children?: unknown }>;
-  return element.type === Link ? element.props.href : findLinkHref(element.props.children);
+interface LinkProps {
+  href?: string;
+  locale?: string;
+  children?: unknown;
 }
 
-function renderHref(entries: ReadingProgress[]) {
-  return findLinkHref(
+function findLink(node: unknown): LinkProps | undefined {
+  if (Array.isArray(node)) return node.map(findLink).find(Boolean);
+  if (!node || typeof node !== "object" || !("props" in node)) return undefined;
+  const element = node as ReactElement<LinkProps>;
+  return element.type === Link ? element.props : findLink(element.props.children);
+}
+
+function renderLink(entries: ReadingProgress[], editionLanguage = "en", interfaceLocale: "en" | "es" = "en") {
+  return findLink(
     loadComponent(entries)({
       bookSlug: "dracula",
+      editionLanguage,
+      interfaceLocale,
       editionId,
       chapterSlugs: ["chapter-i", "chapter-ii", "chapter-iii"],
       firstChapterSlug: "chapter-i",
@@ -56,6 +66,10 @@ function renderHref(entries: ReadingProgress[]) {
       progressLabel: "{progress}%",
     }),
   );
+}
+
+function renderHref(entries: ReadingProgress[]) {
+  return renderLink(entries)?.href;
 }
 
 const progress = (chapterSlug: string, chapterIndex: number, percentage = 40): ReadingProgress => ({
@@ -84,3 +98,15 @@ test("reading progress still leads to the chapter being read, by its clean URL",
   // A finished book starts again from the first chapter.
   assert.equal(renderHref([progress("chapter-iii", 2, 100)]), "/books/dracula/chapter-i");
 });
+
+test("the first chapter is linked under the locale of the edition the book page shows", () => {
+  // An English-only book seen from the Spanish interface: its chapters are indexable under /en.
+  assert.deepEqual(pick(renderLink([], "en", "es")), { href: "/books/dracula/chapter-i", locale: "en" });
+  // A Spanish edition shown in the Spanish interface (a book with both editions, too) keeps the interface locale.
+  assert.deepEqual(pick(renderLink([], "es", "es")), { href: "/books/dracula/chapter-i", locale: "es" });
+  assert.deepEqual(pick(renderLink([], "es-MX", "en")), { href: "/books/dracula/chapter-i", locale: "es" });
+});
+
+function pick(link: LinkProps | undefined) {
+  return { href: link?.href, locale: link?.locale };
+}

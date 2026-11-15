@@ -13,6 +13,7 @@ import { EditionDetails } from "@/components/books/EditionDetails";
 
 import { getBookBySlug, getBookContentLocales, getSitemapContent, type ContentLocale } from "@/db/queries/books";
 import { LibraryButton } from "@/components/books/LibraryButton";
+import { bookLink } from "@/lib/book-links";
 import { isSlug } from "@/lib/catalog-filters";
 import { createLocalizedMetadata } from "@/lib/seo-metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
@@ -249,13 +250,13 @@ export default async function BookPage({ params }: BookPageProps) {
 
   const coverStyle = getCoverStyle(book.slug);
 
+  // Chapters are linked under the locale of the edition shown, where they are indexable (src/lib/book-links.ts).
+  const chapterLink = (chapterSlug: string) =>
+    bookLink({ slug: book.slug, editionLanguage: book.edition.language, chapterSlug }, interfaceLocale);
+
   const renderChapters = () =>
     book.chapters.map((chapter) => (
-      <Link
-        key={chapter.id}
-        href={`/books/${book.slug}/${chapter.slug}`}
-        className="group flex min-w-0 items-center gap-4 py-3"
-      >
+      <Link key={chapter.id} {...chapterLink(chapter.slug)} className="group flex min-w-0 items-center gap-4 py-3">
         <span className="text-muted-foreground w-8 shrink-0 text-sm tabular-nums">
           {String(chapter.number).padStart(2, "0")}
         </span>
@@ -395,6 +396,8 @@ export default async function BookPage({ params }: BookPageProps) {
                 {firstChapter && (
                   <BookReadingAction
                     bookSlug={book.slug}
+                    editionLanguage={book.edition.language}
+                    interfaceLocale={interfaceLocale}
                     editionId={book.edition.id}
                     chapterSlugs={book.chapters.map((chapter) => chapter.slug)}
                     firstChapterSlug={firstChapter.slug}
