@@ -480,7 +480,8 @@ async function checkCatalogPages(
         ...html("main a[href]")
           .toArray()
           .map((element) => html(element).attr("href") ?? "")
-          .filter((href) => new RegExp(`^/${locale}/books/[^/?]+$`).test(href)),
+          // A book is linked under the locale of the edition it shows (src/lib/book-links.ts), not always this one.
+          .filter((href) => /^\/(?:es|en)\/books\/[^/?]+$/.test(href)),
       );
 
       const pagination = html(`nav[aria-label="${(locale === "es" ? es : en).catalog.pagination}"]`);
