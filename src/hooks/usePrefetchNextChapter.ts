@@ -46,10 +46,16 @@ export function hasKeyboardFocus(element: { matches(selectors: string): boolean 
  * it scrolls into view and on hover or touch, Next.js fetches it again only if it is missing or stale; a request still
  * in flight is shared, not repeated. `onLinkFocus` does the same for keyboard focus. On a connection that does not
  * allow it the link keeps its default prefetch, which stops at the loading placeholder. Nothing runs on the server.
+ * `linkLocale` is the locale the link passes with `nextHref` (src/lib/book-links.ts); the interface locale by default.
  */
-export function usePrefetchNextChapter(nextHref: string | undefined, footerRef: RefObject<HTMLElement | null>) {
+export function usePrefetchNextChapter(
+  nextHref: string | undefined,
+  footerRef: RefObject<HTMLElement | null>,
+  linkLocale?: Locale,
+) {
   const router = useRouter();
-  const locale = useLocale() as Locale;
+  const interfaceLocale = useLocale() as Locale;
+  const locale = linkLocale ?? interfaceLocale;
   // Kept while Activity hides and shows the chapter again, so a chapter prefetches its next one only once.
   const [prefetcher] = useState(createNextChapterPrefetcher);
   // False on the server and during hydration, so both render the link's default prefetch.
@@ -81,7 +87,7 @@ export function usePrefetchNextChapter(nextHref: string | undefined, footerRef: 
 
     const run = () => {
       prefetcher.update({ nextHref: target, footerNear, ...currentNetworkConditions() }, (onInvalidate) =>
-        router.prefetch(nextHref, { kind: FULL_PREFETCH, onInvalidate }),
+        router.prefetch(nextHref, { kind: FULL_PREFETCH, onInvalidate, locale }),
       );
     };
 
@@ -118,7 +124,7 @@ export function usePrefetchNextChapter(nextHref: string | undefined, footerRef: 
     if (!canPrefetchOnConnection(currentNetworkConditions())) return;
 
     try {
-      router.prefetch(nextHref, { kind: FULL_PREFETCH });
+      router.prefetch(nextHref, { kind: FULL_PREFETCH, locale });
     } catch {
       // The link still navigates as before.
     }

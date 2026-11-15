@@ -8,6 +8,7 @@ import ts from "typescript";
 import en from "../../../../../../messages/en.json";
 import es from "../../../../../../messages/es.json";
 import type { BookDetails } from "../../../../../db/queries/books";
+import * as bookLinks from "../../../../../lib/book-links";
 import { isSlug } from "../../../../../lib/catalog-filters";
 import { createLocalizedMetadata } from "../../../../../lib/seo-metadata-core";
 import * as workDescriptions from "../../../../../lib/work-descriptions";
@@ -95,6 +96,7 @@ function loadPage(book: BookFixture, queriesOrOptions: string[] | PageOptions = 
       getSitemapContent: async () => ({ books: [], chapters: [] }),
     },
     "@/components/books/LibraryButton": { LibraryButton: stub("LibraryButton") },
+    "@/lib/book-links": bookLinks,
     "@/lib/catalog-filters": { isSlug },
     "@/lib/seo-metadata": { createLocalizedMetadata },
     "@/components/seo/JsonLd": { JsonLd },

@@ -11,6 +11,7 @@ import { ReaderView } from "@/components/reader/ReaderView";
 
 import {
   chapterExistsInPublicEdition,
+  getBookBySlug,
   getChapterBySlug,
   getSitemapContent,
   type ContentLocale,
@@ -21,6 +22,7 @@ import { createLocalizedMetadata } from "@/lib/seo-metadata";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getAbsolutePublicImageUrl, getConfiguredSiteUrl } from "@/lib/site-url";
 import { readerChapterHref } from "@/lib/reading-progress";
+import { bookLinkLocale } from "@/lib/book-links";
 
 interface ReaderPageProps {
   searchParams: Promise<{ edition?: string | string[] }>;
@@ -148,6 +150,15 @@ async function ReaderContent({ params, searchParams }: ReaderPageProps) {
 
   const contentLanguage = getLanguageCode(book.edition.language);
 
+  // Links to the book and its chapters go under the locale of the edition the clean URL shows here, where they are
+  // indexable (src/lib/book-links.ts). A pinned ?edition= is that edition only when none is pinned.
+  const linkLocale = bookLinkLocale(
+    requestedEdition === undefined
+      ? book.edition.language
+      : ((await getBookBySlug(book.slug, interfaceLocale))?.edition.language ?? book.edition.language),
+    interfaceLocale,
+  );
+
   const siteUrl = getConfiguredSiteUrl();
 
   const chapterUrl = siteUrl
@@ -268,6 +279,7 @@ async function ReaderContent({ params, searchParams }: ReaderPageProps) {
           fontVariables={readingFontVariables}
           previousHref={previous ? readerChapterHref(book.slug, previous.slug, requestedEdition) : undefined}
           nextHref={next ? readerChapterHref(book.slug, next.slug, requestedEdition) : undefined}
+          linkLocale={linkLocale}
           languageSwitcher={
             <LanguageSwitcher
               locale={interfaceLocale}
